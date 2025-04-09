@@ -3,6 +3,9 @@ console.log("Worker script evaluating... [Bundled Approach using require]");
 // Use require - Webpack will handle this during build
 const esPkg = require('essentia.js');
 
+// Import feature extraction modules
+import { extractMFCC } from './features/mfcc';
+
 console.log('[Debug] esPkg structure keys:', Object.keys(esPkg));
 
 let essentia: any; // Use 'any' for now
@@ -154,18 +157,6 @@ type WorkerMessageData =
     | { type: 'init', payload: InitPayload }
     | { type: 'extractFeatures', payload: ExtractFeaturesPayload };
 
-// --- Feature Extraction Logic ---
-
-// Helper function to calculate mean
-const mean = (arr: number[]): number => arr.reduce((acc, val) => acc + val, 0) / arr.length;
-
-// Helper function to calculate standard deviation
-const stdDev = (arr: number[], arrMean: number): number => {
-  if (arr.length === 0) return 0; // Avoid division by zero
-  const variance = arr.reduce((acc, val) => acc + Math.pow(val - arrMean, 2), 0) / arr.length;
-  return Math.sqrt(variance);
-};
-
 // Main message handler
 self.onmessage = async (event: MessageEvent<WorkerMessageData>) => {
     console.log("Worker received message:", event.data);
@@ -191,94 +182,15 @@ self.onmessage = async (event: MessageEvent<WorkerMessageData>) => {
         console.log(`[Extract] Processing songId: ${songId}, sampleRate: ${sampleRate}, audio length: ${audioVector.length}`);
         try {
             console.log(`[Extract] Converting audio data for ${songId}...`);
-            // Create a Float32Array from the received audioVector (since FrameGenerator expects Float32Array)
+            // Create a Float32Array from the received audioVector
             const audioData = new Float32Array(audioVector);
             
-            // Process audio in frames for MFCC calculation
-            console.log(`[Extract] Setting up frame processing for ${songId}...`);
-            const frameSize = 2048;
-            const hopSize = 1024;
+            // Extract MFCC features using the imported module
+            const features = await extractMFCC(essentia, audioData, sampleRate, songId);
             
-            let mfccs: number[][] = [];
-            
-            // Use FrameGenerator with Float32Array directly as per documentation
-            console.log(`[Extract] Using FrameGenerator for ${songId}...`);
-            
-            try {
-                // Generate frames using FrameGenerator - IMPORTANT: it expects a Float32Array directly (not a vector)
-                const frames = essentia.FrameGenerator(audioData, frameSize, hopSize);
-                console.log(`[Extract] Generated ${frames.size()} frames for ${songId}`);
-                
-                // Limit number of frames for performance
-                const maxFramesToProcess = Math.min(frames.size(), 100);
-                
-                // Process each frame
-                for (let i = 0; i < maxFramesToProcess; i++) {
-                    try {
-                        const frame = frames.get(i);
-                        
-                        // Compute spectrum
-                        const spectrum = essentia.Spectrum(frame);
-                        
-                        // Compute MFCC
-                        const mfccResult = essentia.MFCC(spectrum.spectrum);
-                        
-                        // Convert to array and add to results
-                        const frameMfccs = essentia.vectorToArray(mfccResult.mfcc);
-                        mfccs.push(frameMfccs);
-                        
-                        spectrum.spectrum.delete();
-                        mfccResult.mfcc.delete();
-                    } catch (frameError) {
-                        console.error(`[Extract] Error processing frame ${i} for ${songId}:`, frameError);
-                        // Continue with next frame
-                    }
-                    
-                    // Log progress occasionally
-                    if (i % 20 === 0) {
-                        console.log(`[Extract] Processed ${i}/${maxFramesToProcess} frames for ${songId}`);
-                    }
-                }
-                
-                // Clean up frames
-                frames.delete();
-            } catch (framesError) {
-                console.error(`[Extract] Error using FrameGenerator for ${songId}:`, framesError);
-                throw new Error(`FrameGenerator failed: ${(framesError as Error).message || String(framesError)}`);
-            }
-            
-            // Check if we extracted any features
-            if (!mfccs || mfccs.length === 0 || !mfccs[0]) {
-                console.error(`[Extract] MFCC calculation empty or invalid format for ${songId}`);
-                throw new Error(`Failed to extract any valid MFCC features for ${songId}`);
-            }
-
-            console.log(`[Extract] Calculating stats for ${songId}...`);
-            const numCoeffs = mfccs[0].length;
-            const mfccMeans: number[] = [];
-            const mfccStdDevs: number[] = [];
-
-            for (let i = 0; i < numCoeffs; i++) {
-                 const coeffValues = mfccs.map(frame => frame[i]);
-                 const coeffMean = mean(coeffValues);
-                 const coeffStdDev = stdDev(coeffValues, coeffMean);
-                 mfccMeans.push(coeffMean);
-                 mfccStdDevs.push(coeffStdDev);
-            }
-
-            console.log(`[Extract] Preparing results for ${songId}...`);
-            const features = {
-                 mfccMeans: mfccMeans,
-                 mfccStdDevs: mfccStdDevs,
-            };
-
-            // Explicitly type the outgoing message if desired
+            // Send results back to main thread
             self.postMessage({ type: 'featureExtractionComplete', songId, features });
             console.log(`[Extract] Finished processing songId: ${songId}`);
-
-            // Clean up
-            console.log(`[Extract] Cleaning up memory for ${songId}...`);
-            // Float32Array is handled by JS garbage collector and doesn't need explicit deletion
 
         } catch (error) {
             const errorMessage = (error instanceof Error) ? error.message : String(error);
