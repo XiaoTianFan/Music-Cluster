@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build",
+    "build:worker": "webpack --config webpack.worker.config.js",
+    "build": "npm run build:worker && next build",
     "start": "next start",
     "lint": "next lint"
   },
@@ -27,9 +28,17 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "buffer": "^6.0.3",
+    "crypto-browserify": "^3.12.1",
     "eslint": "^9",
     "eslint-config-next": "15.2.5",
+    "path-browserify": "^1.0.1",
+    "stream-browserify": "^3.0.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "ts-loader": "^9.5.2",
+    "typescript": "^5",
+    "vm-browserify": "^1.1.2",
+    "webpack": "^5.99.5",
+    "webpack-cli": "^6.0.1"
   }
 }

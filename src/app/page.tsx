@@ -49,10 +49,10 @@ export default function DashboardPage() {
 
     // Initialize Worker
     if (!workerRef.current) {
-        console.log('Creating Essentia Module Worker...');
-        // Use a static path relative to the public directory
-        // Instantiate as a module worker
-        workerRef.current = new Worker(/* turbopackIgnore: true */ '/workers/essentia-worker.js', { type: 'module' }); 
+        console.log('Creating Essentia Bundled Worker...');
+        // Point to the bundled worker file in the public directory
+        // No need for module type or turbopackIgnore anymore
+        workerRef.current = new Worker(/* turbopackIgnore: true */ '/workers/essentia-worker.bundled.js'); 
 
         workerRef.current.onmessage = (event) => {
             const { type, payload, songId, features, error } = event.data;

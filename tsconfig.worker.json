@@ -1,0 +1,24 @@
+// songcluster/tsconfig.worker.json
+{
+    "extends": "./tsconfig.json", // Inherit from the main config
+    "compilerOptions": {
+      "target": "es2017", 
+      "module": "esnext", 
+      "lib": [
+        "es2017",
+        "webworker" 
+      ],
+      "noEmit": false, 
+      "sourceMap": true, 
+      "isolatedModules": false, 
+      "skipLibCheck": true 
+    },
+    // Moved 'include' and 'exclude' outside compilerOptions
+    "include": [
+      "src/workers/**/*.ts", 
+      "src/types/**/*.d.ts" 
+    ],
+    "exclude": [
+      "node_modules" // Explicitly exclude node_modules here if not in base
+    ] 
+  }
