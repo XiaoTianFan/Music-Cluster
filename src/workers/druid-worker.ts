@@ -82,7 +82,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessageData>) => {
                      // UMAP constructor: (X: Matrix | number[][], parameters?: { nn?: number, d?: number, seed?: number, metric?: string | function, iterations?: number, lr?: number, minDist?: number })
                      drInstance = new druid.UMAP(matrix, { 
                         d: dimensions, 
-                        n_neighbors: neighbors ?? 15, // Default neighbors if not provided
+                        n_neighbors: neighbors ?? 5, // Default neighbors if not provided
                         min_dist: minDist ?? 0.1, // Default min_dist if not provided
                         // Add other UMAP params as needed
                     });
