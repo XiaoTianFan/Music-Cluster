@@ -151,6 +151,7 @@ type ExtractFeaturesPayload = {
     audioVector: number[];
     sampleRate: number;
     songId: string;
+    featuresToExtract: string[]; // Added list of feature IDs
 };
 
 type WorkerMessageData = 
@@ -169,7 +170,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessageData>) => {
 
     if (type === 'extractFeatures') {
         // Type assertion for payload based on type check
-        const { audioVector, sampleRate, songId } = payload as ExtractFeaturesPayload;
+        const { audioVector, sampleRate, songId, featuresToExtract } = payload as ExtractFeaturesPayload;
 
         // Ensure Essentia is ready
         const ready = await initializeEssentia();
@@ -179,17 +180,74 @@ self.onmessage = async (event: MessageEvent<WorkerMessageData>) => {
             return;
         }
 
-        console.log(`[Extract] Processing songId: ${songId}, sampleRate: ${sampleRate}, audio length: ${audioVector.length}`);
+        console.log(`[Extract] Processing songId: ${songId}, Features: [${featuresToExtract.join(', ')}], Sample Rate: ${sampleRate}, Length: ${audioVector.length}`);
         try {
             console.log(`[Extract] Converting audio data for ${songId}...`);
             // Create a Float32Array from the received audioVector
             const audioData = new Float32Array(audioVector);
+            const audioVectorEssentia = essentia.arrayToVector(audioData);
             
-            // Extract MFCC features using the imported module
-            const features = await extractMFCC(essentia, audioData, sampleRate, songId);
+            let extractedFeatures: any = {}; // Use any for flexibility initially
+
+            // --- Extract Selected Features --- 
+            console.log(`[Extract] Starting feature extraction for ${songId}...`);
+
+            if (featuresToExtract.includes('mfcc')) {
+                console.log(`[Extract][MFCC] Starting for ${songId}`);
+                const mfccResult = await extractMFCC(essentia, audioData, sampleRate, songId);
+                extractedFeatures = { ...extractedFeatures, ...mfccResult };
+                console.log(`[Extract][MFCC] Completed for ${songId}`);
+            }
+            
+            if (featuresToExtract.includes('energy')) {
+                console.log(`[Extract][Energy] Starting for ${songId}`);
+                const energyResult = essentia.Energy(audioVectorEssentia); 
+                extractedFeatures.energy = energyResult.energy;
+                 essentia.vectorToArray(audioVectorEssentia); // Necessary cleanup?
+                console.log(`[Extract][Energy] Completed for ${songId}:`, extractedFeatures.energy);
+            }
+            
+            if (featuresToExtract.includes('entropy')) {
+                // Note: Entropy requires non-negative values. Audio data might have negatives.
+                // We might need to apply an offset or take absolute values depending on the desired result.
+                // For now, let's try with the raw data, but log a warning.
+                // A better approach might be to calculate entropy on the *energy* of frames.
+                console.log(`[Extract][Entropy] Starting for ${songId}`);
+                try {
+                    // Check for negative values, as Entropy algorithm expects non-negative input
+                    // Option 1: Use absolute values (common for signal processing)
+                    const nonNegativeAudioData = audioData.map(Math.abs);
+                    const nonNegativeVector = essentia.arrayToVector(nonNegativeAudioData);
+                    const entropyResult = essentia.Entropy(nonNegativeVector);
+                    extractedFeatures.entropy = entropyResult.entropy;
+                    essentia.vectorToArray(nonNegativeVector); // Cleanup
+                    console.log(`[Extract][Entropy] Completed for ${songId}:`, extractedFeatures.entropy);
+                } catch (entropyError) {
+                    console.error(`[Extract][Entropy] Error for ${songId}:`, entropyError);
+                    // Optionally add an error indicator to the features
+                    extractedFeatures.entropyError = (entropyError instanceof Error) ? entropyError.message : String(entropyError);
+                }
+            }
+            
+            if (featuresToExtract.includes('key')) {
+                console.log(`[Extract][Key] Starting for ${songId}`);
+                try {
+                    const keyResult = essentia.KeyExtractor(audioVectorEssentia, true, 4096, 4096, 12, 3500, 60, 25, 0.2, 'bgate', sampleRate, 0.0001, 440, 'cosine', 'hann'); // Using defaults from docs + explicit sampleRate
+                    extractedFeatures.key = keyResult.key;
+                    extractedFeatures.keyScale = keyResult.scale;
+                    extractedFeatures.keyStrength = keyResult.strength;
+                     essentia.vectorToArray(audioVectorEssentia); // Necessary cleanup?
+                    console.log(`[Extract][Key] Completed for ${songId}:`, keyResult.key, keyResult.scale, keyResult.strength);
+                } catch (keyError) {
+                     console.error(`[Extract][Key] Error for ${songId}:`, keyError);
+                     extractedFeatures.keyError = (keyError instanceof Error) ? keyError.message : String(keyError);
+                }
+            }
+            
+            console.log(`[Extract] All selected features extracted for ${songId}.`);
             
             // Send results back to main thread
-            self.postMessage({ type: 'featureExtractionComplete', songId, features });
+            self.postMessage({ type: 'featureExtractionComplete', songId, features: extractedFeatures });
             console.log(`[Extract] Finished processing songId: ${songId}`);
 
         } catch (error) {

@@ -2,6 +2,11 @@
 
 import React, { useState, ChangeEvent, useRef, useEffect, useCallback } from 'react';
 
+// Import the new panel components
+import SongListPanel from '../components/SongListPanel';
+import ControlsPanel from '../components/ControlsPanel';
+import VisualizationPanel from '../components/VisualizationPanel';
+
 // Define a type for our song objects
 interface Song {
   id: string; // Using URL or a generated ID for uniqueness
@@ -12,9 +17,13 @@ interface Song {
 
 // Define a type for the extracted features (expand this later)
 interface Features {
-  mfccMeans: number[];
-  mfccStdDevs: number[];
-  // Add other features here
+  mfccMeans?: number[];      // Make existing optional for consistency
+  mfccStdDevs?: number[];    // Make existing optional for consistency
+  energy?: number;          // Added Energy
+  entropy?: number;         // Added Entropy
+  key?: string;             // Added Key
+  keyScale?: string;        // Added Key Scale
+  keyStrength?: number;     // Added Key Strength
 }
 
 // Type for feature status tracking
@@ -23,6 +32,8 @@ type FeatureStatus = 'idle' | 'processing' | 'complete' | 'error';
 // List of default songs based on the directory listing
 const defaultSongs: Song[] = [
   { id: '/audio/The Beatles_Abbey Road_Come Together.mp3', name: 'The Beatles - Come Together.mp3', url: '/audio/The Beatles_Abbey Road_Come Together.mp3', source: 'default' },
+  // Add more default songs here if needed
+  // Example: { id: '/audio/Kraftwerk_The Man-Machine_The Robots.mp3', name: 'Kraftwerk - The Robots.mp3', url: '/audio/Kraftwerk_The Man-Machine_The Robots.mp3', source: 'default' },
 ];
 
 export default function DashboardPage() {
@@ -31,9 +42,14 @@ export default function DashboardPage() {
   const [featureStatus, setFeatureStatus] = useState<Record<string, FeatureStatus>>({}); // { songId: status }
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [essentiaWorkerReady, setEssentiaWorkerReady] = useState<boolean>(false);
+  // State to track which songs are selected for processing
+  const [activeSongIds, setActiveSongIds] = useState<Set<string>>(() => 
+    new Set(defaultSongs.map(song => song.id)) // Initially, all default songs are active
+  );
 
   const workerRef = useRef<Worker | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null); // Ref for the hidden file input
 
   // Initialize Worker and AudioContext
   useEffect(() => {
@@ -121,20 +137,24 @@ export default function DashboardPage() {
     if (!files) return;
 
     const newSongs: Song[] = [];
-    const currentSongNames = new Set(songs.map(s => s.name)); // Faster lookup
+    const currentSongIds = new Set(songs.map(s => s.id)); // Use ID for checking duplicates
+    const newActiveIds = new Set<string>();
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       if (file.type.startsWith('audio/')) {
-        // Check if song already exists (by name)
-        if (!currentSongNames.has(file.name)) {
-            const objectURL = URL.createObjectURL(file);
-            newSongs.push({
-               id: objectURL, // Use object URL as a temporary unique ID
+        const objectURL = URL.createObjectURL(file);
+        // Simple check if ID (objectURL) already exists - less robust than name but ok for demo
+        if (!currentSongIds.has(objectURL)) { 
+            const newSong = {
+               id: objectURL, // Use object URL as a unique ID
                name: file.name,
                url: objectURL,
-               source: 'user',
-            });
+               source: 'user' as 'user',
+            };
+            newSongs.push(newSong);
+            newActiveIds.add(newSong.id); // Make newly added songs active by default
+            currentSongIds.add(objectURL); // Add to current set to prevent duplicates within the same upload batch
         }
         // Note: We might want to revoke object URLs later when they're no longer needed
         // URL.revokeObjectURL(objectURL);
@@ -143,6 +163,7 @@ export default function DashboardPage() {
 
     if (newSongs.length > 0) {
       setSongs(prevSongs => [...prevSongs, ...newSongs]);
+      setActiveSongIds(prevActive => new Set([...prevActive, ...newActiveIds])); // Add new song IDs to active set
       // Reset status for new songs
       const newStatus = newSongs.reduce((acc, song) => {
           acc[song.id] = 'idle';
@@ -168,12 +189,36 @@ export default function DashboardPage() {
         delete newState[songIdToRemove];
         return newState;
     });
+    // Remove from active set as well
+    setActiveSongIds(prevActive => {
+      const newActive = new Set(prevActive);
+      newActive.delete(songIdToRemove);
+      return newActive;
+    });
     
     // Revoke object URL if it's a user-uploaded file being removed
     if (songToRemove && songToRemove.source === 'user') {
         URL.revokeObjectURL(songToRemove.url);
     }
     setSongs(prevSongs => prevSongs.filter(song => song.id !== songIdToRemove));
+  };
+
+  // Handler to toggle a song's active state
+  const handleToggleSongActive = (songId: string) => {
+      setActiveSongIds(prevActive => {
+          const newActive = new Set(prevActive);
+          if (newActive.has(songId)) {
+              newActive.delete(songId);
+          } else {
+              newActive.add(songId);
+          }
+          return newActive;
+      });
+  };
+
+  // Handler to trigger the hidden file input
+  const handleUploadClick = () => {
+      fileInputRef.current?.click();
   };
 
   // Function to fetch and decode audio
@@ -197,25 +242,46 @@ export default function DashboardPage() {
       }
   }, []); // Depends only on audioContextRef which is stable
 
-  // Function to trigger feature extraction for all songs
-  const handleExtractFeatures = useCallback(async () => {
+  // Function to trigger feature extraction for *active* songs
+  const handleExtractFeatures = useCallback(async (selectedFeatures: Set<string>) => {
     if (!essentiaWorkerReady || isProcessing || !workerRef.current) {
         console.warn('Worker not ready or already processing.');
         return;
     }
+    if (selectedFeatures.size === 0) {
+        console.warn('No features selected for extraction.');
+        // Optionally show a message to the user
+        return;
+    }
 
-    console.log('Starting feature extraction for all songs...');
+    console.log(`Starting extraction for features [${[...selectedFeatures].join(', ')}] on ${activeSongIds.size} active songs...`);
     setIsProcessing(true);
 
-    // Reset status for all songs before starting
-    const initialStatus = songs.reduce((acc, song) => {
+    // Filter songs that are marked as active
+    const songsToProcess = songs.filter(song => activeSongIds.has(song.id)); 
+
+    if (songsToProcess.length === 0) {
+        console.log('No active songs to process.');
+        setIsProcessing(false);
+        return;
+    }
+
+    // Reset status only for the active songs we are about to process
+    const statusUpdates = songsToProcess.reduce((acc, song) => {
         acc[song.id] = 'processing';
         return acc;
     }, {} as Record<string, FeatureStatus>);
-    setFeatureStatus(initialStatus);
-    setSongFeatures({}); // Clear previous features
+    setFeatureStatus(prev => ({ ...prev, ...statusUpdates }));
 
-    for (const song of songs) {
+    // Clear features only for the songs being re-processed.
+    const featureUpdates = songsToProcess.reduce((acc, song) => {
+        acc[song.id] = null; // Clear previous features for these songs
+        return acc;
+    }, {} as Record<string, Features | null>);
+     setSongFeatures(prev => ({ ...prev, ...featureUpdates }));
+
+
+    for (const song of songsToProcess) { // Use the filtered list
         console.log(`Processing ${song.name}...`);
         const audioBuffer = await getDecodedAudio(song);
 
@@ -233,7 +299,8 @@ export default function DashboardPage() {
                 payload: {
                     songId: song.id,
                     audioVector: audioVector, // Send as plain array
-                    sampleRate: audioBuffer.sampleRate
+                    sampleRate: audioBuffer.sampleRate,
+                    featuresToExtract: [...selectedFeatures] // Send the list of selected features
                 }
             });
         } else {
@@ -244,18 +311,29 @@ export default function DashboardPage() {
              }
         }
     }
-  }, [songs, getDecodedAudio, essentiaWorkerReady, isProcessing]);
+  }, [songs, getDecodedAudio, essentiaWorkerReady, isProcessing, activeSongIds]);
 
 
   return (
     <main className="flex flex-col min-h-screen p-4 bg-gray-900 text-gray-100 font-[family-name:var(--font-geist-mono)]">
+       {/* Hidden File Input */}
+       <input
+          ref={fileInputRef}
+          id="audio-upload" // Keep ID if needed elsewhere, but visually hidden
+          type="file"
+          accept="audio/*"
+          multiple
+          onChange={handleFileChange}
+          className="hidden"
+        />
+
       {/* Header/Top Controls Placeholder */}
       <div
         className="w-full h-16 mb-4 p-2 flex justify-between items-center border border-cyan-500"
         data-augmented-ui="tl-clip tr-clip br-clip bl-clip border"
         style={{ '--aug-border-color': 'cyan', '--aug-border-bg': 'transparent' } as React.CSSProperties}
       >
-        <h1 className="text-xl font-bold text-cyan-400">SongCluster Dashboard</h1>
+        <h1 className="px-4 text-xl font-bold text-cyan-400">SongCluster Dashboard</h1>
         <div className="text-sm text-cyan-300">
           {isProcessing ? 'Processing Audio... ' : 'Ready'}
           ({songs.filter(s => featureStatus[s.id] === 'complete').length} / {songs.length} songs complete)
@@ -263,85 +341,32 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="flex flex-grow gap-4">
-        {/* Main Visualization Area Placeholder */}
-        <div
-          className="flex-grow h-full p-4 border border-pink-500 flex items-center justify-center"
-          data-augmented-ui="tl-clip-x tr-round br-clip bl-round border"
-          style={{ '--aug-border-color': 'hotpink', '--aug-border-bg': 'transparent' } as React.CSSProperties}
-        >
-          <p className="text-pink-400">[Main Visualization Area]</p>
-        </div>
+      {/* New Grid Layout - Updated */}
+      <div className="flex-grow grid grid-cols-2 grid-rows-[auto_1fr] gap-4"> {/* Changed grid-cols-3 to grid-cols-2 */}
+        {/* Song List Panel */}
+        <SongListPanel 
+          className="col-span-1 row-span-1"  // Changed col-span-2 to col-span-1
+          songs={songs}
+          featureStatus={featureStatus}
+          activeSongIds={activeSongIds}
+          isProcessing={isProcessing}
+          onToggleSongActive={handleToggleSongActive}
+          onRemoveSong={handleRemoveSong}
+          onUploadClick={handleUploadClick}
+        />
 
-        {/* Side Panel for Controls Placeholder */}
-        <div
-          className="w-72 h-full p-4 border border-green-500 flex flex-col"
-          data-augmented-ui="tl-round tr-clip br-clip-x bl-clip border"
-          style={{ '--aug-border-color': 'lime', '--aug-border-bg': 'transparent' } as React.CSSProperties}
-        >
-          <h2 className="text-lg font-semibold mb-4 text-green-400">Controls</h2>
+        {/* Controls Panel */}
+        <ControlsPanel 
+          className="col-span-1 row-span-1" // Changed row-span-2 to row-span-1
+          isProcessing={isProcessing}
+          essentiaWorkerReady={essentiaWorkerReady}
+          activeSongCount={activeSongIds.size}
+          onExtractFeatures={handleExtractFeatures}
+          // Pass down setters/handlers for controls later
+        />
 
-          {/* Audio Input Section */}
-          <div className="mb-4" data-augmented-ui="tl-clip br-clip border" style={{ '--aug-border-color': '#555' } as React.CSSProperties}>
-            <label htmlFor="audio-upload" className="block text-sm font-medium text-green-300 p-2 cursor-pointer hover:bg-gray-700">
-              Upload Audio Files
-            </label>
-            <input
-              id="audio-upload"
-              type="file"
-              accept="audio/*"
-              multiple
-              onChange={handleFileChange}
-              className="hidden" // Hide default input, style the label
-            />
-          </div>
-
-           {/* Song List Section */}
-          <div className="mb-4 flex-grow overflow-y-auto" data-augmented-ui="tl-clip br-clip border" style={{ '--aug-border-color': '#555' } as React.CSSProperties}>
-            <h3 className="text-md font-semibold p-2 text-green-300 sticky top-0 bg-gray-900">Selected Songs ({songs.length}):</h3>
-            <ul className="list-none p-2">
-              {songs.map((song) => (
-                <li key={song.id} className="flex justify-between items-center text-xs mb-1 p-1 hover:bg-gray-800">
-                  <span title={song.name} className="truncate flex-grow mr-2">
-                    {song.name}
-                     {featureStatus[song.id] === 'processing' && <span className="text-yellow-400 ml-1"> (Proc...)</span>}
-                     {featureStatus[song.id] === 'complete' && <span className="text-green-400 ml-1"> (Done)</span>}
-                     {featureStatus[song.id] === 'error' && <span className="text-red-500 ml-1"> (Error)</span>}
-                  </span>
-                  {song.source === 'user' && (
-                    <button
-                      onClick={() => handleRemoveSong(song.id)}
-                      className="text-red-500 hover:text-red-400 text-xs px-1 py-0.5 rounded bg-gray-700 hover:bg-gray-600 flex-shrink-0"
-                      data-augmented-ui="br-clip"
-                      disabled={isProcessing} // Disable remove while processing
-                    >
-                      X
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Action Buttons Section */}
-          <div className="mt-auto border-t border-gray-700 pt-4">
-            <button
-              onClick={handleExtractFeatures}
-              disabled={!essentiaWorkerReady || isProcessing || songs.length === 0}
-              className={`w-full p-2 text-center rounded font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed ${essentiaWorkerReady && !isProcessing && songs.length > 0 ? 'bg-green-600 hover:bg-green-500 text-white' : 'bg-gray-600 text-gray-400'}`}
-               data-augmented-ui="tl-clip br-clip border"
-               style={{ '--aug-border-color': (essentiaWorkerReady && !isProcessing && songs.length > 0) ? 'lime' : '#555' } as React.CSSProperties}
-            >
-              {isProcessing ? 'Processing...' : 'Extract Features'}
-            </button>
-          </div>
-
-          {/* Other Controls Placeholders */}
-          {/* <p className="text-green-300 text-sm mt-4">[MIR Feature Selection]</p> */}
-          {/* <p className="text-green-300 text-sm mt-auto">[Dimensionality Reduction Options]</p> */}
-          {/* <p className="text-green-300 text-sm mt-auto">[Clustering Options]</p> */}
-
-        </div>
+        {/* Visualization Panel */}
+        <VisualizationPanel className="col-span-2 row-span-1"/> {/* Changed row-span-1 (implicitly) and added col-span-2 */}
       </div>
 
       {/* Footer Placeholder (Optional) */}
