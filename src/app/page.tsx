@@ -22,12 +22,7 @@ type FeatureStatus = 'idle' | 'processing' | 'complete' | 'error';
 
 // List of default songs based on the directory listing
 const defaultSongs: Song[] = [
-  { id: '/audio/Queen_Bohemian Rhapsody.mp3', name: 'Queen - Bohemian Rhapsody.mp3', url: '/audio/Queen_Bohemian Rhapsody.mp3', source: 'default' },
-  { id: '/audio/Genesis_Selling England by the Pond_Firth of Fifth.mp3', name: 'Genesis - Firth of Fifth.mp3', url: '/audio/Genesis_Selling England by the Pond_Firth of Fifth.mp3', source: 'default' },
   { id: '/audio/The Beatles_Abbey Road_Come Together.mp3', name: 'The Beatles - Come Together.mp3', url: '/audio/The Beatles_Abbey Road_Come Together.mp3', source: 'default' },
-  { id: '/audio/King Crimson_In the Court of the Crimson King_The Court of the Crimson King.mp3', name: 'King Crimson - Court of the Crimson King.mp3', url: '/audio/King Crimson_In the Court of the Crimson King_The Court of the Crimson King.mp3', source: 'default' },
-  { id: '/audio/Yes_Close to the Edge_Close to the Edge.mp3', name: 'Yes - Close to the Edge.mp3', url: '/audio/Yes_Close to the Edge_Close to the Edge.mp3', source: 'default' },
-  { id: '/audio/Yes_Fragile_Roundabout.mp3', name: 'Yes - Roundabout.mp3', url: '/audio/Yes_Fragile_Roundabout.mp3', source: 'default' },
 ];
 
 export default function DashboardPage() {

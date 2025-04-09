@@ -191,21 +191,66 @@ self.onmessage = async (event: MessageEvent<WorkerMessageData>) => {
         console.log(`[Extract] Processing songId: ${songId}, sampleRate: ${sampleRate}, audio length: ${audioVector.length}`);
         try {
             console.log(`[Extract] Converting audio data for ${songId}...`);
-            // Note: Essentia methods might return specific types, adjust if needed
-            const audioFloat32 = essentia.arrayToVector(audioVector); 
-            console.log(`[Extract] Calculating MFCCs for ${songId}...`);
+            // Create a Float32Array from the received audioVector (since FrameGenerator expects Float32Array)
+            const audioData = new Float32Array(audioVector);
             
+            // Process audio in frames for MFCC calculation
+            console.log(`[Extract] Setting up frame processing for ${songId}...`);
             const frameSize = 2048;
             const hopSize = 1024;
-            // Explicitly type the result if possible, otherwise use any/unknown
-            const mfccResult: any = essentia.MFCC(audioFloat32, sampleRate, 13, 40, 133.33, 6855.4, frameSize, hopSize);
             
-            console.log(`[Extract] Converting MFCC results for ${songId}...`);
-            const mfccs: number[][] = essentia.vectorToArray(mfccResult.mfcc);
-
+            let mfccs: number[][] = [];
+            
+            // Use FrameGenerator with Float32Array directly as per documentation
+            console.log(`[Extract] Using FrameGenerator for ${songId}...`);
+            
+            try {
+                // Generate frames using FrameGenerator - IMPORTANT: it expects a Float32Array directly (not a vector)
+                const frames = essentia.FrameGenerator(audioData, frameSize, hopSize);
+                console.log(`[Extract] Generated ${frames.size()} frames for ${songId}`);
+                
+                // Limit number of frames for performance
+                const maxFramesToProcess = Math.min(frames.size(), 100);
+                
+                // Process each frame
+                for (let i = 0; i < maxFramesToProcess; i++) {
+                    try {
+                        const frame = frames.get(i);
+                        
+                        // Compute spectrum
+                        const spectrum = essentia.Spectrum(frame);
+                        
+                        // Compute MFCC
+                        const mfccResult = essentia.MFCC(spectrum.spectrum);
+                        
+                        // Convert to array and add to results
+                        const frameMfccs = essentia.vectorToArray(mfccResult.mfcc);
+                        mfccs.push(frameMfccs);
+                        
+                        spectrum.spectrum.delete();
+                        mfccResult.mfcc.delete();
+                    } catch (frameError) {
+                        console.error(`[Extract] Error processing frame ${i} for ${songId}:`, frameError);
+                        // Continue with next frame
+                    }
+                    
+                    // Log progress occasionally
+                    if (i % 20 === 0) {
+                        console.log(`[Extract] Processed ${i}/${maxFramesToProcess} frames for ${songId}`);
+                    }
+                }
+                
+                // Clean up frames
+                frames.delete();
+            } catch (framesError) {
+                console.error(`[Extract] Error using FrameGenerator for ${songId}:`, framesError);
+                throw new Error(`FrameGenerator failed: ${(framesError as Error).message || String(framesError)}`);
+            }
+            
+            // Check if we extracted any features
             if (!mfccs || mfccs.length === 0 || !mfccs[0]) {
-                 console.error(`[Extract] MFCC calculation empty or invalid format for ${songId}`);
-                 throw new Error('MFCC calculation resulted in empty or invalid output.');
+                console.error(`[Extract] MFCC calculation empty or invalid format for ${songId}`);
+                throw new Error(`Failed to extract any valid MFCC features for ${songId}`);
             }
 
             console.log(`[Extract] Calculating stats for ${songId}...`);
@@ -233,8 +278,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessageData>) => {
 
             // Clean up
             console.log(`[Extract] Cleaning up memory for ${songId}...`);
-            audioFloat32.delete();
-            mfccResult.mfcc.delete();
+            // Float32Array is handled by JS garbage collector and doesn't need explicit deletion
 
         } catch (error) {
             const errorMessage = (error instanceof Error) ? error.message : String(error);
