@@ -16,6 +16,11 @@ const availableMirFeatures = [
   { id: 'energy', name: 'Energy' },
   { id: 'entropy', name: 'Entropy' },
   { id: 'key', name: 'Key' },
+  // { id: 'loudness', name: 'Loudness (EBU R128)' }, // Removed Loudness
+  { id: 'dynamicComplexity', name: 'Dynamic Complexity' },
+  // { id: 'onsetRate', name: 'Onset Rate' }, // Removed Onset Rate
+  { id: 'rms', name: 'RMS' },
+  { id: 'tuningFrequency', name: 'Tuning Frequency (Slow)' },
   // { id: 'spectral_centroid', name: 'Spectral Centroid' },
   // { id: 'spectral_flux', name: 'Spectral Flux' },
 ];

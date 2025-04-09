@@ -17,13 +17,21 @@ interface Song {
 
 // Define a type for the extracted features (expand this later)
 interface Features {
-  mfccMeans?: number[];      // Make existing optional for consistency
-  mfccStdDevs?: number[];    // Make existing optional for consistency
-  energy?: number;          // Added Energy
-  entropy?: number;         // Added Entropy
-  key?: string;             // Added Key
-  keyScale?: string;        // Added Key Scale
-  keyStrength?: number;     // Added Key Strength
+  mfccMeans?: number[];      
+  mfccStdDevs?: number[];    
+  energy?: number;          
+  entropy?: number;         
+  key?: string;             
+  keyScale?: string;        
+  keyStrength?: number;     
+  // Dynamic Complexity related fields:
+  dynamicComplexity?: number;
+  loudness?: number; // Note: This 'loudness' is from DynamicComplexity
+  // RMS field:
+  rms?: number;
+  // Tuning Frequency fields:
+  tuningFrequency?: number; // Estimated tuning frequency in Hz
+  tuningCents?: number;     // Deviation from 440 Hz in cents
 }
 
 // Type for feature status tracking
@@ -286,21 +294,17 @@ export default function DashboardPage() {
         const audioBuffer = await getDecodedAudio(song);
 
         if (audioBuffer && workerRef.current) {
-            // Essentia typically works with mono audio at a specific sample rate
-            // For simplicity here, we send the first channel if stereo
-            // Resampling might be needed depending on the model/features
+            // Revert to only sending mono data
             const audioData = audioBuffer.getChannelData(0); // Use first channel (mono)
-            // Send audio data (as Array or Float32Array) and necessary info to worker
-            // Need to transfer ownership or copy the data for the worker
-             const audioVector = Array.from(audioData); // Convert Float32Array to plain array for transfer
+            const audioVector = Array.from(audioData); 
 
              workerRef.current.postMessage({
                 type: 'extractFeatures',
                 payload: {
                     songId: song.id,
-                    audioVector: audioVector, // Send as plain array
+                    audioVector: audioVector, // Send mono vector
                     sampleRate: audioBuffer.sampleRate,
-                    featuresToExtract: [...selectedFeatures] // Send the list of selected features
+                    featuresToExtract: [...selectedFeatures] 
                 }
             });
         } else {

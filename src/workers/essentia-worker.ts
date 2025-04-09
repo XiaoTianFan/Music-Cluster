@@ -148,10 +148,10 @@ const initializeEssentia = async (): Promise<boolean> => {
 // --- Type definitions for message payloads (optional but good practice) ---
 type InitPayload = {}; // No payload for init
 type ExtractFeaturesPayload = {
-    audioVector: number[];
+    audioVector: number[]; // Reverted to only mono vector
     sampleRate: number;
     songId: string;
-    featuresToExtract: string[]; // Added list of feature IDs
+    featuresToExtract: string[]; 
 };
 
 type WorkerMessageData = 
@@ -170,7 +170,12 @@ self.onmessage = async (event: MessageEvent<WorkerMessageData>) => {
 
     if (type === 'extractFeatures') {
         // Type assertion for payload based on type check
-        const { audioVector, sampleRate, songId, featuresToExtract } = payload as ExtractFeaturesPayload;
+        const { 
+            audioVector, 
+            sampleRate, 
+            songId, 
+            featuresToExtract 
+        } = payload as ExtractFeaturesPayload;
 
         // Ensure Essentia is ready
         const ready = await initializeEssentia();
@@ -181,19 +186,27 @@ self.onmessage = async (event: MessageEvent<WorkerMessageData>) => {
         }
 
         console.log(`[Extract] Processing songId: ${songId}, Features: [${featuresToExtract.join(', ')}], Sample Rate: ${sampleRate}, Length: ${audioVector.length}`);
+        let audioVectorEssentia: any = null; // Define here for broader scope and cleanup
         try {
             console.log(`[Extract] Converting audio data for ${songId}...`);
-            // Create a Float32Array from the received audioVector
+            // Convert primary (left/mono) channel
             const audioData = new Float32Array(audioVector);
-            const audioVectorEssentia = essentia.arrayToVector(audioData);
-            
-            let extractedFeatures: any = {}; // Use any for flexibility initially
+            audioVectorEssentia = essentia.arrayToVector(audioData);
+
+            let extractedFeatures: any = {}; 
 
             // --- Extract Selected Features --- 
-            console.log(`[Extract] Starting feature extraction for ${songId}...`);
+            console.log(`[Extract] Starting feature extraction for ${songId} at ${sampleRate} Hz...`);
+
+            // Ensure audioVectorEssentia is valid before proceeding
+            if (!audioVectorEssentia || audioVectorEssentia.size() === 0) {
+                throw new Error("Audio vector is invalid or empty.");
+            }
 
             if (featuresToExtract.includes('mfcc')) {
                 console.log(`[Extract][MFCC] Starting for ${songId}`);
+                // Use original audioData and sampleRate
+                // No need for temporary conversion back here if extractMFCC uses audioData
                 const mfccResult = await extractMFCC(essentia, audioData, sampleRate, songId);
                 extractedFeatures = { ...extractedFeatures, ...mfccResult };
                 console.log(`[Extract][MFCC] Completed for ${songId}`);
@@ -203,46 +216,144 @@ self.onmessage = async (event: MessageEvent<WorkerMessageData>) => {
                 console.log(`[Extract][Energy] Starting for ${songId}`);
                 const energyResult = essentia.Energy(audioVectorEssentia); 
                 extractedFeatures.energy = energyResult.energy;
-                 essentia.vectorToArray(audioVectorEssentia); // Necessary cleanup?
                 console.log(`[Extract][Energy] Completed for ${songId}:`, extractedFeatures.energy);
             }
             
             if (featuresToExtract.includes('entropy')) {
-                // Note: Entropy requires non-negative values. Audio data might have negatives.
-                // We might need to apply an offset or take absolute values depending on the desired result.
-                // For now, let's try with the raw data, but log a warning.
-                // A better approach might be to calculate entropy on the *energy* of frames.
                 console.log(`[Extract][Entropy] Starting for ${songId}`);
+                let nonNegativeVector: any = null; 
                 try {
-                    // Check for negative values, as Entropy algorithm expects non-negative input
-                    // Option 1: Use absolute values (common for signal processing)
+                    // Use original audioData
                     const nonNegativeAudioData = audioData.map(Math.abs);
-                    const nonNegativeVector = essentia.arrayToVector(nonNegativeAudioData);
+                    nonNegativeVector = essentia.arrayToVector(nonNegativeAudioData);
                     const entropyResult = essentia.Entropy(nonNegativeVector);
                     extractedFeatures.entropy = entropyResult.entropy;
-                    essentia.vectorToArray(nonNegativeVector); // Cleanup
                     console.log(`[Extract][Entropy] Completed for ${songId}:`, extractedFeatures.entropy);
                 } catch (entropyError) {
                     console.error(`[Extract][Entropy] Error for ${songId}:`, entropyError);
-                    // Optionally add an error indicator to the features
                     extractedFeatures.entropyError = (entropyError instanceof Error) ? entropyError.message : String(entropyError);
+                } finally {
+                    if (nonNegativeVector) nonNegativeVector.delete(); 
                 }
             }
             
             if (featuresToExtract.includes('key')) {
                 console.log(`[Extract][Key] Starting for ${songId}`);
                 try {
-                    const keyResult = essentia.KeyExtractor(audioVectorEssentia, true, 4096, 4096, 12, 3500, 60, 25, 0.2, 'bgate', sampleRate, 0.0001, 440, 'cosine', 'hann'); // Using defaults from docs + explicit sampleRate
+                    // Use original audioVectorEssentia and sampleRate
+                    const keyResult = essentia.KeyExtractor(audioVectorEssentia, true, 4096, 4096, 12, 3500, 60, 25, 0.2, 'bgate', sampleRate, 0.0001, 440, 'cosine', 'hann');
                     extractedFeatures.key = keyResult.key;
                     extractedFeatures.keyScale = keyResult.scale;
                     extractedFeatures.keyStrength = keyResult.strength;
-                     essentia.vectorToArray(audioVectorEssentia); // Necessary cleanup?
                     console.log(`[Extract][Key] Completed for ${songId}:`, keyResult.key, keyResult.scale, keyResult.strength);
                 } catch (keyError) {
                      console.error(`[Extract][Key] Error for ${songId}:`, keyError);
                      extractedFeatures.keyError = (keyError instanceof Error) ? keyError.message : String(keyError);
                 }
             }
+            
+            if (featuresToExtract.includes('dynamicComplexity')) {
+                console.log(`[Extract][DynamicComplexity] Starting for ${songId}`);
+                try {
+                    // Use original audioVectorEssentia and sampleRate
+                    const dynamicComplexityResult = essentia.DynamicComplexity(audioVectorEssentia, 0.2, sampleRate);
+                    extractedFeatures.dynamicComplexity = dynamicComplexityResult.dynamicComplexity;
+                    extractedFeatures.loudness = dynamicComplexityResult.loudness; 
+                    console.log(`[Extract][DynamicComplexity] Completed for ${songId}:`, dynamicComplexityResult);
+                } catch (dynCompError) {
+                    console.error(`[Extract][DynamicComplexity] Error for ${songId}:`, dynCompError);
+                    extractedFeatures.dynamicComplexityError = (dynCompError instanceof Error) ? dynCompError.message : String(dynCompError);
+                }
+            }
+
+            // --- RMS --- (NEW)
+            if (featuresToExtract.includes('rms')) {
+                console.log(`[Extract][RMS] Starting for ${songId}`);
+                try {
+                    const rmsResult = essentia.RMS(audioVectorEssentia);
+                    extractedFeatures.rms = rmsResult.rms;
+                    console.log(`[Extract][RMS] Completed for ${songId}:`, rmsResult.rms);
+                 } catch (rmsError) {
+                     console.error(`[Extract][RMS] Error for ${songId}:`, rmsError);
+                     extractedFeatures.rmsError = (rmsError instanceof Error) ? rmsError.message : String(rmsError);
+                 }
+             }
+             
+            // --- Rhythm Extractor --- (NEW)
+            if (featuresToExtract.includes('rhythm')) {
+                console.log(`[Extract][Rhythm] Starting for ${songId}`);
+                 try {
+                     // Using default method ('multifeature') and tempo ranges (40-208) explicitly
+                     const rhythmResult = essentia.RhythmExtractor2013(
+                         audioVectorEssentia,
+                         208, // maxTempo
+                         'degara', // method
+                         40 // minTempo
+                     );
+                     extractedFeatures.bpm = rhythmResult.bpm;
+                     extractedFeatures.ticks = essentia.vectorToArray(rhythmResult.ticks);
+                     extractedFeatures.rhythmConfidence = rhythmResult.confidence;
+                     // Optionally extract estimates and bpmIntervals if needed later
+                     // extractedFeatures.estimates = essentia.vectorToArray(rhythmResult.estimates);
+                     // extractedFeatures.bpmIntervals = essentia.vectorToArray(rhythmResult.bpmIntervals);
+                    console.log(`[Extract][Rhythm] Completed for ${songId}: BPM = ${rhythmResult.bpm}, Confidence = ${rhythmResult.confidence}, Ticks = ${extractedFeatures.ticks.length}`);
+                 } catch (rhythmError) {
+                     console.error(`[Extract][Rhythm] Error for ${songId}:`, rhythmError);
+                     extractedFeatures.rhythmError = (rhythmError instanceof Error) ? rhythmError.message : String(rhythmError);
+                 }
+            }
+
+            // --- Tuning Frequency --- (NEW)
+            if (featuresToExtract.includes('tuningFrequency')) {
+                console.log(`[Extract][TuningFreq] Starting for ${songId}`);
+                // Needs intermediate steps: Windowing -> Spectrum -> SpectralPeaks
+                let windowedFrameVec: any = null;
+                let spectrumVec: any = null;
+                let freqVec: any = null;
+                let magVec: any = null;
+                try {
+                    // 1. Windowing (using default Hann window, size matching audio for simplicity? Or standard like 2048? Let's use 2048)
+                    // Note: TuningFrequency often works better on a representative frame rather than the whole signal averaged.
+                    // However, for simplicity now, let's process the whole signal vector as one large frame.
+                    // This might not be the most musically meaningful way, but demonstrates the chain.
+                    // A better approach would involve framing and averaging results.
+                    windowedFrameVec = essentia.Windowing(audioVectorEssentia).frame; // Apply default Hann window
+
+                    // 2. Spectrum
+                    spectrumVec = essentia.Spectrum(windowedFrameVec).spectrum;
+
+                    // 3. Spectral Peaks
+                    const peaks = essentia.SpectralPeaks(spectrumVec);
+                    freqVec = peaks.frequencies;
+                    magVec = peaks.magnitudes;
+
+                    // 4. Tuning Frequency (using default resolution = 1 cent)
+                    if (freqVec.size() > 0) { // Check if any peaks were found
+                        const tuningResult = essentia.TuningFrequency(freqVec, magVec);
+                        extractedFeatures.tuningFrequency = tuningResult.tuningFrequency;
+                        extractedFeatures.tuningCents = tuningResult.tuningCents;
+                        console.log(`[Extract][TuningFreq] Completed for ${songId}: Freq = ${tuningResult.tuningFrequency} Hz, Cents = ${tuningResult.tuningCents}`);
+                    } else {
+                         console.warn(`[Extract][TuningFreq] No spectral peaks found for ${songId}, skipping tuning calculation.`);
+                         extractedFeatures.tuningFrequencyError = "No spectral peaks found";
+                    }
+                 } catch (tuningError) {
+                     console.error(`[Extract][TuningFreq] Error for ${songId}:`, tuningError);
+                     extractedFeatures.tuningFrequencyError = (tuningError instanceof Error) ? tuningError.message : String(tuningError);
+                 } finally {
+                     // Cleanup intermediate vectors
+                     if (windowedFrameVec) windowedFrameVec.delete();
+                     if (spectrumVec) spectrumVec.delete();
+                     if (freqVec) freqVec.delete();
+                     if (magVec) magVec.delete();
+                 }
+            }
+
+            // --- Cleanup primary audio vector --- 
+            if (audioVectorEssentia) { 
+                 console.log(`[Extract] Cleaning up audio vector for ${songId}`);
+                 audioVectorEssentia.delete(); 
+            } 
             
             console.log(`[Extract] All selected features extracted for ${songId}.`);
             
