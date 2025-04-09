@@ -5,12 +5,15 @@ module.exports = {
   // Target the webworker environment
   target: 'webworker',
   // Entry point for the worker script
-  entry: './src/workers/essentia-worker.ts',
+  entry: {
+    'essentia-worker': './src/workers/essentia-worker.ts',
+    'druid-worker': './src/workers/druid-worker.ts',
+  },
   output: {
     // Output directory for the bundled worker (inside public)
     path: path.resolve(__dirname, 'public/workers'),
     // Output filename
-    filename: 'essentia-worker.bundled.js',
+    filename: '[name].bundled.js',
     // Important for WASM loading within worker
     publicPath: '/workers/' 
   },

@@ -1,6 +1,6 @@
 'use client'; // Add this directive to make it a Client Component
 
-import React, { useState, ChangeEvent, useRef, useEffect, useCallback } from 'react';
+import React, { useState, ChangeEvent, useRef, useEffect, useCallback, useMemo } from 'react';
 
 // Import the new panel components
 import SongListPanel from '../components/SongListPanel';
@@ -54,35 +54,39 @@ export default function DashboardPage() {
   const [activeSongIds, setActiveSongIds] = useState<Set<string>>(() => 
     new Set(defaultSongs.map(song => song.id)) // Initially, all default songs are active
   );
+  // --- DruidJS State ---
+  const [reducedDataPoints, setReducedDataPoints] = useState<Record<string, number[]>>({}); // { songId: [dim1, dim2, ...] }
+  const [isReducing, setIsReducing] = useState<boolean>(false);
+  // Type for reduction method
+  type ReductionMethod = 'pca' | 'tsne' | 'umap';
+  // ---------------------
 
   const workerRef = useRef<Worker | null>(null);
+  const druidWorkerRef = useRef<Worker | null>(null); // Ref for Druid worker
   const audioContextRef = useRef<AudioContext | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null); // Ref for the hidden file input
 
-  // Initialize Worker and AudioContext
+  // Initialize Workers and AudioContext
   useEffect(() => {
     // Initialize AudioContext
     if (!audioContextRef.current) {
       audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
     }
 
-    // Initialize Worker
+    // Initialize Essentia Worker
     if (!workerRef.current) {
         console.log('Creating Essentia Bundled Worker...');
-        // Point to the bundled worker file in the public directory
-        // No need for module type or turbopackIgnore anymore
         workerRef.current = new Worker(/* turbopackIgnore: true */ '/workers/essentia-worker.bundled.js'); 
 
         workerRef.current.onmessage = (event) => {
             const { type, payload, songId, features, error } = event.data;
-            console.log('Message from worker:', event.data);
+            console.log('[Essentia Worker] Message received:', event.data);
 
             switch (type) {
                 case 'essentiaReady':
                     setEssentiaWorkerReady(payload);
                     if (!payload) {
                         console.error('Essentia worker failed to initialize:', error);
-                        // Handle initialization error appropriately (e.g., show message to user)
                     }
                     break;
                 case 'featureExtractionComplete':
@@ -90,24 +94,61 @@ export default function DashboardPage() {
                     setFeatureStatus(prev => ({ ...prev, [songId]: 'complete' }));
                     break;
                 case 'featureExtractionError':
-                    console.error(`Error processing song ${songId}:`, error);
+                    console.error(`[Essentia Worker] Error processing song ${songId}:`, error);
                     setFeatureStatus(prev => ({ ...prev, [songId]: 'error' }));
                     break;
                 default:
-                    console.warn('Unknown message type from worker:', type);
+                    console.warn('[Essentia Worker] Unknown message type:', type);
             }
         };
 
         workerRef.current.onerror = (error) => {
             console.error('Error in Essentia Worker:', error);
-            setEssentiaWorkerReady(false); // Assume worker is unusable
-             // Maybe set all processing songs to error status
+            setEssentiaWorkerReady(false); 
             setIsProcessing(false);
         };
         
-        // Send init message to worker
         workerRef.current.postMessage({ type: 'init' });
+    }
 
+    // Initialize Druid Worker
+    if (!druidWorkerRef.current) {
+        console.log('Creating Druid Bundled Worker...');
+        druidWorkerRef.current = new Worker(/* turbopackIgnore: true */ '/workers/druid-worker.bundled.js');
+
+        druidWorkerRef.current.onmessage = (event) => {
+            const { type, payload } = event.data;
+            console.log('[Druid Worker] Message received:', event.data);
+
+            switch (type) {
+                case 'reductionComplete':
+                    const { reducedData, songIds: returnedSongIds } = payload;
+                    // Update state by mapping song IDs to reduced data points
+                    const newPoints = returnedSongIds.reduce((acc: Record<string, number[]>, id: string, index: number) => {
+                        if (reducedData[index]) { // Ensure data exists for the index
+                            acc[id] = reducedData[index];
+                        }
+                        return acc;
+                    }, {});
+                    setReducedDataPoints(prev => ({ ...prev, ...newPoints }));
+                    setIsReducing(false);
+                    console.log('[Druid Worker] Dimensionality reduction complete.');
+                    break;
+                case 'reductionError':
+                    console.error('[Druid Worker] Reduction error:', payload.error);
+                    setIsReducing(false);
+                    // TODO: Maybe show a notification to the user
+                    break;
+                default:
+                    console.warn('[Druid Worker] Unknown message type:', type);
+            }
+        };
+
+        druidWorkerRef.current.onerror = (error) => {
+            console.error('Error in Druid Worker:', error);
+            setIsReducing(false);
+             // TODO: Maybe show a notification to the user
+        };
     }
 
     // Cleanup function
@@ -116,6 +157,11 @@ export default function DashboardPage() {
         console.log('Terminating Essentia Worker...');
         workerRef.current.terminate();
         workerRef.current = null;
+      }
+      if (druidWorkerRef.current) {
+          console.log('Terminating Druid Worker...');
+          druidWorkerRef.current.terminate();
+          druidWorkerRef.current = null;
       }
       // Close AudioContext if no longer needed elsewhere
       // if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
@@ -317,6 +363,210 @@ export default function DashboardPage() {
     }
   }, [songs, getDecodedAudio, essentiaWorkerReady, isProcessing, activeSongIds]);
 
+  // Function to trigger dimensionality reduction
+  const handleReduceDimensions = useCallback((method: ReductionMethod, dimensions: number, params?: any) => {
+    if (!druidWorkerRef.current || isReducing) {
+        console.warn('Druid worker not ready or already reducing.');
+        return;
+    }
+
+    console.log(`Starting dimensionality reduction with method: ${method}, dimensions: ${dimensions}`);
+    setIsReducing(true);
+    // Clear previous results? Or merge? For now, let's clear for the active set.
+    setReducedDataPoints(prev => {
+        const clearedState = { ...prev };
+        activeSongIds.forEach(id => delete clearedState[id]);
+        return clearedState;
+    });
+
+    // 1. Get features for active songs
+    const activeFeatures: { id: string; features: Features }[] = [];
+    activeSongIds.forEach(id => {
+        const features = songFeatures[id];
+        // Only include songs that have successfully computed features
+        if (features && featureStatus[id] === 'complete') {
+            activeFeatures.push({ id, features });
+        }
+    });
+
+    if (activeFeatures.length === 0) {
+        console.warn('No active songs with successfully extracted features found.');
+        setIsReducing(false);
+        return;
+    }
+    
+     // Basic check: Need more samples than dimensions
+    if (activeFeatures.length <= dimensions) {
+        console.warn(`Insufficient data points (${activeFeatures.length}) for ${dimensions} dimensions.`);
+        setIsReducing(false);
+        // TODO: Show notification to user
+        return;
+    }
+
+    // 2. Construct the featureVectors array and songIds array
+    //    IMPORTANT: Decide WHICH features to use and HOW to combine them.
+    //    For now, let's concatenate mfccMeans and mfccStdDevs if available.
+    const featureVectors: number[][] = [];
+    const vectorSongIds: string[] = [];
+
+    // --- Define Canonical Feature Order ---
+    const canonicalFeatureOrder: (keyof Features)[] = [
+        'energy', 'entropy', 'loudness', 'rms', 'dynamicComplexity', 'keyStrength', 
+        'tuningFrequency', 'tuningCents',
+        'mfccMeans', 'mfccStdDevs', // Array features
+        'key', 'keyScale' // String features last for one-hot encoding part
+    ];
+
+    // --- Determine Common Features Present in ALL Active Songs ---
+    let commonFeatures = new Set<keyof Features>(canonicalFeatureOrder);
+    if (activeFeatures.length > 0) {
+        // Initialize with features of the first song
+        const firstFeatures = activeFeatures[0].features;
+        commonFeatures = new Set(canonicalFeatureOrder.filter(key => 
+            firstFeatures[key] !== undefined && firstFeatures[key] !== null
+        ));
+
+        // Intersect with features of subsequent songs
+        for (let i = 1; i < activeFeatures.length; i++) {
+            const currentFeatures = activeFeatures[i].features;
+            commonFeatures.forEach(key => {
+                if (currentFeatures[key] === undefined || currentFeatures[key] === null) {
+                    commonFeatures.delete(key);
+                }
+            });
+        }
+    }
+
+    if (commonFeatures.size === 0) {
+        console.warn('No features are commonly present across all active songs.');
+        setIsReducing(false);
+        // TODO: Notify user
+        return;
+    }
+    console.log('Common features selected for analysis:', Array.from(commonFeatures));
+
+    // --- One-Hot Encoding Prep (only for common string features) ---
+    const uniqueKeys = new Set<string>();
+    const uniqueScales = new Set<string>();
+    let keyToIndex: Map<string, number> | null = null;
+    let scaleToIndex: Map<string, number> | null = null;
+    let numKeyDimensions = 0;
+    let numScaleDimensions = 0;
+
+    if (commonFeatures.has('key')) {
+        activeFeatures.forEach(({ features }) => {
+            // We already know key is non-null from commonFeatures check
+            uniqueKeys.add(features.key!);
+        });
+        const keyList = Array.from(uniqueKeys).sort();
+        keyToIndex = new Map(keyList.map((k, i) => [k, i]));
+        numKeyDimensions = keyList.length;
+        console.log(`One-hot encoding prepared for 'key' with ${numKeyDimensions} dimensions.`);
+    }
+
+    if (commonFeatures.has('keyScale')) {
+        activeFeatures.forEach(({ features }) => {
+            uniqueScales.add(features.keyScale!);
+        });
+        const scaleList = Array.from(uniqueScales).sort();
+        scaleToIndex = new Map(scaleList.map((s, i) => [s, i]));
+        numScaleDimensions = scaleList.length;
+        console.log(`One-hot encoding prepared for 'keyScale' with ${numScaleDimensions} dimensions.`);
+    }
+    // -----------------------------
+
+    activeFeatures.forEach(({ id, features }) => {
+        const vec: number[] = [];
+
+        // Iterate through the canonical order, but only include common features
+        for (const key of canonicalFeatureOrder) {
+            if (!commonFeatures.has(key)) {
+                continue; // Skip features not present in all active songs
+            }
+
+            const value = features[key]; // We know value is not null/undefined here
+
+            // Handle based on type (and if it's a string feature)
+            if (key === 'key' && keyToIndex) {
+                const keyOneHot = Array(numKeyDimensions).fill(0);
+                const index = keyToIndex.get(value as string);
+                if (index !== undefined) { // Should always be found if logic is correct
+                    keyOneHot[index] = 1;
+                    vec.push(...keyOneHot);
+                } else {
+                     console.error(`Logic error: Key '${value}' for song ${id} not found in keyToIndex map.`);
+                     // Handle this potential inconsistency? Skip song? For now, log error.
+                }
+            } else if (key === 'keyScale' && scaleToIndex) {
+                const scaleOneHot = Array(numScaleDimensions).fill(0);
+                const index = scaleToIndex.get(value as string);
+                if (index !== undefined) {
+                     scaleOneHot[index] = 1;
+                    vec.push(...scaleOneHot);
+                } else {
+                    console.error(`Logic error: Scale '${value}' for song ${id} not found in scaleToIndex map.`);
+                }
+            } else if (Array.isArray(value)) {
+                // Assume numeric array based on Features type & commonFeatures check
+                vec.push(...(value as number[]));
+            } else if (typeof value === 'number') {
+                vec.push(value);
+            }
+            // Else: non-string, non-array, non-number - should not happen based on Features type
+        }
+        
+        // Add the fully constructed vector if it's not empty (it shouldn't be if commonFeatures > 0)
+        if (vec.length > 0) { 
+            featureVectors.push(vec);
+            vectorSongIds.push(id);
+        } else {
+            // This case should theoretically not be reached if commonFeatures.size > 0
+            console.warn(`Song ${id} resulted in an empty vector despite having common features.`);
+        }
+    });
+
+    // Check if all vectors have the same dimension after construction
+    if (featureVectors.length > 0) {
+        const firstLen = featureVectors[0].length;
+        if (!featureVectors.every(v => v.length === firstLen)) {
+             console.error('Feature vectors have inconsistent lengths. Cannot proceed.');
+             setIsReducing(false);
+             // TODO: Show error notification
+             return;
+        }
+        if (firstLen === 0) {
+            console.warn('Constructed feature vectors are empty.');
+             setIsReducing(false);
+             return;
+        }
+        const finalDimension = featureVectors[0].length; // Get dimension after all features added
+        console.log(`Prepared ${featureVectors.length} vectors for reduction, each with ${finalDimension} dimensions (including one-hot).`);
+    } else {
+         console.warn('No valid feature vectors constructed for reduction.');
+         setIsReducing(false);
+         return;
+    }
+
+    // 3. Post message to worker
+    druidWorkerRef.current.postMessage({
+        type: 'reduceDimensions',
+        payload: {
+            featureVectors: featureVectors,
+            songIds: vectorSongIds,
+            method: method,
+            dimensions: dimensions,
+            ...(params && { ...params }) // Include optional params like perplexity, neighbors
+        }
+    });
+
+}, [activeSongIds, songFeatures, featureStatus, isReducing]);
+
+  // Calculate derived state: Check if any active song has completed features
+  const hasFeaturesForActiveSongs = useMemo(() => {
+      return Array.from(activeSongIds).some(id => 
+          featureStatus[id] === 'complete' && songFeatures[id] != null
+      );
+  }, [activeSongIds, featureStatus, songFeatures]);
 
   return (
     <main className="flex flex-col min-h-screen p-4 bg-gray-900 text-gray-100 font-[family-name:var(--font-geist-mono)]">
@@ -363,10 +613,12 @@ export default function DashboardPage() {
         <ControlsPanel 
           className="col-span-1 row-span-1" // Changed row-span-2 to row-span-1
           isProcessing={isProcessing}
+          isReducing={isReducing} // Pass down reducing state
           essentiaWorkerReady={essentiaWorkerReady}
           activeSongCount={activeSongIds.size}
+          hasFeaturesForActiveSongs={hasFeaturesForActiveSongs} // Pass down derived state
           onExtractFeatures={handleExtractFeatures}
-          // Pass down setters/handlers for controls later
+          onReduceDimensions={handleReduceDimensions} // Pass down handler
         />
 
         {/* Visualization Panel */}
