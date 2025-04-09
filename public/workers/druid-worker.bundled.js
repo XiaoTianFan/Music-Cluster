@@ -7152,7 +7152,7 @@ self.onmessage = async (event) => {
                     // UMAP constructor: (X: Matrix | number[][], parameters?: { nn?: number, d?: number, seed?: number, metric?: string | function, iterations?: number, lr?: number, minDist?: number })
                     drInstance = new _saehrimnir_druidjs__WEBPACK_IMPORTED_MODULE_0__.UMAP(matrix, {
                         d: dimensions,
-                        n_neighbors: neighbors !== null && neighbors !== void 0 ? neighbors : 15, // Default neighbors if not provided
+                        n_neighbors: neighbors !== null && neighbors !== void 0 ? neighbors : 5, // Default neighbors if not provided
                         min_dist: minDist !== null && minDist !== void 0 ? minDist : 0.1, // Default min_dist if not provided
                         // Add other UMAP params as needed
                     });
