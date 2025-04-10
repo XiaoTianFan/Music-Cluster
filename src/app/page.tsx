@@ -120,6 +120,173 @@ const setsAreEqual = (setA: Set<unknown>, setB: Set<unknown>): boolean => {
   return true;
 };
 
+// Type for data processing method (add this if not already defined globally)
+type ProcessingMethod = 'none' | 'standardize' | 'normalize';
+
+// --- Helper: Prepare Matrix (Extracted Logic) ---
+const prepareMatrix = (
+    activeFeatures: { id: string; features: Features }[], // Input: Features of active songs
+    logFn: (msg: string, level: LogLevel) => void
+): { vectors: number[][], songIds: string[], isOHEColumn: boolean[] } | null => {
+    logFn('Preparing numerical matrix from features...', 'info');
+
+    if (activeFeatures.length === 0) {
+        logFn('No active songs with features available for matrix preparation.', 'warn');
+        return null;
+    }
+
+    // Define Canonical Feature Order (same as before)
+    const canonicalFeatureOrder: (keyof Features)[] = [
+        'energy', 'entropy', 'loudness', 'rms', 'dynamicComplexity', 'keyStrength',
+        'tuningFrequency', 'tuningCents',
+        'mfccMeans', 'mfccStdDevs', // Array features last before strings
+        'key', 'keyScale' // String features for one-hot encoding
+    ];
+
+    // Determine Common Features (same logic as before)
+    let commonFeatures = new Set<keyof Features>();
+    const firstFeatures = activeFeatures[0].features;
+    commonFeatures = new Set(canonicalFeatureOrder.filter(key =>
+        firstFeatures[key] !== undefined && firstFeatures[key] !== null
+    ));
+    for (let i = 1; i < activeFeatures.length; i++) {
+        const currentFeatures = activeFeatures[i].features;
+        commonFeatures.forEach(key => {
+            if (currentFeatures[key] === undefined || currentFeatures[key] === null) {
+                commonFeatures.delete(key);
+            }
+        });
+    }
+
+    if (commonFeatures.size === 0) {
+        logFn('No features are commonly present across all selected active songs for matrix prep.', 'warn');
+        return null;
+    }
+    logFn(`Common features for matrix: [${Array.from(commonFeatures).join(', ')}]`, 'complete');
+
+    // One-Hot Encoding Prep (same logic as before)
+    const uniqueKeys = new Set<string>();
+    const uniqueScales = new Set<string>();
+    let keyToIndex: Map<string, number> | null = null;
+    let scaleToIndex: Map<string, number> | null = null;
+    let numKeyDimensions = 0;
+    let numScaleDimensions = 0;
+    if (commonFeatures.has('key')) {
+        activeFeatures.forEach(({ features }) => { uniqueKeys.add(features.key!); });
+        const keyList = Array.from(uniqueKeys).sort();
+        keyToIndex = new Map(keyList.map((k, i) => [k, i]));
+        numKeyDimensions = keyList.length;
+        logFn(`Preparing one-hot encoding for 'key' (${numKeyDimensions} dimensions).`, 'complete');
+    }
+    if (commonFeatures.has('keyScale')) {
+        activeFeatures.forEach(({ features }) => { uniqueScales.add(features.keyScale!); });
+        const scaleList = Array.from(uniqueScales).sort();
+        scaleToIndex = new Map(scaleList.map((s, i) => [s, i]));
+        numScaleDimensions = scaleList.length;
+        logFn(`Preparing one-hot encoding for 'keyScale' (${numScaleDimensions} dimensions).`, 'complete');
+    }
+
+    // Construct vectors
+    const featureVectors: number[][] = [];
+    const vectorSongIds: string[] = [];
+    // --- NEW: Track OHE status for each column ---
+    let isOHEColumnDefinition: boolean[] = []; 
+    let isOHEColumnDefinitionFinalized = false;
+    // ---------------------------------------------
+    let inconsistencyFound = false;
+    
+    activeFeatures.forEach(({ id, features }, rowIndex) => {
+        const vec: number[] = [];
+        // Define isOHEColumnDefinition based on the first row
+        if (rowIndex === 0) {
+             isOHEColumnDefinition = []; // Reset for the first row run
+        }
+
+        for (const key of canonicalFeatureOrder) {
+            if (!commonFeatures.has(key)) continue;
+            const value = features[key]!;
+
+            if (key === 'key' && keyToIndex) {
+                const keyOneHot = Array(numKeyDimensions).fill(0);
+                const index = keyToIndex.get(value as string);
+                if (index !== undefined) keyOneHot[index] = 1;
+                else { /* error handling */ inconsistencyFound = true; }
+                vec.push(...keyOneHot);
+                // Mark these columns as OHE (only needed for first row)
+                if (rowIndex === 0) {
+                    isOHEColumnDefinition.push(...Array(numKeyDimensions).fill(true));
+                }
+            } else if (key === 'keyScale' && scaleToIndex) {
+                const scaleOneHot = Array(numScaleDimensions).fill(0);
+                const index = scaleToIndex.get(value as string);
+                if (index !== undefined) scaleOneHot[index] = 1;
+                else { /* error handling */ inconsistencyFound = true; }
+                vec.push(...scaleOneHot);
+                 // Mark these columns as OHE (only needed for first row)
+                if (rowIndex === 0) {
+                     isOHEColumnDefinition.push(...Array(numScaleDimensions).fill(true));
+                 }
+            } else if (Array.isArray(value)) {
+                const numericalArray = value as number[];
+                vec.push(...numericalArray);
+                 // Mark these columns as NOT OHE (only needed for first row)
+                 if (rowIndex === 0) {
+                     isOHEColumnDefinition.push(...Array(numericalArray.length).fill(false));
+                 }
+            } else if (typeof value === 'number') {
+                vec.push(value);
+                 // Mark this column as NOT OHE (only needed for first row)
+                 if (rowIndex === 0) {
+                     isOHEColumnDefinition.push(false);
+                 }
+            }
+        }
+        
+        // Finalize the definition after processing the first row
+        if (rowIndex === 0) {
+             isOHEColumnDefinitionFinalized = true;
+        }
+
+        if (vec.length > 0 && !inconsistencyFound) {
+            // Simple sanity check: vector length should match definition length after first row
+            if (isOHEColumnDefinitionFinalized && vec.length !== isOHEColumnDefinition.length) {
+                 logFn(`Row ${rowIndex} for song ${id} has inconsistent vector length (${vec.length}) compared to definition (${isOHEColumnDefinition.length}). Aborting.`, 'error');
+                 inconsistencyFound = true;
+            }
+            featureVectors.push(vec);
+            vectorSongIds.push(id);
+        } else if (!inconsistencyFound) {
+             logFn(`Song ${id} resulted in an empty vector.`, 'warn');
+        }
+    });
+
+    if (inconsistencyFound || !isOHEColumnDefinitionFinalized) {
+        logFn('Matrix preparation failed due to inconsistencies or lack of data.', 'error');
+        return null;
+    }
+
+    // Final checks (vector consistency, length)
+    if (featureVectors.length > 0) {
+        const firstLen = featureVectors[0].length;
+        if (!featureVectors.every(v => v.length === firstLen)) {
+             logFn('Constructed feature vectors have inconsistent lengths.', 'error');
+             return null;
+        }
+        if (firstLen === 0) {
+            logFn('Constructed feature vectors are empty (length 0).', 'warn');
+            return null;
+        }
+        logFn(`Prepared ${featureVectors.length} vectors for processing, each with ${firstLen} dimensions.`, 'complete');
+    } else {
+         logFn('No valid feature vectors constructed for matrix prep.', 'warn');
+         return null;
+    }
+
+    // MODIFIED Return Value:
+    return { vectors: featureVectors, songIds: vectorSongIds, isOHEColumn: isOHEColumnDefinition };
+};
+// --- End Helper ---
+
 export default function DashboardPage() {
   const [songs, setSongs] = useState<Song[]>(defaultSongs);
   const [songFeatures, setSongFeatures] = useState<Record<string, Features | null>>({}); // { songId: features }
@@ -130,6 +297,12 @@ export default function DashboardPage() {
   const [activeSongIds, setActiveSongIds] = useState<Set<string>>(() =>
     new Set(defaultSongs.map(song => song.id)) // Initially, all default songs are active
   );
+  // --- Data Processing State (New) ---
+  // MODIFIED: Add isOHEColumn to state type
+  type UnprocessedDataType = { vectors: number[][], songIds: string[], isOHEColumn: boolean[] };
+  const [unprocessedData, setUnprocessedData] = useState<UnprocessedDataType | null>(null);
+  const [processedData, setProcessedData] = useState<{ vectors: number[][], songIds: string[] } | null>(null); // Processed data doesn't need OHE info directly
+  const [isProcessingData, setIsProcessingData] = useState<boolean>(false);
   // --- DruidJS State ---
   const [reducedDataPoints, setReducedDataPoints] = useState<Record<string, number[]>>({}); // { songId: [dim1, dim2, ...] }
   const [isReducing, setIsReducing] = useState<boolean>(false);
@@ -161,6 +334,7 @@ export default function DashboardPage() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null); // Ref for the hidden file input
   const kmeansWorkerRef = useRef<Worker | null>(null);
+  const dataProcessingWorkerRef = useRef<Worker | null>(null); // <-- Add ref for the new worker
   const extractionStartTimeRef = useRef<number | null>(null); // Ref for timing
 
   // --- K-Means State ---
@@ -337,6 +511,48 @@ export default function DashboardPage() {
         };
     }
 
+    // Initialize Data Processing Worker
+    if (!dataProcessingWorkerRef.current) {
+        addLogMessage('Creating Data Processing Bundled Worker...', 'info');
+        dataProcessingWorkerRef.current = new Worker(/* turbopackIgnore: true */ '/workers/data-processing-worker.bundled.js');
+
+        dataProcessingWorkerRef.current.onmessage = (event) => {
+            const { type, payload } = event.data;
+            addLogMessage(`[Main] Received Data Processing worker message: ${type}`);
+
+            switch (type) {
+                case 'processingComplete':
+                    // --- Update state on processing complete --- 
+                    setProcessedData({ vectors: payload.processedVectors, songIds: payload.songIds });
+                    setIsProcessingData(false);
+                    addLogMessage(`Data processing complete. Stored ${payload.processedVectors?.length} processed vectors.`, 'complete');
+                    // -------------------------------------------
+                    break;
+                case 'processingError':
+                    // --- Update state on processing error --- 
+                    addLogMessage(`Data Processing Worker Error: ${payload.error}`, 'error');
+                    setProcessedData(null); // Clear processed data on error
+                    setIsProcessingData(false);
+                     // Keep unprocessedData as it might still be useful or user might retry
+                    // ----------------------------------------
+                    break;
+                case 'dataProcessingWorkerReady':
+                     addLogMessage('Data Processing worker reported ready.', 'complete');
+                     break;
+                default:
+                    addLogMessage(`Unknown message type from Data Processing worker: ${type}`, 'warn');
+            }
+        };
+
+        dataProcessingWorkerRef.current.onerror = (error) => {
+            addLogMessage(`Error in Data Processing Worker: ${error?.message || 'Unknown error'}`, 'error');
+            // --- Update state on worker error --- 
+            setProcessedData(null);
+            setIsProcessingData(false);
+            // -----------------------------------
+        };
+    }
+
     // Cleanup function
     return () => {
       if (workerRef.current) {
@@ -353,6 +569,11 @@ export default function DashboardPage() {
           addLogMessage('Terminating K-Means worker...', 'info');
           kmeansWorkerRef.current.terminate();
           kmeansWorkerRef.current = null;
+      }
+      if (dataProcessingWorkerRef.current) {
+          addLogMessage('Terminating Data Processing Worker...', 'info');
+          dataProcessingWorkerRef.current.terminate();
+          dataProcessingWorkerRef.current = null;
       }
       // Close AudioContext if no longer needed elsewhere
       // if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
@@ -383,9 +604,9 @@ export default function DashboardPage() {
       });
   }, [addLogMessage]); // Run once on mount
 
-  // Check if all songs are processed
+  // Check if all songs are processed (Feature Extraction Completion Check)
   useEffect(() => {
-    if (!isProcessing) return; // Only run when processing
+    if (!isProcessing) return; // Only run when MIR extraction is processing
 
     // Check if there are any songs STILL marked as 'processing'
     // This correctly identifies when the *current batch* has finished,
@@ -406,9 +627,20 @@ export default function DashboardPage() {
             extractionStartTimeRef.current = null; // Reset timer
         }
 
-        setIsProcessing(false); // Mark processing as complete
+        setIsProcessing(false); // Mark MIR processing as complete
         setProcessingSongIds(new Set()); // Clear the processing batch IDs
         addLogMessage(durationMessage, 'complete');
+
+        // --- Clear downstream state when NEW features are extracted ---
+        setUnprocessedData(null);
+        setProcessedData(null);
+        setReducedDataPoints({});
+        setKmeansAssignments({});
+        setKmeansCentroids([]);
+        setKmeansIteration(0);
+        setReductionDimensions(0);
+        addLogMessage('Downstream processing results cleared due to new feature extraction.', 'info');
+        // -------------------------------------------------------------
 
         // --- TEMPORARY CODE START (Cache Generation Logging) ---
         // Log the final features object ONLY when processing finishes
@@ -524,6 +756,23 @@ export default function DashboardPage() {
         return newState;
     });
 
+    // Remove from new processing states as well
+    setUnprocessedData(prev => {
+        if (!prev) return null;
+        const songIndex = prev.songIds.indexOf(songIdToRemove);
+        if (songIndex === -1) return prev;
+        const newVectors = prev.vectors.filter((_, index) => index !== songIndex);
+        const newSongIds = prev.songIds.filter(id => id !== songIdToRemove);
+        return newVectors.length > 0 ? { vectors: newVectors, songIds: newSongIds, isOHEColumn: prev.isOHEColumn } : null;
+    });
+    setProcessedData(prev => {
+        if (!prev) return null;
+        const songIndex = prev.songIds.indexOf(songIdToRemove);
+        if (songIndex === -1) return prev;
+        const newVectors = prev.vectors.filter((_, index) => index !== songIndex);
+        const newSongIds = prev.songIds.filter(id => id !== songIdToRemove);
+        return newVectors.length > 0 ? { vectors: newVectors, songIds: newSongIds } : null;
+    });
 
     // Revoke object URL if it's a user-uploaded file being removed
     if (songToRemove && songToRemove.source === 'user') {
@@ -689,6 +938,8 @@ export default function DashboardPage() {
 
               addLogMessage('Successfully loaded features from cache.', 'complete');
               setIsProcessing(false); // Ensure processing flag is off
+              setUnprocessedData(null); // Clear new state
+              setProcessedData(null);   // Clear new state
               return; // Exit the function early
             }
           } else {
@@ -703,6 +954,20 @@ export default function DashboardPage() {
       }
     }
     // --- END: Cache Check Logic ---
+
+    // If using cache, clear downstream state
+    if (/* cache was successfully loaded */ false) { // Replace false with actual cache success condition
+        // ... existing cache loading logic ...
+        setUnprocessedData(null); // Clear new state
+        setProcessedData(null);   // Clear new state
+        setReducedDataPoints({});
+        setKmeansAssignments({});
+        setKmeansCentroids([]);
+        setKmeansIteration(0);
+        setReductionDimensions(0);
+        addLogMessage('Downstream results cleared after loading features from cache.', 'info');
+        return;
+    }
 
     // --- Original Worker Logic (Fallback) ---
     if (!essentiaWorkerReady || isProcessing || !workerRef.current) {
@@ -752,8 +1017,27 @@ export default function DashboardPage() {
         return clearedState;
      });
      setKmeansCentroids([]);
-     setReductionDimensions(0); // Reset dimensions indicator
+     setKmeansIteration(0);
+     setReductionDimensions(0);
 
+    // --- Clear downstream state when starting NEW feature extraction ---
+    setUnprocessedData(null);
+    setProcessedData(null);
+    setReducedDataPoints(prev => {
+         const clearedState = { ...prev };
+         songsToProcess.forEach(song => delete clearedState[song.id]);
+         return clearedState;
+     });
+     setKmeansAssignments(prev => {
+        const clearedState = { ...prev };
+        songsToProcess.forEach(song => delete clearedState[song.id]);
+        return clearedState;
+     });
+     setKmeansCentroids([]);
+     setKmeansIteration(0);
+     setReductionDimensions(0);
+    addLogMessage('Downstream processing results cleared before new feature extraction.', 'info');
+    // ------------------------------------------------------------------
 
     for (const song of songsToProcess) {
         addLogMessage(`Requesting features for ${song.name}...`, 'info');
@@ -781,223 +1065,170 @@ export default function DashboardPage() {
     }
   }, [songs, getDecodedAudio, essentiaWorkerReady, isProcessing, activeSongIds, addLogMessage, featureStatus, setSongFeatures, setFeatureStatus, setReducedDataPoints, setKmeansAssignments, setKmeansCentroids, setKmeansIteration, setReductionDimensions]); // Added state setters to dependency array
 
-  // Function to trigger dimensionality reduction
-  const handleReduceDimensions = useCallback((method: ReductionMethod, dimensions: number, params?: any) => {
-    if (!druidWorkerRef.current || isReducing) {
-        addLogMessage('Druid worker not ready or already reducing.', 'warn');
+  // --- NEW Handler to Trigger Data Processing ---
+  const handleStartDataProcessing = useCallback((method: ProcessingMethod, range?: [number, number]) => {
+    // Checks for worker readiness and other active processes
+    if (!dataProcessingWorkerRef.current || isProcessingData || isProcessing || isReducing || isClustering) {
+        addLogMessage('Cannot start data processing: Worker not ready or another process is active.', 'warn');
         return;
     }
 
-    addLogMessage(`Starting dimensionality reduction with method: ${method}, dimensions: ${dimensions}`, 'info');
+    addLogMessage(`Preparing data for processing method: ${method}...`, 'info');
+
+    // Get features for active songs that are complete
+    const activeFeatures: { id: string; features: Features }[] = [];
+    let songsWithoutCompleteFeaturesCount = 0;
+    activeSongIds.forEach(id => {
+        const features = songFeatures[id];
+        const status = featureStatus[id];
+        if (features && status === 'complete') {
+            activeFeatures.push({ id, features });
+        } else if (status !== 'complete') {
+            songsWithoutCompleteFeaturesCount++;
+        }
+    });
+
+    // Log skipped songs
+    if (songsWithoutCompleteFeaturesCount > 0) {
+        addLogMessage(`Skipping ${songsWithoutCompleteFeaturesCount} active song(s) without complete features for processing step.`, 'warn');
+    }
+
+    // Check if any features are available
+    if (activeFeatures.length === 0) {
+        addLogMessage('No active songs with successfully extracted features found for processing.', 'warn');
+        return;
+    }
+
+    // Prepare the numerical matrix using the helper function
+    const matrixResult = prepareMatrix(activeFeatures, addLogMessage);
+
+    if (matrixResult) {
+        // Store unprocessed data (including OHE info) & clear downstream
+        setUnprocessedData(matrixResult); // Now includes isOHEColumn
+        setProcessedData(null);
+        setReducedDataPoints({});
+        setKmeansAssignments({});
+        setKmeansCentroids([]);
+        setKmeansIteration(0);
+        setReductionDimensions(0);
+        addLogMessage('Stored unprocessed matrix with OHE info. Cleared downstream results...', 'info');
+
+        // Set processing flag and send to worker (including OHE info)
+        setIsProcessingData(true);
+        addLogMessage(`Sending ${matrixResult.vectors.length} vectors to Data Processing worker (Method: ${method})...`, 'info');
+        dataProcessingWorkerRef.current.postMessage({
+            type: 'processData',
+            payload: {
+                vectors: matrixResult.vectors,
+                songIds: matrixResult.songIds,
+                isOHEColumn: matrixResult.isOHEColumn, // <-- Send OHE info
+                method: method,
+                ...(range && { range: range })
+            }
+        });
+    } else {
+        // Matrix preparation failed
+        addLogMessage('Matrix preparation failed. Cannot proceed with data processing.', 'error');
+        setUnprocessedData(null);
+        setIsProcessingData(false);
+    }
+
+}, [
+    // Direct state dependencies read in the function:
+    activeSongIds, songFeatures, featureStatus, 
+    isProcessingData, isProcessing, isReducing, isClustering,
+    // Callbacks/Refs used:
+    addLogMessage, dataProcessingWorkerRef,
+    // State setters used:
+    setUnprocessedData, setProcessedData, setReducedDataPoints, 
+    setKmeansAssignments, setKmeansCentroids, setKmeansIteration, 
+    setReductionDimensions, setIsProcessingData
+]);
+
+  // --- MODIFIED Handler: Trigger dimensionality reduction ---
+  const handleReduceDimensions = useCallback((reductionMethod: ReductionMethod, dimensions: number, params?: any) => {
+    // --- Check Preconditions ---
+    if (!druidWorkerRef.current) {
+        addLogMessage('Druid worker not ready. Reduction aborted.', 'warn');
+        return;
+    }
+    if (isReducing) {
+        addLogMessage('Dimensionality reduction already in progress.', 'warn');
+        return;
+    }
+    if (isProcessing || isProcessingData || isClustering) {
+        addLogMessage('Cannot reduce dimensions while another process is active.', 'warn');
+        return;
+    }
+    if (!processedData || processedData.vectors.length === 0) {
+        addLogMessage('No processed data available. Please run the Data Processing step first.', 'warn');
+        return;
+    }
+
+    const { vectors: vectorsToReduce, songIds: idsForReduction } = processedData;
+
+    // Basic check: Need more samples than dimensions
+    if (vectorsToReduce.length <= dimensions) {
+        addLogMessage(`Insufficient data points (${vectorsToReduce.length}) for ${dimensions} dimensions. Need more points than dimensions.`, 'warn');
+        return;
+    }
+    
+    // Check if target dimensions exceed source dimensions
+    if (vectorsToReduce.length > 0 && dimensions >= vectorsToReduce[0].length) {
+        addLogMessage(`Target dimensions (${dimensions}) must be less than source dimensions (${vectorsToReduce[0].length}). Aborting reduction.`, 'warn');
+        return;
+    }
+    // --- Preconditions Met ---
+
+    addLogMessage(`Starting dimensionality reduction with method: ${reductionMethod}, dimensions: ${dimensions}`, 'info');
     setIsReducing(true);
-    // Clear previous reduced points for active songs and related k-means
+    // Clear previous reduced points for active songs and subsequent clustering results
     setReducedDataPoints(prev => {
         const clearedState = { ...prev };
-        activeSongIds.forEach(id => delete clearedState[id]);
+        idsForReduction.forEach(id => delete clearedState[id]); // Clear only the points we are about to reduce
         return clearedState;
     });
     setKmeansAssignments({});
     setKmeansCentroids([]);
     setKmeansIteration(0);
+    // Keep reductionDimensions state as it is, it will be updated on completion
 
-    // 1. Get features for active songs
-    const activeFeatures: { id: string; features: Features }[] = [];
-    let songsWithoutCompleteFeaturesCount = 0;
-    activeSongIds.forEach(id => {
-        const features = songFeatures[id];
-        if (features && featureStatus[id] === 'complete') {
-            activeFeatures.push({ id, features });
-        } else {
-            songsWithoutCompleteFeaturesCount++;
-        }
-    });
-
-     if (songsWithoutCompleteFeaturesCount > 0) {
-        addLogMessage(`Skipping ${songsWithoutCompleteFeaturesCount} active song(s) without complete features for reduction.`, 'warn');
-     }
-
-    if (activeFeatures.length === 0) {
-        addLogMessage('No active songs with successfully extracted features found for reduction.', 'warn');
-        setIsReducing(false);
-        return;
-    }
-
-     // Basic check: Need more samples than dimensions
-    if (activeFeatures.length <= dimensions) {
-        addLogMessage(`Insufficient data points (${activeFeatures.length}) for ${dimensions} dimensions. Need more points than dimensions.`, 'warn');
-        setIsReducing(false);
-        // TODO: Show notification to user
-        return;
-    }
-
-    // 2. Construct the featureVectors array and songIds array
-    const featureVectors: number[][] = [];
-    const vectorSongIds: string[] = [];
-
-    // Define Canonical Feature Order
-    const canonicalFeatureOrder: (keyof Features)[] = [
-        'energy', 'entropy', 'loudness', 'rms', 'dynamicComplexity', 'keyStrength',
-        'tuningFrequency', 'tuningCents',
-        'mfccMeans', 'mfccStdDevs', // Array features last before strings
-        // String features should be handled specifically for one-hot encoding
-        'key', 'keyScale'
-    ];
-
-    // Determine Common Features Present in ALL Active Songs being processed
-    let commonFeatures = new Set<keyof Features>();
-    if (activeFeatures.length > 0) {
-        const firstFeatures = activeFeatures[0].features;
-        // Initialize with features available in the first song
-        commonFeatures = new Set(canonicalFeatureOrder.filter(key =>
-            firstFeatures[key] !== undefined && firstFeatures[key] !== null
-        ));
-        // Intersect with features of subsequent songs
-        for (let i = 1; i < activeFeatures.length; i++) {
-            const currentFeatures = activeFeatures[i].features;
-            commonFeatures.forEach(key => {
-                if (currentFeatures[key] === undefined || currentFeatures[key] === null) {
-                    commonFeatures.delete(key);
-                }
-            });
-        }
-    }
-
-    if (commonFeatures.size === 0) {
-        addLogMessage('No features are commonly present across all selected active songs.', 'warn');
-        setIsReducing(false);
-        return;
-    }
-    addLogMessage(`Common features identified for analysis: [${Array.from(commonFeatures).join(', ')}]`, 'complete');
-
-    // One-Hot Encoding Prep (only for common string features)
-    const uniqueKeys = new Set<string>();
-    const uniqueScales = new Set<string>();
-    let keyToIndex: Map<string, number> | null = null;
-    let scaleToIndex: Map<string, number> | null = null;
-    let numKeyDimensions = 0;
-    let numScaleDimensions = 0;
-
-    if (commonFeatures.has('key')) {
-        activeFeatures.forEach(({ features }) => { uniqueKeys.add(features.key!); });
-        const keyList = Array.from(uniqueKeys).sort();
-        keyToIndex = new Map(keyList.map((k, i) => [k, i]));
-        numKeyDimensions = keyList.length;
-        addLogMessage(`Preparing one-hot encoding for 'key' (${numKeyDimensions} dimensions).`, 'complete');
-    }
-
-    if (commonFeatures.has('keyScale')) {
-        activeFeatures.forEach(({ features }) => { uniqueScales.add(features.keyScale!); });
-        const scaleList = Array.from(uniqueScales).sort();
-        scaleToIndex = new Map(scaleList.map((s, i) => [s, i]));
-        numScaleDimensions = scaleList.length;
-        addLogMessage(`Preparing one-hot encoding for 'keyScale' (${numScaleDimensions} dimensions).`, 'complete');
-    }
-
-    // Construct vectors using common features in canonical order
-    let inconsistencyFound = false;
-    activeFeatures.forEach(({ id, features }) => {
-        const vec: number[] = [];
-        for (const key of canonicalFeatureOrder) {
-            if (!commonFeatures.has(key)) continue;
-
-            const value = features[key]!; // Value guaranteed to exist
-
-            if (key === 'key' && keyToIndex) {
-                const keyOneHot = Array(numKeyDimensions).fill(0);
-                const index = keyToIndex.get(value as string);
-                if (index !== undefined) keyOneHot[index] = 1;
-                else { addLogMessage(`Logic error: Key '${value}' for song ${id} not found in keyToIndex map.`, 'error'); inconsistencyFound = true; }
-                vec.push(...keyOneHot);
-            } else if (key === 'keyScale' && scaleToIndex) {
-                const scaleOneHot = Array(numScaleDimensions).fill(0);
-                const index = scaleToIndex.get(value as string);
-                if (index !== undefined) scaleOneHot[index] = 1;
-                else { addLogMessage(`Logic error: Scale '${value}' for song ${id} not found in scaleToIndex map.`, 'error'); inconsistencyFound = true; }
-                vec.push(...scaleOneHot);
-            } else if (Array.isArray(value)) {
-                vec.push(...(value as number[]));
-            } else if (typeof value === 'number') {
-                vec.push(value);
-            }
-        }
-
-        if (vec.length > 0 && !inconsistencyFound) {
-            featureVectors.push(vec);
-            vectorSongIds.push(id);
-        } else if (!inconsistencyFound) {
-             addLogMessage(`Song ${id} resulted in an empty vector despite having common features.`, 'warn');
-        }
-    });
-
-    if (inconsistencyFound) {
-        addLogMessage('Inconsistencies found during one-hot encoding. Aborting reduction.', 'error');
-        setIsReducing(false);
-        return;
-    }
-
-    // Check vector consistency and dimensions
-    if (featureVectors.length > 0) {
-        const firstLen = featureVectors[0].length;
-        if (!featureVectors.every(v => v.length === firstLen)) {
-             addLogMessage('Constructed feature vectors have inconsistent lengths. Cannot proceed with reduction.', 'error');
-             setIsReducing(false);
-             return;
-        }
-        if (firstLen === 0) {
-            addLogMessage('Constructed feature vectors are empty (length 0). Cannot reduce.', 'warn');
-             setIsReducing(false);
-             return;
-        }
-        addLogMessage(`Prepared ${featureVectors.length} vectors for reduction, each with ${firstLen} dimensions (incl. one-hot).`, 'complete');
-
-        // Check if target dimensions exceed source dimensions
-        if (dimensions >= firstLen) {
-            addLogMessage(`Target dimensions (${dimensions}) must be less than source dimensions (${firstLen}). Aborting reduction.`, 'warn');
-            setIsReducing(false);
-            return;
-        }
-
-    } else {
-         addLogMessage('No valid feature vectors constructed for reduction.', 'warn');
-         setIsReducing(false);
-         return;
-    }
-
-    // 3. Post message to worker
-    addLogMessage(`Sending ${featureVectors.length} vectors to Druid worker for reduction...`, 'info');
+    // Post message to worker using the processedData
+    addLogMessage(`Sending ${vectorsToReduce.length} processed vectors to Druid worker for reduction...`, 'info');
     druidWorkerRef.current.postMessage({
         type: 'reduceDimensions',
         payload: {
-            featureVectors: featureVectors,
-            songIds: vectorSongIds,
-            method: method,
+            featureVectors: vectorsToReduce,
+            songIds: idsForReduction,
+            method: reductionMethod,
             dimensions: dimensions,
             ...(params && { ...params }) // Include optional params
         }
     });
 
-}, [activeSongIds, songFeatures, featureStatus, isReducing, addLogMessage]); // Added addLogMessage
+}, [
+    processedData, isProcessing, isProcessingData, isReducing, isClustering, 
+    addLogMessage, druidWorkerRef,
+    setIsReducing, setReducedDataPoints, setKmeansAssignments, setKmeansCentroids, setKmeansIteration
+]);
 
-
-  // Calculate derived state: Check if any active song has completed features
-  const hasFeaturesForActiveSongs = useMemo(() => {
-      return Array.from(activeSongIds).some(id =>
-          featureStatus[id] === 'complete' && songFeatures[id] != null
-      );
-  }, [activeSongIds, featureStatus, songFeatures]);
-
-
-  // --- Clustering Handler ---
+  // --- Clustering Handler (handleRunClustering) ---
   const handleRunClustering = useCallback((k: number) => {
-      if (!kmeansWorkerRef.current || isClustering || isProcessing || isReducing) {
-          addLogMessage('Cannot start clustering: Worker not ready or another process is active.', 'warn');
+      // Check readiness and other processes
+      if (!kmeansWorkerRef.current) {
+          addLogMessage('Cannot start clustering: K-Means worker not ready.', 'warn');
           return;
       }
+      if (isClustering || isProcessing || isProcessingData || isReducing) {
+           addLogMessage('Cannot start clustering: Another process is active.', 'warn');
+           return;
+      }
 
+      // Filter reducedDataPoints for active songs and check dimensions
       const activeReducedData: { id: string, vector: number[] }[] = [];
       let skippedCount = 0;
       let dimensionMismatchCount = 0;
-      const targetDim = reductionDimensions; // Capture current target dimension
+      const targetDim = reductionDimensions; // Capture current target dimension from state
 
       activeSongIds.forEach(id => {
           const vector = reducedDataPoints[id];
@@ -1005,7 +1236,7 @@ export default function DashboardPage() {
               // Use targetDim for check if it's > 0, otherwise just check if vector exists
               if (targetDim > 0 && vector.length !== targetDim) {
                   dimensionMismatchCount++;
-              } else {
+              } else if (targetDim === 0 || vector.length === targetDim) { // Add check if targetDim is 0 (not yet set)
                   activeReducedData.push({ id, vector });
               }
           } else {
@@ -1017,26 +1248,26 @@ export default function DashboardPage() {
           addLogMessage(`Skipping ${skippedCount} active songs without reduced data for clustering.`, 'warn');
       }
       if (dimensionMismatchCount > 0) {
-          addLogMessage(`Skipping ${dimensionMismatchCount} active songs with mismatched dimensions (expected ${targetDim}) for clustering.`, 'warn');
+          addLogMessage(`Skipping ${dimensionMismatchCount} active songs with mismatched dimensions (expected ${targetDim > 0 ? targetDim : 'any'}) for clustering.`, 'warn');
       }
 
-
+      // Check if valid data exists
       if (activeReducedData.length === 0) {
           addLogMessage('No valid reduced data points found for active songs to cluster.', 'warn');
           return;
       }
 
+      // Check k value
       if (k <= 0) {
           addLogMessage(`Invalid k value: ${k}. Must be greater than 0.`, 'warn');
           return;
       }
-
-       if (activeReducedData.length < k) {
+      if (activeReducedData.length < k) {
           addLogMessage(`Cannot cluster: Not enough data points (${activeReducedData.length}) for k=${k}. Need at least k points.`, 'warn');
           return;
       }
 
-
+      // Prepare data for worker
       const dataForWorker = activeReducedData.map(d => d.vector);
       const idsForWorker = activeReducedData.map(d => d.id);
 
@@ -1046,24 +1277,37 @@ export default function DashboardPage() {
       setKmeansCentroids([]);
       setKmeansAssignments({});
 
+      // Post message to worker (with null check already done)
       kmeansWorkerRef.current.postMessage({
           type: 'startTraining',
           payload: {
               reducedData: dataForWorker,
               songIds: idsForWorker,
               k: k,
-              // maxIter: 50 // Optionally override worker default
           }
       });
 
-  }, [isClustering, isProcessing, isReducing, activeSongIds, reducedDataPoints, addLogMessage]); // Added addLogMessage
+  }, [
+      isClustering, isProcessing, isProcessingData, isReducing, activeSongIds, reducedDataPoints, 
+      reductionDimensions, addLogMessage, kmeansWorkerRef,
+      setIsClustering, setKmeansIteration, setKmeansCentroids, setKmeansAssignments
+  ]);
 
   // --- Derived State ---
-    const hasReducedDataForActiveSongs = useMemo(() => {
-      const targetDim = reductionDimensions; // Capture current target dimension
+  const hasFeaturesForActiveSongs = useMemo(() => {
+      return Array.from(activeSongIds).some(id =>
+          featureStatus[id] === 'complete' && songFeatures[id] != null
+      );
+  }, [activeSongIds, featureStatus, songFeatures]);
+
+  const hasProcessedData = useMemo(() => {
+      return processedData != null && processedData.vectors.length > 0;
+  }, [processedData]);
+
+  const hasReducedDataForActiveSongs = useMemo(() => {
+      const targetDim = reductionDimensions;
       return Array.from(activeSongIds).some(id => {
           const point = reducedDataPoints[id];
-          // Check if point exists and either dimensions match or no specific dimension is set yet
           return point != null && point.length > 0 && (targetDim === 0 || point.length === targetDim);
       });
   }, [activeSongIds, reducedDataPoints, reductionDimensions]);
@@ -1131,7 +1375,7 @@ export default function DashboardPage() {
   };
 
   return (
-    <main className="flex flex-col min-h-screen p-4 bg-gray-900 text-gray-100 font-[family-name:var(--font-geist-mono)]">
+    <main className="flex flex-col min-h-screen p-4 bg-gray-900 text-gray-100 font-[family-name:var(--font-geist-mono)] hide-scrollbar">
        {/* Hidden File Input */}
        <input
           ref={fileInputRef}
@@ -1225,7 +1469,7 @@ export default function DashboardPage() {
 
          {/* Controls Panel (Right Column, Full Height, Max Width)*/}
         <ControlsPanel
-          className="col-span-1 row-span-2 max-w-sm" // Added max-width
+          className="col-span-1 row-span-2 max-w-sm"
           isProcessing={isProcessing}
           isReducing={isReducing}
           isClustering={isClustering}
@@ -1237,6 +1481,9 @@ export default function DashboardPage() {
           onReduceDimensions={handleReduceDimensions}
           onRunClustering={handleRunClustering}
           onShowExplanation={handleShowExplanation}
+          isProcessingData={isProcessingData}
+          hasProcessedData={hasProcessedData}
+          onProcessData={handleStartDataProcessing}
         />
 
         {/* Log Panel (Middle Column, Bottom Row) */}

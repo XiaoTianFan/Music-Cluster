@@ -67,8 +67,8 @@ self.onmessage = async (event: MessageEvent<WorkerMessageData>) => {
             // Instantiate the correct DR method
             switch (method) {
                 case 'pca':
-                    // PCA constructor: (X: Matrix | number[][], d?: number)
-                    drInstance = new druid.PCA(matrix, dimensions);
+                    // PCA constructor likely expects options object: (X: Matrix | number[][], parameters?: { d?: number })
+                    drInstance = new druid.PCA(matrix, { d: dimensions }); // Pass dimensions inside an object
                     break;
                 case 'tsne':
                     // TSNE constructor: (X: Matrix | number[][], parameters?: { perplexity?: number, d?: number, seed?: number, metric?: string | function, epsilon?: number, exageration?: number })

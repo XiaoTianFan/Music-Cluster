@@ -2,10 +2,13 @@ import React, { useState } from 'react';
 
 // Type for reduction method (assuming it's defined elsewhere or should be here)
 type ReductionMethod = 'pca' | 'tsne' | 'umap';
+// Type for data processing method
+type ProcessingMethod = 'none' | 'standardize' | 'normalize';
 
 // Define props based on analysis of page.tsx
 interface ControlsPanelProps {
   isProcessing: boolean; // True if MIR extraction is running
+  isProcessingData: boolean; // True if Data Processing worker is running (NEW)
   isReducing: boolean; // True if dimensionality reduction is running
   isClustering: boolean; // True if K-Means clustering is running
   essentiaWorkerReady: boolean;
@@ -14,7 +17,9 @@ interface ControlsPanelProps {
   hasFeaturesForActiveSongs: boolean; 
   // Check if *any* of the active songs have successfully computed reduced features
   hasReducedDataForActiveSongs: boolean;
+  hasProcessedData: boolean; // Data has been processed (NEW derived state)
   onExtractFeatures: (selectedFeatures: Set<string>) => void;
+  onProcessData: (method: ProcessingMethod, range?: [number, number]) => void; // (NEW)
   // Type for the reduction method, mirroring page.tsx
   onReduceDimensions: (method: ReductionMethod, dimensions: number, params?: Record<string, unknown>) => void;
   onRunClustering: (k: number) => void; // Handler to start clustering
@@ -46,13 +51,16 @@ const availableDimReducers = [
 
 const ControlsPanel: React.FC<ControlsPanelProps> = ({ 
   isProcessing,
+  isProcessingData,
   isReducing,
   isClustering,
   essentiaWorkerReady,
   activeSongCount,
   hasFeaturesForActiveSongs,
   hasReducedDataForActiveSongs,
+  hasProcessedData,
   onExtractFeatures,
+  onProcessData,
   onReduceDimensions,
   onRunClustering,
   onShowExplanation, // <-- Destructure the prop
@@ -60,9 +68,14 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
 }) => {
   // State for selected controls
   const [selectedMirFeatures, setSelectedMirFeatures] = useState<Set<string>>(() => new Set(['mfcc'])); // Default MFCC
-  const [selectedDimReducer, setSelectedDimReducer] = useState<'pca' | 'tsne' | 'umap'>('tsne'); // Default t-SNE, use specific type
+  const [selectedDimReducer, setSelectedDimReducer] = useState<ReductionMethod>('tsne'); // Default t-SNE
   const [targetDimensions, setTargetDimensions] = useState<number>(2); // Default 2D
   const [numClusters, setNumClusters] = useState<number>(3); // Default k=3
+
+  // --- NEW: State for Data Processing Method ---
+  const [selectedProcessingMethod, setSelectedProcessingMethod] = useState<ProcessingMethod>('standardize');
+  const [selectedNormalizationRange, setSelectedNormalizationRange] = useState<'[0,1]' | '[-1,1]'>('[0,1]');
+  // -------------------------------------------
 
   const handleMirFeatureToggle = (featureId: string) => {
     setSelectedMirFeatures(prev => {
@@ -88,6 +101,15 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
     }
   };
 
+  // --- NEW: Handler for starting data processing ---
+  const handleStartProcessing = () => {
+    const range = selectedProcessingMethod === 'normalize' 
+                    ? (selectedNormalizationRange === '[0,1]' ? [0, 1] as [number, number] : [-1, 1] as [number, number])
+                    : undefined;
+    onProcessData(selectedProcessingMethod, range);
+  };
+  // ---------------------------------------------
+
   // Handler to trigger dimension reduction
   const handleProceedReduction = () => {
     // TODO: Add logic here later to gather method-specific parameters if needed (e.g., perplexity)
@@ -96,10 +118,12 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
   };
 
   // Determine if the reduction button should be enabled
-  const canReduce = !isProcessing && !isReducing && !isClustering && activeSongCount > 0 && hasFeaturesForActiveSongs;
+  // MODIFIED: Depends on hasProcessedData now
+  const canReduce = !isProcessing && !isProcessingData && !isReducing && !isClustering && activeSongCount > 0 && hasProcessedData;
 
   // Determine if the clustering button should be enabled
-  const canCluster = !isProcessing && !isReducing && !isClustering && activeSongCount > 0 && hasReducedDataForActiveSongs && numClusters > 0;
+  // MODIFIED: Also disable if data processing is running
+  const canCluster = !isProcessing && !isProcessingData && !isReducing && !isClustering && activeSongCount > 0 && hasReducedDataForActiveSongs && numClusters > 0;
 
   return (
     <div
@@ -160,6 +184,76 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
              </button>
           </div>
         </div>
+
+        {/* === NEW: Data Processing Selection === */}
+        <div 
+            className="mb-4 p-3 border border-gray-700/80 flex flex-col" 
+            data-augmented-ui="tl-clip br-clip border" 
+            style={{ '--aug-border-color': '#555' } as React.CSSProperties}
+        >
+            <h3 className="text-md font-semibold mb-2 text-green-300">Data Processing (Optional)</h3>
+            {/* Method Selection */} 
+            <div className="mb-3">
+                <span className="text-xs block mb-1 text-gray-400">Method:</span>
+                <div className="flex gap-3 flex-wrap">
+                    {['standardize', 'normalize'].map(method => (
+                        <label key={method} className="text-xs px-2 py-1 rounded cursor-pointer border border-transparent hover:border-green-500/50 data-[checked=true]:bg-green-800/50 data-[checked=true]:border-green-600" data-checked={selectedProcessingMethod === method}>
+                            <input 
+                                type="radio" 
+                                name="processingMethod" 
+                                value={method}
+                                checked={selectedProcessingMethod === method}
+                                onChange={(e) => setSelectedProcessingMethod(e.target.value as ProcessingMethod)}
+                                className="hidden" // Style the label instead
+                                disabled={isProcessing || isProcessingData || isReducing || isClustering || !hasFeaturesForActiveSongs}
+                            />
+                            {method === 'standardize' ? 'Standardize (Z-score)' : 'Normalize (Min-Max)'}
+                        </label>
+                    ))}
+                </div>
+            </div>
+            {/* Normalization Range (Conditional) */} 
+            {selectedProcessingMethod === 'normalize' && (
+                <div className="mb-3 ml-4"> {/* Indent range selection */} 
+                   <span className="text-xs block mb-1 text-gray-400">Normalization Range:</span>
+                    <div className="flex gap-3 flex-wrap">
+                        {['[0,1]', '[-1,1]'].map(range => (
+                            <label key={range} className="text-xs px-2 py-1 rounded cursor-pointer border border-transparent hover:border-green-500/50 data-[checked=true]:bg-green-800/50 data-[checked=true]:border-green-600" data-checked={selectedNormalizationRange === range}>
+                                <input 
+                                    type="radio" 
+                                    name="normalizationRange" 
+                                    value={range}
+                                    checked={selectedNormalizationRange === range}
+                                    onChange={(e) => setSelectedNormalizationRange(e.target.value as '[0,1]' | '[-1,1]')}
+                                    className="hidden" // Style the label instead
+                                    disabled={isProcessing || isProcessingData || isReducing || isClustering || !hasFeaturesForActiveSongs}
+                                />
+                                {range}
+                            </label>
+                        ))}
+                    </div>
+                </div>
+            )}
+            {/* Process Data Button */} 
+             <button 
+                onClick={handleStartProcessing} // Wire up the new handler
+                disabled={!hasFeaturesForActiveSongs || isProcessing || isProcessingData || isReducing || isClustering}
+                className={`w-full p-2 mt-1 text-center rounded font-semibold text-xs disabled:opacity-50 disabled:cursor-not-allowed ${(hasFeaturesForActiveSongs && !isProcessing && !isProcessingData && !isReducing && !isClustering) ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-600 text-gray-400'}`}
+                data-augmented-ui="tl-clip br-clip border"
+                style={{ '--aug-border-color': (hasFeaturesForActiveSongs && !isProcessing && !isProcessingData && !isReducing && !isClustering) ? 'deepskyblue' : '#555' } as React.CSSProperties}
+                title={ 
+                    !hasFeaturesForActiveSongs ? "Extract features first" : 
+                    (isProcessing ? "MIR processing..." : 
+                    (isProcessingData ? "Processing data..." : 
+                    (isReducing ? "Reducing dimensions..." : 
+                    (isClustering ? "Clustering in progress..." : 
+                    "Apply selected processing method"))))
+                }
+            >
+                {isProcessingData ? 'Processing Data...' : `Process Data`}
+            </button>
+        </div>
+        {/* === END: Data Processing Selection === */}
 
         {/* === Dimensionality Reduction === */}
          <div 
@@ -224,15 +318,18 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
            <button 
                 onClick={handleProceedReduction} // Wire up the handler
                 disabled={!canReduce} // Use the calculated enabled state
-                className={`w-full p-1 text-center rounded font-semibold text-xs disabled:opacity-50 disabled:cursor-not-allowed ${canReduce ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-600 text-gray-400'}`}
+                className={`w-full p-2 text-center rounded font-semibold text-xs disabled:opacity-50 disabled:cursor-not-allowed ${canReduce ? 'bg-cyan-600 hover:bg-cyan-500 text-white' : 'bg-gray-600 text-gray-400'}`}
                 data-augmented-ui="tl-clip br-clip border"
                 style={{ '--aug-border-color': canReduce ? 'cyan' : '#555' } as React.CSSProperties}
                 title={
+                    // Chain of checks for tooltip
                     !hasFeaturesForActiveSongs ? "Extract features first" : 
-                    (isProcessing ? "MIR processing..." : 
-                    (isReducing ? "Reducing dimensions..." : 
-                    (isClustering ? "Clustering in progress..." : 
-                    "Run selected reduction method"))) 
+                    !hasProcessedData ? "Process data first" : 
+                    isProcessing ? "MIR processing..." : 
+                    isProcessingData ? "Processing data..." : 
+                    isReducing ? "Reducing dimensions..." : 
+                    isClustering ? "Clustering in progress..." : 
+                    "Run selected reduction method" // Default title if enabled
                 }
             >
                 {isReducing ? 'Reducing...' : `Reduce Dimensions`}
@@ -260,16 +357,20 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
            <button 
                onClick={() => onRunClustering(numClusters)} 
                disabled={!canCluster} 
-               className={`w-full p-1 text-center rounded font-semibold text-xs disabled:opacity-50 disabled:cursor-not-allowed ${canCluster ? 'bg-yellow-600 hover:bg-yellow-500 text-black' : 'bg-gray-600 text-gray-400'}`}
+               className={`w-full p-2 text-center rounded font-semibold text-xs disabled:opacity-50 disabled:cursor-not-allowed ${canCluster ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-gray-600 text-gray-400'}`}
                data-augmented-ui="tl-clip br-clip border"
                style={{ '--aug-border-color': canCluster ? 'yellow' : '#555' } as React.CSSProperties}
                title={
+                  // Chain of checks for tooltip
+                  !hasFeaturesForActiveSongs ? "Extract features first" : // Should ideally not be reachable if reduction isn't done, but good fallback
+                  !hasProcessedData ? "Process data first" : // Should ideally not be reachable if reduction isn't done
                   !hasReducedDataForActiveSongs ? "Reduce dimensions first" : 
-                  (isProcessing ? "MIR processing..." : 
-                  (isReducing ? "Reducing dimensions..." : 
-                  (isClustering ? "Clustering in progress..." : 
-                  (numClusters <= 0 ? "Set k > 0" : 
-                  "Run K-Means clustering")))) 
+                  numClusters <= 0 ? "Set k > 0" : 
+                  isProcessing ? "MIR processing..." : 
+                  isProcessingData ? "Processing data..." : 
+                  isReducing ? "Reducing dimensions..." : 
+                  isClustering ? "Clustering in progress..." : 
+                  "Run K-Means clustering" // Default title if enabled
                 }
            >
               {isClustering ? 'Clustering...' : `Run Clustering (k=${numClusters})`}

@@ -9,6 +9,7 @@ module.exports = {
     'essentia-worker': './src/workers/essentia-worker.ts',
     'druid-worker': './src/workers/druid-worker.ts',
     'kmeans-worker': './src/workers/kmeans-worker.ts',
+    'data-processing-worker': './src/workers/data-processing-worker.ts',
   },
   output: {
     // Output directory for the bundled worker (inside public)
