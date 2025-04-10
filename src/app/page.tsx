@@ -1460,6 +1460,11 @@ export default function DashboardPage() {
           className="col-span-1 row-span-1 max-h-full min-h-full" // Updated spans
           activeSongIds={activeSongIds}
           songs={songs}
+          // Pass raw features, unprocessed matrix, and processed matrix
+          songFeatures={songFeatures}
+          unprocessedData={unprocessedData}
+          processedData={processedData}
+          // Existing props for clustering results
           reducedDataPoints={reducedDataPoints}
           reductionDimensions={reductionDimensions}
           kmeansAssignments={kmeansAssignments}
