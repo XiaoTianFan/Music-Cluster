@@ -23,7 +23,7 @@ const SongDetailsDialog: React.FC<SongDetailsDialogProps> = ({ song, features, o
   };
 
   return (
-    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-50 p-4">
       <div 
         className="bg-gray-800 p-6 rounded-lg shadow-xl max-w-lg w-full border border-teal-500 relative max-h-[80vh] flex flex-col"
         data-augmented-ui="tl-clip tr-clip br-clip bl-clip border"

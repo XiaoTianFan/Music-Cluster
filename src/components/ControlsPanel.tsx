@@ -1,4 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+
+// Type for reduction method (assuming it's defined elsewhere or should be here)
+type ReductionMethod = 'pca' | 'tsne' | 'umap';
 
 // Define props based on analysis of page.tsx
 interface ControlsPanelProps {
@@ -13,8 +16,9 @@ interface ControlsPanelProps {
   hasReducedDataForActiveSongs: boolean;
   onExtractFeatures: (selectedFeatures: Set<string>) => void;
   // Type for the reduction method, mirroring page.tsx
-  onReduceDimensions: (method: 'pca' | 'tsne' | 'umap', dimensions: number, params?: any) => void;
+  onReduceDimensions: (method: ReductionMethod, dimensions: number, params?: any) => void;
   onRunClustering: (k: number) => void; // Handler to start clustering
+  onShowExplanation: (featureId: string) => void; // <-- Add the new prop
   className?: string; // Allow passing className for layout adjustments
 }
 
@@ -51,6 +55,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
   onExtractFeatures,
   onReduceDimensions,
   onRunClustering,
+  onShowExplanation, // <-- Destructure the prop
   className 
 }) => {
   // State for selected controls
@@ -114,16 +119,27 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
           <h3 className="text-md font-semibold mb-2 text-green-300">MIR Features</h3>
           <div className="space-y-1 flex-grow">
             {availableMirFeatures.map(feature => (
-              <label key={feature.id} className="flex items-center text-xs cursor-pointer">
-                <input 
-                  type="checkbox"
-                  checked={selectedMirFeatures.has(feature.id)}
-                  onChange={() => handleMirFeatureToggle(feature.id)}
-                  className="mr-2 accent-green-500 cursor-pointer"
+              <div key={feature.id} className="flex items-center justify-between group text-xs">
+                <label htmlFor={`feature-${feature.id}`} className="flex items-center cursor-pointer">
+                  <input 
+                    type="checkbox"
+                    id={`feature-${feature.id}`}
+                    checked={selectedMirFeatures.has(feature.id)}
+                    onChange={() => handleMirFeatureToggle(feature.id)}
+                    className="mr-2 accent-green-500 cursor-pointer"
+                    disabled={isProcessing}
+                  />
+                  {feature.name}
+                </label>
+                <button 
+                  onClick={() => onShowExplanation(feature.id)}
+                  className="ml-2 px-1 py-0.5 text-xs rounded bg-gray-700 hover:bg-gray-600 text-blue-300 hover:text-blue-200 border border-blue-900/50 invisible group-hover:visible disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={`Explain ${feature.name}`}
                   disabled={isProcessing}
-                />
-                {feature.name}
-              </label>
+                >
+                  ?
+                </button>
+              </div>
             ))}
              {/* Add more features later */}
           </div>

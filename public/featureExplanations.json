@@ -1,0 +1,30 @@
+{
+    "mfcc": {
+      "name": "MFCCs (Mel-Frequency Cepstral Coefficients)",
+      "explanation": "Represents the short-term power spectrum of a sound based on a linear cosine transform of a log power spectrum on a nonlinear Mel scale of frequency. Essentially, it captures the timbral or 'sound color' characteristics relevant to human hearing. Useful for distinguishing instruments, identifying genres, or speech recognition."
+    },
+    "energy": {
+      "name": "Energy",
+      "explanation": "Measures the overall loudness or intensity of the audio signal. It's calculated as the Root Mean Square (RMS) of the signal amplitude over a short frame. Higher energy usually corresponds to louder sections."
+    },
+    "entropy": {
+      "name": "Zero-Crossing Rate Entropy",
+      "explanation": "Measures the entropy (randomness or unpredictability) of the Zero-Crossing Rate (ZCR). ZCR itself indicates how often the signal crosses the zero axis. High entropy might suggest more complex or noisy signals, while low entropy could indicate more tonal or periodic sounds."
+    },
+    "key": {
+      "name": "Key & Scale",
+      "explanation": "Estimates the musical key (e.g., C, G#, Eb) and scale (e.g., Major, Minor) of the audio segment. It analyzes the pitch content and harmony to determine the most likely tonal center. Key Strength indicates the confidence of the estimation."
+    },
+    "dynamicComplexity": {
+      "name": "Dynamic Complexity",
+      "explanation": "Measures the variation in loudness throughout the piece. Higher values indicate frequent or significant changes in volume (dynamics), often found in expressive classical music or complex arrangements. Lower values suggest more consistent loudness, common in some pop or electronic genres. It's related to the standard deviation of loudness levels."
+    },
+    "rms": {
+      "name": "RMS (Root Mean Square)",
+      "explanation": "Represents the average power or intensity of the audio signal, closely related to perceived loudness over a given time window. Similar to Energy, but often calculated over longer segments or the entire track for overall level assessment."
+    },
+    "tuningFrequency": {
+      "name": "Tuning Frequency & Cents",
+      "explanation": "Estimates the reference tuning frequency (often around A4 = 440 Hz) used in the recording. It analyzes the pitch content to find the most prominent tuning standard. 'Tuning Cents' shows the deviation from the standard 440 Hz tuning in cents (100 cents = 1 semitone)."
+    }
+  }

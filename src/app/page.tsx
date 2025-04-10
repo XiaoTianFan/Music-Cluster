@@ -8,6 +8,7 @@ import SongListPanel from '../components/SongListPanel';
 import ControlsPanel from '../components/ControlsPanel';
 import LogPanel from '../components/LogPanel'; // Import the new LogPanel
 import SongDetailsDialog from '../components/SongDetailsDialog'; // Import the new dialog component
+import FeatureExplanationDialog from '../components/FeatureExplanationDialog'; // Import the explanation dialog
 // Remove the static import of VisualizationPanel
 // import VisualizationPanel from '../components/VisualizationPanel';
 
@@ -103,6 +104,12 @@ interface LogMessage {
   timestamp: string; // Keep timestamp separate for potential future use
 }
 
+// Structure for feature explanations (matches JSON)
+interface FeatureExplanation {
+  name: string;
+  explanation: string;
+}
+
 // Helper function to compare two sets
 const setsAreEqual = (setA: Set<any>, setB: Set<any>): boolean => {
   if (setA.size !== setB.size) return false;
@@ -136,6 +143,11 @@ export default function DashboardPage() {
   // --- Details Dialog State ---
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState<boolean>(false);
   const [detailsSongId, setDetailsSongId] = useState<string | null>(null);
+
+  // --- State for Feature Explanations ---
+  const [explanations, setExplanations] = useState<Record<string, FeatureExplanation> | null>(null);
+  const [isExplanationOpen, setIsExplanationOpen] = useState(false);
+  const [explainedFeatureId, setExplainedFeatureId] = useState<string | null>(null);
 
   // --- State to track songs in the current processing batch ---
   const [processingSongIds, setProcessingSongIds] = useState<Set<string>>(new Set());
@@ -345,6 +357,26 @@ export default function DashboardPage() {
     };
   }, [addLogMessage]); // Add addLogMessage to dependency array
 
+  // --- Fetch Explanations on Mount ---
+  useEffect(() => {
+    addLogMessage('Fetching feature explanations...', 'info');
+    fetch('/featureExplanations.json')
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+      })
+      .then(data => {
+        setExplanations(data);
+        addLogMessage('Feature explanations loaded successfully.', 'complete');
+      })
+      .catch(error => {
+        console.error('Error fetching feature explanations:', error);
+        addLogMessage(`Failed to load feature explanations: ${error.message}`, 'error');
+        setExplanations({}); // Set to empty object to indicate loading failed but allow UI to proceed
+      });
+  }, [addLogMessage]); // Run once on mount
 
   // Check if all songs are processed
   useEffect(() => {
@@ -394,7 +426,6 @@ export default function DashboardPage() {
     // addLogMessage is used for logging.
     // processingSongIds is added to correctly identify batch completion.
   }, [featureStatus, isProcessing, songs, songFeatures, addLogMessage, processingSongIds]);
-
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -1074,6 +1105,22 @@ export default function DashboardPage() {
     return (finishedCount / processingSongIds.size) * 100;
   }, [isProcessing, processingSongIds, featureStatus]);
 
+  // --- Explanation Dialog Handlers ---
+  const handleShowExplanation = useCallback((featureId: string) => {
+    if (explanations && explanations[featureId]) {
+      setExplainedFeatureId(featureId);
+      setIsExplanationOpen(true);
+      addLogMessage(`Showing explanation for feature: ${featureId}`, 'info');
+    } else {
+      addLogMessage(`Explanation not available or not loaded for feature: ${featureId}`, 'warn');
+    }
+  }, [explanations, addLogMessage]);
+
+  const handleCloseExplanation = useCallback(() => {
+    setIsExplanationOpen(false);
+    setExplainedFeatureId(null); // Clear the ID when closing
+  }, []);
+
   return (
     <main className="flex flex-col min-h-screen p-4 bg-gray-900 text-gray-100 font-[family-name:var(--font-geist-mono)]">
        {/* Hidden File Input */}
@@ -1163,6 +1210,7 @@ export default function DashboardPage() {
           onExtractFeatures={handleExtractFeatures}
           onReduceDimensions={handleReduceDimensions}
           onRunClustering={handleRunClustering}
+          onShowExplanation={handleShowExplanation}
         />
 
         {/* Log Panel (Middle Column, Bottom Row) */}
@@ -1187,6 +1235,16 @@ export default function DashboardPage() {
           song={detailsSong} 
           features={detailsFeatures} 
           onClose={handleCloseDetailsDialog} 
+        />
+      )}
+
+      {/* Feature Explanation Dialog (Conditionally Rendered) */}
+      {explanations && (
+         <FeatureExplanationDialog
+          isOpen={isExplanationOpen}
+          featureName={explainedFeatureId ? explanations[explainedFeatureId]?.name : ''}
+          explanation={explainedFeatureId ? explanations[explainedFeatureId]?.explanation : ''}
+          onClose={handleCloseExplanation}
         />
       )}
     </main>
