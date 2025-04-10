@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic'; // Import dynamic
 import SongListPanel from '../components/SongListPanel';
 import ControlsPanel from '../components/ControlsPanel';
 import LogPanel from '../components/LogPanel'; // Import the new LogPanel
+import SongDetailsDialog from '../components/SongDetailsDialog'; // Import the new dialog component
 // Remove the static import of VisualizationPanel
 // import VisualizationPanel from '../components/VisualizationPanel';
 
@@ -131,6 +132,13 @@ export default function DashboardPage() {
 
   // --- Log State ---
   const [logMessages, setLogMessages] = useState<LogMessage[]>([]); // Use LogMessage[]
+
+  // --- Details Dialog State ---
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState<boolean>(false);
+  const [detailsSongId, setDetailsSongId] = useState<string | null>(null);
+
+  // --- State to track songs in the current processing batch ---
+  const [processingSongIds, setProcessingSongIds] = useState<Set<string>>(new Set());
 
   const workerRef = useRef<Worker | null>(null);
   const druidWorkerRef = useRef<Worker | null>(null); // Ref for Druid worker
@@ -340,44 +348,52 @@ export default function DashboardPage() {
 
   // Check if all songs are processed
   useEffect(() => {
-    if (!isProcessing) return;
+    if (!isProcessing) return; // Only run when processing
 
-    // Check status ONLY for songs that were supposed to be processed in the current batch
-    // (This logic might need refinement if processing can be interrupted/restarted partially)
-    // For now, assume we check all songs in the main `songs` state.
-    const allProcessed = songs.every(song =>
-        featureStatus[song.id] === 'complete' || featureStatus[song.id] === 'error'
-    );
+    // Check if there are any songs STILL marked as 'processing'
+    // This correctly identifies when the *current batch* has finished,
+    // regardless of whether all songs or only a subset were processed.
+    // We specifically check the IDs that were part of the current batch.
+    const stillProcessing = Array.from(processingSongIds).some(id => featureStatus[id] === 'processing');
 
-    if (allProcessed) {
+    // If NO songs in the batch are 'processing' anymore, AND we *were* processing, then the batch is done.
+    if (!stillProcessing && processingSongIds.size > 0) { // Ensure we were actually processing a batch
         const startTime = extractionStartTimeRef.current;
         let durationMessage = 'All requested song processing finished.';
 
-        if (startTime) { // Check if a timer was started for this batch
+        // Calculate duration only if a start time was recorded for this batch
+        if (startTime) {
             const endTime = performance.now();
             const durationMs = endTime - startTime;
-            durationMessage = `Total feature extraction time: ${(durationMs / 1000).toFixed(2)} seconds.`;
+            durationMessage = `Total feature extraction time for the batch: ${(durationMs / 1000).toFixed(2)} seconds.`;
             extractionStartTimeRef.current = null; // Reset timer
         }
 
-        setIsProcessing(false);
+        setIsProcessing(false); // Mark processing as complete
+        setProcessingSongIds(new Set()); // Clear the processing batch IDs
         addLogMessage(durationMessage, 'complete');
 
-        // --- TEMPORARY CODE START ---
+        // --- TEMPORARY CODE START (Cache Generation Logging) ---
         // Log the final features object ONLY when processing finishes
-        // Ensure this runs only when default songs were processed for caching
+        // This logic might run even if only a subset was processed.
+        // Consider refining the condition if cache generation should only happen
+        // when *all* default songs are processed *in the same batch*.
         const onlyDefaultSongs = songs.every(s => s.source === 'default');
         if (onlyDefaultSongs && songs.length === defaultSongs.length) {
+             // NOTE: This log condition checks if the *current* song list *only* contains default songs,
+             //       not necessarily that *all* were processed *in this specific batch*.
             console.log("=== COPY FEATURE DATA BELOW ===");
             console.log(JSON.stringify(songFeatures, null, 2)); // Log as pretty-printed JSON string
             console.log("=== COPY FEATURE DATA ABOVE ===");
-            addLogMessage('Default song features logged to console for cache generation.', 'info');
+            addLogMessage('Default song features logged to console for cache generation (may include previously cached data).', 'info');
         }
         // --- TEMPORARY CODE END ---
-
-        // addLogMessage(`Final Features: ${JSON.stringify(songFeatures)}`); // Could be very verbose
     }
-  }, [featureStatus, songs, isProcessing, songFeatures, addLogMessage]); // Add songFeatures here if not already present
+    // Dependencies: isProcessing ensures we only check when active. featureStatus changes trigger the check.
+    // songs and songFeatures are needed for the cache logging logic.
+    // addLogMessage is used for logging.
+    // processingSongIds is added to correctly identify batch completion.
+  }, [featureStatus, isProcessing, songs, songFeatures, addLogMessage, processingSongIds]);
 
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -484,19 +500,35 @@ export default function DashboardPage() {
 
   // Handler to toggle a song's active state
   const handleToggleSongActive = (songId: string) => {
-      setActiveSongIds(prevActive => {
-          const newActive = new Set(prevActive);
-          const songName = songs.find(s => s.id === songId)?.name || songId;
-          if (newActive.has(songId)) {
-              newActive.delete(songId);
-              addLogMessage(`Deactivated song: ${songName}`, 'complete');
-          } else {
-              newActive.add(songId);
-              addLogMessage(`Activated song: ${songName}`, 'complete');
-          }
-          return newActive;
-      });
+    setActiveSongIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(songId)) {
+        newSet.delete(songId);
+        addLogMessage(`Deselected song: ${getSongNameById(songId)} (ID: ${songId.substring(0, 8)}...)`, 'info');
+      } else {
+        newSet.add(songId);
+        addLogMessage(`Selected song: ${getSongNameById(songId)} (ID: ${songId.substring(0, 8)}...)`, 'info');
+      }
+      return newSet;
+    });
   };
+
+  // Helper to get song name by ID for logging
+  const getSongNameById = useCallback((id: string): string => {
+      return songs.find(s => s.id === id)?.name || id; // Return ID if name not found
+  }, [songs]);
+
+  // --- Select/Clear All Handlers ---
+  const handleSelectAll = useCallback(() => {
+    setActiveSongIds(new Set(songs.map(song => song.id)));
+    addLogMessage(`Selected all ${songs.length} songs.`, 'info');
+  }, [songs, addLogMessage]);
+
+  const handleClearAll = useCallback(() => {
+    setActiveSongIds(new Set());
+    addLogMessage('Cleared all song selections.', 'info');
+  }, [addLogMessage]);
+  // --------------------------------
 
   // Handler to trigger the hidden file input
   const handleUploadClick = () => {
@@ -527,6 +559,41 @@ export default function DashboardPage() {
           return null;
       }
   }, [addLogMessage]); // Add addLogMessage dependency
+
+  // --- Add New Songs Handler (for Drop and potentially future additions) ---
+  const handleAddSongs = useCallback((newSongsToAdd: Song[]) => {
+    const currentSongIds = new Set(songs.map(s => s.id));
+    const addedSongs: Song[] = [];
+    const newActiveIds = new Set<string>();
+    let skippedCount = 0;
+
+    newSongsToAdd.forEach(newSong => {
+      if (!currentSongIds.has(newSong.id)) {
+        addedSongs.push(newSong);
+        newActiveIds.add(newSong.id); // Make newly added songs active by default
+        currentSongIds.add(newSong.id); // Add to current set to prevent duplicates within the same batch
+      } else {
+        skippedCount++;
+        // Revoke URL if song is skipped immediately (important for dropped files)
+        URL.revokeObjectURL(newSong.url); 
+      }
+    });
+
+    if (addedSongs.length > 0) {
+      setSongs(prevSongs => [...prevSongs, ...addedSongs]);
+      setActiveSongIds(prevActive => new Set([...prevActive, ...newActiveIds]));
+      // Reset status for new songs
+      const newStatus = addedSongs.reduce((acc, song) => {
+          acc[song.id] = 'idle';
+          return acc;
+      }, {} as Record<string, FeatureStatus>);
+      setFeatureStatus(prev => ({...prev, ...newStatus}));
+      addLogMessage(`Added ${addedSongs.length} new song(s) via drop.`, 'complete');
+    }
+    if (skippedCount > 0) {
+       addLogMessage(`Skipped ${skippedCount} dropped file(s) (duplicates or non-audio).`, 'warn');
+    }
+  }, [songs, addLogMessage]); // Dependencies: songs for duplicate check, addLogMessage
 
   // Function to trigger feature extraction for *active* songs
   const handleExtractFeatures = useCallback(async (selectedFeatures: Set<string>) => {
@@ -616,6 +683,10 @@ export default function DashboardPage() {
     setIsProcessing(true);
 
     const songsToProcess = songs.filter(song => activeSongIds.has(song.id));
+    
+    // --- Store the IDs of the songs being processed in this batch ---
+    setProcessingSongIds(new Set(songsToProcess.map(s => s.id))); 
+    // ---
 
     if (songsToProcess.length === 0) {
         addLogMessage('No active songs selected to process.', 'info');
@@ -969,6 +1040,40 @@ export default function DashboardPage() {
       );
   }, [logMessages]);
 
+  // --- Details Dialog Handlers ---
+  const handleShowDetails = useCallback((songId: string) => {
+    addLogMessage(`Showing details for song ID: ${songId}`, 'info');
+    setDetailsSongId(songId);
+    setIsDetailsDialogOpen(true);
+  }, [addLogMessage]); // Include addLogMessage if it's used inside
+
+  const handleCloseDetailsDialog = useCallback(() => {
+    setIsDetailsDialogOpen(false);
+    setDetailsSongId(null); // Clear the ID when closing
+  }, []);
+
+  // Memoize derived state for the dialog to avoid unnecessary lookups
+  const detailsSong = useMemo(() => {
+    if (!detailsSongId) return null;
+    return songs.find(s => s.id === detailsSongId) ?? null;
+  }, [detailsSongId, songs]);
+
+  const detailsFeatures = useMemo(() => {
+    if (!detailsSongId) return null;
+    return songFeatures[detailsSongId] ?? null;
+  }, [detailsSongId, songFeatures]);
+
+  // Calculate progress percentage for the current batch
+  const progressPercent = useMemo(() => {
+    if (!isProcessing || processingSongIds.size === 0) {
+      return 0;
+    }
+    const finishedCount = Array.from(processingSongIds).filter(
+      id => featureStatus[id] === 'complete' || featureStatus[id] === 'error'
+    ).length;
+    return (finishedCount / processingSongIds.size) * 100;
+  }, [isProcessing, processingSongIds, featureStatus]);
+
   return (
     <main className="flex flex-col min-h-screen p-4 bg-gray-900 text-gray-100 font-[family-name:var(--font-geist-mono)]">
        {/* Hidden File Input */}
@@ -990,38 +1095,64 @@ export default function DashboardPage() {
       >
         <h1 className="px-4 text-xl font-bold text-cyan-400">SongCluster Dashboard</h1>
         <div className="text-sm text-cyan-300">
-          {isProcessing ? 'Processing Audio... ' : ''}
-          {isReducing ? 'Reducing Dimensions... ' : ''}
-          {isClustering ? `Clustering (Iter: ${kmeansIteration})... ` : ''}
-          {!isProcessing && !isReducing && !isClustering ? 'Ready ' : ''}
-          ({songs.filter(s => featureStatus[s.id] === 'complete').length} / {songs.length} songs complete)
+          {/* Status Text */}
+          <span>
+            {isProcessing ? 'Processing Audio... ' : ''}
+            {isReducing ? 'Reducing Dimensions... ' : ''}
+            {isClustering ? `Clustering (Iter: ${kmeansIteration})... ` : ''}
+            {!isProcessing && !isReducing && !isClustering ? 'Ready ' : ''}
+          </span>
+          {/* Overall Counts (remain useful) */}
+          <span className="ml-2"> 
+            ({songs.filter(s => featureStatus[s.id] === 'complete').length} / {songs.length} songs processed)
+          </span>
           {!essentiaWorkerReady && <span className="text-red-500 ml-2">Worker Error!</span>}
+          
+          {/* Progress Bar - Conditionally rendered */}
+          {isProcessing && processingSongIds.size > 0 && (
+             <div className="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden mt-1">
+              <div 
+                className="h-full bg-cyan-500 transition-width duration-150 ease-linear" 
+                style={{ width: `${progressPercent}%` }}
+              ></div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* New Grid Layout - Updated Order */}
-      <div className="flex-grow grid grid-cols-3 grid-rows-[auto_1fr] gap-4">
-        {/* Log Panel (First Column) */}
-        <LogPanel
-           className="col-span-1 row-span-1"
-           logs={filteredLogMessages}
-        />
-
-        {/* Song List Panel (Second Column) */}
+      {/* New Grid Layout - Based on Wireframe */}
+      <div className="flex-grow grid grid-cols-[auto_1fr_auto] grid-rows-[3fr_1fr] min-h-full max-h-full gap-4"> {/* Use auto columns for sides, fr for middle */} 
+        {/* Song List Panel (Left Column, Full Height, Max Width) */}
         <SongListPanel
-          className="col-span-1 row-span-1"
+          className="col-span-1 row-span-2 max-w-xs max-h-full" // Added max-width
           songs={songs}
           featureStatus={featureStatus}
           activeSongIds={activeSongIds}
-          isProcessing={isProcessing}
+          isProcessing={isProcessing || isReducing || isClustering}
           onToggleSongActive={handleToggleSongActive}
           onRemoveSong={handleRemoveSong}
           onUploadClick={handleUploadClick}
+          onAddSongs={handleAddSongs} // Pass the new handler
+          onSelectAll={handleSelectAll}
+          onClearAll={handleClearAll}
+          onShowDetails={handleShowDetails}
         />
 
-        {/* Controls Panel (Third Column)*/}
+        {/* Visualization Panel (Middle Column, Top Row) */}
+        <VisualizationPanel
+          className="col-span-1 row-span-1 max-h-full min-h-full" // Updated spans
+          activeSongIds={activeSongIds}
+          songs={songs}
+          reducedDataPoints={reducedDataPoints}
+          reductionDimensions={reductionDimensions}
+          kmeansAssignments={kmeansAssignments}
+          kmeansCentroids={kmeansCentroids}
+          kmeansIteration={kmeansIteration}
+        />
+
+         {/* Controls Panel (Right Column, Full Height, Max Width)*/}
         <ControlsPanel
-          className="col-span-1 row-span-1"
+          className="col-span-1 row-span-2 max-w-sm" // Added max-width
           isProcessing={isProcessing}
           isReducing={isReducing}
           isClustering={isClustering}
@@ -1034,16 +1165,10 @@ export default function DashboardPage() {
           onRunClustering={handleRunClustering}
         />
 
-        {/* Visualization Panel (Spanning Full Width Below) */}
-        <VisualizationPanel
-          className="col-span-3 row-span-1"
-          activeSongIds={activeSongIds}
-          songs={songs}
-          reducedDataPoints={reducedDataPoints}
-          reductionDimensions={reductionDimensions}
-          kmeansAssignments={kmeansAssignments}
-          kmeansCentroids={kmeansCentroids}
-          kmeansIteration={kmeansIteration}
+        {/* Log Panel (Middle Column, Bottom Row) */}
+        <LogPanel
+           className="col-span-1 row-span-1 max-h-56" // Updated spans
+           logs={filteredLogMessages}
         />
       </div>
 
@@ -1055,6 +1180,15 @@ export default function DashboardPage() {
       >
         Status messages or other info can go here.
       </footer>
+
+      {/* Song Details Dialog (Conditionally Rendered) */}
+      {isDetailsDialogOpen && detailsSong && (
+        <SongDetailsDialog 
+          song={detailsSong} 
+          features={detailsFeatures} 
+          onClose={handleCloseDetailsDialog} 
+        />
+      )}
     </main>
   );
 }

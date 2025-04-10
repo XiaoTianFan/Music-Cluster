@@ -43,8 +43,7 @@ const LogPanel: React.FC<LogPanelProps> = ({ logs, className }) => {
       <h2 className="text-lg font-semibold mb-2 text-yellow-300">Program Logs</h2>
       <div
         ref={scrollContainerRef}
-        className="flex-grow overflow-y-auto bg-grey/90 p-2 text-xs font-mono"
-        style={{ maxHeight: '500px' }} // Adjust max height as needed
+        className="flex-grow overflow-y-auto bg-grey/90 p-2 text-xs font-mono hide-scrollbar"
       >
         {logs.length === 0 ? (
           <p className="text-gray-500 italic">No logs yet...</p>
