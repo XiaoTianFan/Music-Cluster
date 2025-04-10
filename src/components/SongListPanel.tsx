@@ -1,4 +1,4 @@
-import React, { useState, ChangeEvent, DragEvent } from 'react';
+import React, { useState, DragEvent } from 'react';
 
 // Re-import types from page.tsx or define locally/globally
 interface Song {
@@ -24,8 +24,6 @@ interface SongListPanelProps {
   onShowDetails: (songId: string) => void; // Prop to trigger showing details
   className?: string; // Allow passing className for layout adjustments
 }
-
-const SONGS_PER_PAGE = 15;
 
 const SongListPanel: React.FC<SongListPanelProps> = ({ 
   songs, 

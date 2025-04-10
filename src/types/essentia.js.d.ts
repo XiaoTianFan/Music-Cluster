@@ -3,18 +3,18 @@
 declare module 'essentia.js' {
     // Declare the factory function for the WASM module
     // It returns a Promise resolving to the Emscripten module instance
-    export function EssentiaWASM(options?: any): Promise<any>;
+    export function EssentiaWASM(options?: Record<string, unknown>): Promise<EssentiaWASMModule>;
   
     // Declare the main Essentia class
     export class Essentia {
-      constructor(wasmModule: any);
+      constructor(wasmModule: EssentiaWASMModule);
   
       // Add common methods we know we'll use (can add more later)
-      // Use 'any' for complex Essentia-specific types for now
-      arrayToVector(data: number[] | Float32Array): any;
-      vectorToArray(vector: any): any; // Adjust return type if known (e.g., number[] or number[][])
+      // Use 'unknown' for complex Essentia-specific types for now
+      arrayToVector(data: number[] | Float32Array): unknown;
+      vectorToArray(vector: unknown): unknown; // Adjust return type if known (e.g., number[] or number[][])
       MFCC(
-          signal: any, 
+          signal: unknown, 
           sampleRate?: number, 
           numCoefficients?: number, 
           numBands?: number, 
@@ -23,7 +23,7 @@ declare module 'essentia.js' {
           frameSize?: number, 
           hopSize?: number, 
           // ... add other parameters if needed
-      ): any; // Adjust return type if known (e.g., { mfcc: any })
+      ): { mfcc: unknown }; // Return type should be { mfcc: vector } which translates to unknown here
       
       // Add other algorithms as needed
       // ReplayGain(signal: any, sampleRate?: number): any;
@@ -38,6 +38,10 @@ declare module 'essentia.js' {
   
       // Add other known properties or methods if necessary
     }
+  
+    // Define a placeholder type for the WASM module instance
+    // This could be refined later if the structure is known
+    interface EssentiaWASMModule {}
   
     // If there are other top-level exports from the module, declare them here
     // export const someOtherExport: any; 

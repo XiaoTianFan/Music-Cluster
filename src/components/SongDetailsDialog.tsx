@@ -10,7 +10,7 @@ interface SongDetailsDialogProps {
 const SongDetailsDialog: React.FC<SongDetailsDialogProps> = ({ song, features, onClose }) => {
   
   // Helper to format feature values
-  const formatValue = (value: any): string => {
+  const formatValue = (value: unknown): string => {
     if (value === undefined || value === null) return 'N/A';
     if (typeof value === 'number') return value.toFixed(3); // Format numbers
     if (Array.isArray(value)) {

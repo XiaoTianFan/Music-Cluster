@@ -70,7 +70,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
     const traceType = reductionDimensions === 3 ? 'scatter3d' : 'scatter';
 
     // Data Points Trace
-    const dataTrace: any = {
+    const dataTrace: Partial<Plotly.PlotData> = {
       x: activePoints.map(p => p.x),
       y: activePoints.map(p => p.y),
       type: traceType,
@@ -87,11 +87,11 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
       name: 'Songs'
     };
     if (reductionDimensions === 3) {
-        dataTrace.z = activePoints.map(p => p.z);
+        dataTrace.z = activePoints.map(p => p.z).filter((z): z is number => z !== undefined);
     }
 
     // Centroids Trace
-    const centroidTrace: any = {
+    const centroidTrace: Partial<Plotly.PlotData> = {
         x: kmeansCentroids.map(c => c[0]),
         y: kmeansCentroids.map(c => c[1]),
         type: traceType,

@@ -112,7 +112,7 @@ interface FeatureExplanation {
 }
 
 // Helper function to compare two sets
-const setsAreEqual = (setA: Set<any>, setB: Set<any>): boolean => {
+const setsAreEqual = (setA: Set<unknown>, setB: Set<unknown>): boolean => {
   if (setA.size !== setB.size) return false;
   for (const item of setA) {
     if (!setB.has(item)) return false;
@@ -164,7 +164,6 @@ export default function DashboardPage() {
   const extractionStartTimeRef = useRef<number | null>(null); // Ref for timing
 
   // --- K-Means State ---
-  const [kmeansK, setKmeansK] = useState<number>(3); // Default K value
   const [kmeansIteration, setKmeansIteration] = useState<number>(0);
   const [kmeansCentroids, setKmeansCentroids] = useState<number[][]>([]);
   const [kmeansAssignments, setKmeansAssignments] = useState<KmeansAssignments>({});
@@ -199,7 +198,7 @@ export default function DashboardPage() {
   useEffect(() => {
     // Initialize AudioContext
     if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      audioContextRef.current = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
       addLogMessage('AudioContext initialized.', 'info');
     }
 
@@ -296,14 +295,16 @@ export default function DashboardPage() {
 
             switch (type) {
                 case 'kmeansIterationUpdate':
-                    setKmeansIteration(payload.iteration);
-                    setKmeansCentroids(payload.centroids);
+                    // Define payload type explicitly for kmeansIterationUpdate
+                    const updatePayload = payload as { iteration: number; centroids: number[][]; songIds: string[]; assignments: number[] };
+                    setKmeansIteration(updatePayload.iteration);
+                    setKmeansCentroids(updatePayload.centroids);
                     const newAssignments: KmeansAssignments = {};
-                    payload.songIds.forEach((id: string, index: number) => {
-                        newAssignments[id] = payload.assignments[index];
+                    updatePayload.songIds.forEach((id: string, index: number) => {
+                        newAssignments[id] = updatePayload.assignments[index];
                     });
-                    setKmeansAssignments(prev => ({ ...prev, ...newAssignments }));
-                    addLogMessage(`K-Means iteration ${payload.iteration} update received.`, 'complete');
+                    setKmeansAssignments(prev => ({ ...prev, ...newAssignments })); // Update state correctly
+                    addLogMessage(`K-Means iteration ${updatePayload.iteration} update received.`, 'complete');
                     break;
                 case 'kmeansComplete':
                     setIsClustering(false);
@@ -451,7 +452,7 @@ export default function DashboardPage() {
                id: objectURL, // Use object URL as a unique ID
                name: file.name,
                url: objectURL,
-               source: 'user' as 'user',
+               source: 'user' as const, // Use as const assertion
             };
             newSongs.push(newSong);
             newActiveIds.add(newSong.id); // Make newly added songs active by default
@@ -1044,7 +1045,6 @@ export default function DashboardPage() {
       setKmeansIteration(0);
       setKmeansCentroids([]);
       setKmeansAssignments({});
-      setKmeansK(k); // Store the requested K
 
       kmeansWorkerRef.current.postMessage({
           type: 'startTraining',
@@ -1056,7 +1056,7 @@ export default function DashboardPage() {
           }
       });
 
-  }, [isClustering, isProcessing, isReducing, activeSongIds, reducedDataPoints, reductionDimensions, kmeansWorkerRef, addLogMessage]); // Added addLogMessage
+  }, [isClustering, isProcessing, isReducing, activeSongIds, reducedDataPoints, addLogMessage]); // Added addLogMessage
 
   // --- Derived State ---
     const hasReducedDataForActiveSongs = useMemo(() => {

@@ -2,7 +2,7 @@
 declare module '@saehrimnir/druidjs' {
     // Base class (assuming it exists, or use any)
     export class DR {
-        constructor(X: any, params?: any);
+        constructor(X: unknown, params?: Record<string, unknown>);
         transform(): Matrix;
         // Add other methods if needed
     }

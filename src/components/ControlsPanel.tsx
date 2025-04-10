@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 
 // Type for reduction method (assuming it's defined elsewhere or should be here)
 type ReductionMethod = 'pca' | 'tsne' | 'umap';
@@ -16,7 +16,7 @@ interface ControlsPanelProps {
   hasReducedDataForActiveSongs: boolean;
   onExtractFeatures: (selectedFeatures: Set<string>) => void;
   // Type for the reduction method, mirroring page.tsx
-  onReduceDimensions: (method: ReductionMethod, dimensions: number, params?: any) => void;
+  onReduceDimensions: (method: ReductionMethod, dimensions: number, params?: Record<string, unknown>) => void;
   onRunClustering: (k: number) => void; // Handler to start clustering
   onShowExplanation: (featureId: string) => void; // <-- Add the new prop
   className?: string; // Allow passing className for layout adjustments
