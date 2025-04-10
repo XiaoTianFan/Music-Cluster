@@ -9,6 +9,7 @@ import ControlsPanel from '../components/ControlsPanel';
 import LogPanel from '../components/LogPanel'; // Import the new LogPanel
 import SongDetailsDialog from '../components/SongDetailsDialog'; // Import the new dialog component
 import FeatureExplanationDialog from '../components/FeatureExplanationDialog'; // Import the explanation dialog
+import AboutDialog from '../components/AboutDialog'; // Import the About dialog
 // Remove the static import of VisualizationPanel
 // import VisualizationPanel from '../components/VisualizationPanel';
 
@@ -148,6 +149,9 @@ export default function DashboardPage() {
   const [explanations, setExplanations] = useState<Record<string, FeatureExplanation> | null>(null);
   const [isExplanationOpen, setIsExplanationOpen] = useState(false);
   const [explainedFeatureId, setExplainedFeatureId] = useState<string | null>(null);
+
+  // --- State for About Dialog ---
+  const [isAboutDialogOpen, setIsAboutDialogOpen] = useState<boolean>(false);
 
   // --- State to track songs in the current processing batch ---
   const [processingSongIds, setProcessingSongIds] = useState<Set<string>>(new Set());
@@ -1121,6 +1125,11 @@ export default function DashboardPage() {
     setExplainedFeatureId(null); // Clear the ID when closing
   }, []);
 
+  // --- Handler for Toggling the About Dialog ---
+  const handleToggleAboutDialog = () => {
+    setIsAboutDialogOpen(prev => !prev);
+  };
+
   return (
     <main className="flex flex-col min-h-screen p-4 bg-gray-900 text-gray-100 font-[family-name:var(--font-geist-mono)]">
        {/* Hidden File Input */}
@@ -1141,29 +1150,46 @@ export default function DashboardPage() {
         style={{ '--aug-border-color': 'cyan', '--aug-border-bg': 'transparent' } as React.CSSProperties}
       >
         <h1 className="px-4 text-xl font-bold text-cyan-400">SongCluster Dashboard</h1>
-        <div className="text-sm text-cyan-300">
-          {/* Status Text */}
-          <span>
-            {isProcessing ? 'Processing Audio... ' : ''}
-            {isReducing ? 'Reducing Dimensions... ' : ''}
-            {isClustering ? `Clustering (Iter: ${kmeansIteration})... ` : ''}
-            {!isProcessing && !isReducing && !isClustering ? 'Ready ' : ''}
+        <div className="flex items-center gap-4"> {/* Wrapper for status and button */}
+          <div className="text-sm text-cyan-300">
+            {/* Status Text */}
+            <span>
+              {isProcessing ? 'Processing Audio... ' : ''}
+              {isReducing ? 'Reducing Dimensions... ' : ''}
+              {isClustering ? `Clustering (Iter: ${kmeansIteration})... ` : ''}
+              {!isProcessing && !isReducing && !isClustering ? 'Ready ' : ''}
+            </span>
+            {/* Overall Counts (remain useful) */}
+            <span className="ml-2">
+              ({songs.filter(s => featureStatus[s.id] === 'complete').length} / {songs.length} songs processed)
+            </span>
+            {!essentiaWorkerReady && <span className="text-red-500 ml-2">Worker Error!</span>}
+
+            {/* Progress Bar - Conditionally rendered */}
+            {isProcessing && processingSongIds.size > 0 && (
+               <div className="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden mt-1">
+                <div
+                  className="h-full bg-cyan-500 transition-width duration-150 ease-linear"
+                  style={{ width: `${progressPercent}%` }}
+                ></div>
+              </div>
+            )}
+          </div>
+          {/* About Text Link */}
+          <span
+            onClick={handleToggleAboutDialog}
+            className="text-cyan-300 hover:text-cyan-400 cursor-pointer text-sm whitespace-nowrap mr-4"
+            role="button" // Accessibility: Indicate it behaves like a button
+            tabIndex={0}  // Accessibility: Make it focusable
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                handleToggleAboutDialog();
+              }
+            }} // Accessibility: Trigger on Enter/Space
+          >
+            | 
+            About
           </span>
-          {/* Overall Counts (remain useful) */}
-          <span className="ml-2"> 
-            ({songs.filter(s => featureStatus[s.id] === 'complete').length} / {songs.length} songs processed)
-          </span>
-          {!essentiaWorkerReady && <span className="text-red-500 ml-2">Worker Error!</span>}
-          
-          {/* Progress Bar - Conditionally rendered */}
-          {isProcessing && processingSongIds.size > 0 && (
-             <div className="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden mt-1">
-              <div 
-                className="h-full bg-cyan-500 transition-width duration-150 ease-linear" 
-                style={{ width: `${progressPercent}%` }}
-              ></div>
-            </div>
-          )}
         </div>
       </div>
 
@@ -1247,6 +1273,12 @@ export default function DashboardPage() {
           onClose={handleCloseExplanation}
         />
       )}
+
+      {/* About Dialog (Conditionally Rendered) */}
+      <AboutDialog
+        isOpen={isAboutDialogOpen}
+        onClose={handleToggleAboutDialog}
+      />
     </main>
   );
 }
