@@ -640,7 +640,29 @@ export default function DashboardPage() {
         setKmeansIteration(0);
         setReductionDimensions(0);
         addLogMessage('Downstream processing results cleared due to new feature extraction.', 'info');
-        // -------------------------------------------------------------
+        
+        // --- IMPROVEMENT: Automatically generate raw data matrix after extraction completes ---
+        // Get features for active songs that now have complete features
+        const activeFeatures: { id: string; features: Features }[] = [];
+        activeSongIds.forEach(id => {
+            const features = songFeatures[id];
+            const status = featureStatus[id];
+            if (features && status === 'complete') {
+                activeFeatures.push({ id, features });
+            }
+        });
+        
+        // Only proceed if there are active songs with complete features
+        if (activeFeatures.length > 0) {
+            addLogMessage('Automatically preparing raw data matrix after feature extraction...', 'info');
+            const matrixResult = prepareMatrix(activeFeatures, addLogMessage);
+            
+            if (matrixResult) {
+                // Store unprocessed data (just the raw matrix, not triggering processing)
+                setUnprocessedData(matrixResult);
+                addLogMessage('Raw data matrix successfully prepared and available for visualization.', 'complete');
+            }
+        }
 
         // --- TEMPORARY CODE START (Cache Generation Logging) ---
         // Log the final features object ONLY when processing finishes
@@ -649,8 +671,8 @@ export default function DashboardPage() {
         // when *all* default songs are processed *in the same batch*.
         const onlyDefaultSongs = songs.every(s => s.source === 'default');
         if (onlyDefaultSongs && songs.length === defaultSongs.length) {
-             // NOTE: This log condition checks if the *current* song list *only* contains default songs,
-             //       not necessarily that *all* were processed *in this specific batch*.
+            // NOTE: This log condition checks if the *current* song list *only* contains default songs,
+            //       not necessarily that *all* were processed *in this specific batch*.
             console.log("=== COPY FEATURE DATA BELOW ===");
             console.log(JSON.stringify(songFeatures, null, 2)); // Log as pretty-printed JSON string
             console.log("=== COPY FEATURE DATA ABOVE ===");
@@ -658,11 +680,10 @@ export default function DashboardPage() {
         }
         // --- TEMPORARY CODE END ---
     }
-    // Dependencies: isProcessing ensures we only check when active. featureStatus changes trigger the check.
-    // songs and songFeatures are needed for the cache logging logic.
-    // addLogMessage is used for logging.
-    // processingSongIds is added to correctly identify batch completion.
-  }, [featureStatus, isProcessing, songs, songFeatures, addLogMessage, processingSongIds]);
+  }, [isProcessing, processingSongIds, featureStatus, extractionStartTimeRef, 
+      setIsProcessing, addLogMessage, setUnprocessedData, setProcessedData, 
+      setReducedDataPoints, setKmeansAssignments, setKmeansCentroids, 
+      setKmeansIteration, setReductionDimensions, activeSongIds, songFeatures, songs, defaultSongs]);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;

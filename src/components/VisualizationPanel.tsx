@@ -1,4 +1,4 @@
-import React, { useMemo, useState, ChangeEvent } from 'react';
+import React, { useMemo, useState, ChangeEvent, useEffect } from 'react';
 import Plot from 'react-plotly.js';
 import { Song, Features, KmeansAssignments } from '@/app/page'; // Assuming types are exported from page
 
@@ -50,8 +50,103 @@ const plotlyColors = [
   '#e377c2',  // Raspberry yogurt pink
   '#7f7f7f',  // Middle gray
   '#bcbd22',  // Curry yellow-green
-  '#17becf'   // Blue-teal
+  '#17becf',  // Blue-teal
+  '#aec7e8',  // Light blue
+  '#ffbb78',  // Light orange
+  '#98df8a',  // Light green
+  '#ff9896',  // Light red
+  '#c5b0d5',  // Light purple
+  '#c49c94',  // Light brown
+  '#f7b6d2',  // Light pink
+  '#c7c7c7',  // Light gray
+  '#dbdb8d',  // Light yellow-green
+  '#9edae5',  // Light blue-teal
+  '#393b79',  // Dark blue
+  '#843c39',  // Dark red
+  '#5254a3',  // Dark purple
+  '#8c6d31',  // Dark brown
+  '#637939',  // Dark green
+  '#8ca252',  // Olive green
+  '#b5cf6b',  // Lime green
+  '#cedb9c',  // Pale green
+  '#8c6d31',  // Dark gold
+  '#bd9e39'   // Gold
 ];
+
+// Define feature field order and mappings for better visualization
+const FEATURE_FIELD_ORDER = [
+  // MFCC fields
+  { key: 'mfccMeans', prefix: 'MFCC Mean', isArray: true },
+  { key: 'mfccStdDevs', prefix: 'MFCC Std', isArray: true },
+  // Energy and complexity fields
+  { key: 'energy', prefix: 'Energy', isArray: false },
+  { key: 'entropy', prefix: 'Entropy', isArray: false },
+  { key: 'dynamicComplexity', prefix: 'Dynamic Complexity', isArray: false },
+  { key: 'loudness', prefix: 'Loudness', isArray: false },
+  { key: 'rms', prefix: 'RMS', isArray: false },
+  // Tuning fields
+  { key: 'tuningFrequency', prefix: 'Tuning Frequency', isArray: false },
+  { key: 'tuningCents', prefix: 'Tuning Cents', isArray: false },
+  // Categorical fields (for coloring, not for axes)
+  { key: 'key', prefix: 'Key', isArray: false, isCategorical: true },
+  { key: 'keyScale', prefix: 'Scale', isArray: false, isCategorical: true },
+  { key: 'keyStrength', prefix: 'Key Strength', isArray: false }
+];
+
+// Define a type for feature column metadata
+interface FeatureColumn {
+  name: string;        // Display name
+  columnIndex: number; // Index in the matrix
+  featureKey: string;  // Original feature key
+  arrayIndex?: number; // If from array, which index
+}
+
+// Define a type for categorical value mapping
+interface CategoryValueMap {
+  [category: string]: { // Category like 'key' or 'keyScale'
+    values: string[];   // Possible values in order of encoding
+  };
+}
+
+// Base layout configuration to ensure consistent styling even when no data is plotted
+const basePlotLayout: Partial<Plotly.Layout> = {
+  title: 'Visualization', // Generic initial title
+  autosize: true,
+  paper_bgcolor: 'rgba(0,0,0,0)',
+  plot_bgcolor: 'rgba(0, 0, 0, 0)',
+  font: {
+    color: '#cccccc'
+  },
+  margin: { l: 40, r: 40, b: 40, t: 60, pad: 4 },
+  legend: {
+    x: 0.05,
+    y: 0.95,
+    bgcolor: 'rgba(50,50,50,0.7)',
+    bordercolor: '#aaaaaa',
+    borderwidth: 1
+  },
+  hovermode: 'closest',
+  // Default axis styling (can be overridden later)
+  xaxis: {
+    title: 'X',
+    color: '#cccccc',
+    gridcolor: '#555555',
+    zerolinecolor: '#777777'
+  },
+  yaxis: {
+    title: 'Y',
+    color: '#cccccc',
+    gridcolor: '#555555',
+    zerolinecolor: '#777777'
+  },
+  scene: { // Default 3D scene styling
+    xaxis: { title: 'X', color: '#cccccc', gridcolor: '#555555', zerolinecolor: '#777777' },
+    yaxis: { title: 'Y', color: '#cccccc', gridcolor: '#555555', zerolinecolor: '#777777' },
+    zaxis: { title: 'Z', color: '#cccccc', gridcolor: '#555555', zerolinecolor: '#777777' },
+    bgcolor: 'rgba(0,0,0,0)',
+    camera: { eye: { x: 1.25, y: 1.25, z: 1.25 } } 
+  }
+};
 
 const VisualizationPanel: React.FC<VisualizationPanelProps> = ({ 
   className,
@@ -70,11 +165,11 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 }) => {
 
   // --- Internal State for Visualization Controls ---
-  const [selectedDataStage, setSelectedDataStage] = useState<DataStage>('clustering');
+  const [selectedDataStage, setSelectedDataStage] = useState<DataStage>('raw');
   const [selectedDimensions, setSelectedDimensions] = useState<DimensionSelection>(2);
   // Default to 'cluster' if clustering data exists and stage is clustering, else null
   const [selectedColorBy, setSelectedColorBy] = useState<string | null>(
-    () => (selectedDataStage === 'clustering' && Object.keys(kmeansAssignments).length > 0) ? 'cluster' : null
+    () => (Object.keys(kmeansAssignments).length > 0) ? 'cluster' : null
   );
   const [selectedAxisX, setSelectedAxisX] = useState<string | null>(null); // Will be set dynamically
   const [selectedAxisY, setSelectedAxisY] = useState<string | null>(null); // Will be set dynamically
@@ -82,130 +177,467 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
   const [selectedScaleX, setSelectedScaleX] = useState<AxisScale>('linear');
   const [selectedScaleY, setSelectedScaleY] = useState<AxisScale>('linear');
   const [selectedScaleZ, setSelectedScaleZ] = useState<AxisScale>('linear');
+  const [showLegend, setShowLegend] = useState<boolean>(false); // State for legend visibility
   // -------------------------------------------------
 
   const songMap = useMemo(() => new Map(songs.map(s => [s.id, s])), [songs]);
 
-  const plotDataAndLayout = useMemo(() => {
-    if (reductionDimensions !== 2 && reductionDimensions !== 3) {
-      return { plotData: [], plotLayout: {} }; // Invalid dimensions
+  // --- Helper functions for mapping feature columns and names ---
+  const featureColumnsMap = useMemo<{ numerical: FeatureColumn[], categorical: string[] }>(() => {
+    if (!unprocessedData) {
+      return { numerical: [], categorical: [] };
     }
 
-    const activePoints: { x: number; y: number; z?: number; id: string; name: string; cluster: number | undefined }[] = [];
-    activeSongIds.forEach(id => {
-      const point = reducedDataPoints[id];
-      const assignment = kmeansAssignments[id];
-      const song = songMap.get(id);
-      if (point && point.length === reductionDimensions && song) {
-        activePoints.push({
-          x: point[0],
-          y: point[1],
-          z: reductionDimensions === 3 ? point[2] : undefined,
-          id: id,
-          name: song.name,
-          cluster: assignment, // Will be undefined if not yet assigned
+    // Initialize result objects
+    const numerical: FeatureColumn[] = [];
+    const categorical: string[] = [];
+    
+    // Track column index as we build the mapping
+    let currentColIndex = 0;
+    
+    // Process features in canonical order
+    FEATURE_FIELD_ORDER.forEach(fieldInfo => {
+      const { key, prefix, isArray, isCategorical } = fieldInfo;
+      
+      if (isCategorical) {
+        // This is a categorical feature, add it to the categorical list
+        categorical.push(key);
+        
+        // Skip the corresponding OHE columns in the numerical matrix
+        // Need to determine how many columns this categorical feature uses
+        if (unprocessedData.isOHEColumn) {
+          for (let i = currentColIndex; i < unprocessedData.vectors[0]?.length; i++) {
+            if (unprocessedData.isOHEColumn[i]) {
+              currentColIndex++;
+            } else {
+              break; // Stop when we hit a non-OHE column
+            }
+          }
+        }
+      } else if (isArray) {
+        // This is an array feature (like mfccMeans with multiple coefficients)
+        // Need to determine array length by analyzing the first song's feature
+        let arrayLength = 0;
+        
+        // Find a song that has this feature
+        for (const songId of unprocessedData.songIds) {
+          const features = songFeatures[songId];
+          if (features && features[key as keyof Features] && Array.isArray(features[key as keyof Features])) {
+            // @ts-ignore - we verified it's an array above
+            arrayLength = features[key as keyof Features].length;
+            break;
+          }
+        }
+        
+        // Now create a column entry for each array element
+        for (let i = 0; i < arrayLength; i++) {
+          numerical.push({
+            name: `${prefix} ${i + 1}`, // e.g., "MFCC Mean 1", "MFCC Mean 2"
+            columnIndex: currentColIndex,
+            featureKey: key,
+            arrayIndex: i
+          });
+          currentColIndex++;
+        }
+      } else {
+        // This is a regular numerical feature
+        numerical.push({
+          name: prefix,
+          columnIndex: currentColIndex,
+          featureKey: key
         });
+        currentColIndex++;
       }
     });
+    
+    return { numerical, categorical };
+  }, [unprocessedData, songFeatures]);
 
-    if (activePoints.length === 0) {
-        return { plotData: [], plotLayout: {} }; // No valid points to plot
-    }
-
-    const traceType = reductionDimensions === 3 ? 'scatter3d' : 'scatter';
-
-    // Data Points Trace
-    const dataTrace: Partial<Plotly.PlotData> = {
-      x: activePoints.map(p => p.x),
-      y: activePoints.map(p => p.y),
-      type: traceType,
-      mode: 'markers',
-      marker: {
-        color: activePoints.map(p => 
-            p.cluster !== undefined ? plotlyColors[p.cluster % plotlyColors.length] : '#cccccc' // Default gray if no cluster
-        ),
-        size: 8,
-        opacity: 0.8
-      },
-      text: activePoints.map(p => `${p.name}<br>Cluster: ${p.cluster ?? 'N/A'}`), // Hover text
-      hoverinfo: 'text',
-      name: 'Songs'
-    };
-    if (reductionDimensions === 3) {
-        dataTrace.z = activePoints.map(p => p.z).filter((z): z is number => z !== undefined);
-    }
-
-    // Centroids Trace
-    const centroidTrace: Partial<Plotly.PlotData> = {
-        x: kmeansCentroids.map(c => c[0]),
-        y: kmeansCentroids.map(c => c[1]),
-        type: traceType,
-        mode: 'markers',
-        marker: {
-            color: kmeansCentroids.map((c, i) => plotlyColors[i % plotlyColors.length]),
-            size: 14,
-            symbol: 'diamond', // Use diamond for centroids
-            opacity: 1,
-            line: { // Add a border to centroids
-                color: '#000000', 
-                width: 1
-            }
-        },
-        text: kmeansCentroids.map((c, i) => `Centroid ${i}`),
-        hoverinfo: 'text',
-        name: 'Centroids'
-    };
-    if (reductionDimensions === 3) {
-        centroidTrace.z = kmeansCentroids.map(c => c[2]);
-    }
-
-    const plotData = [dataTrace, centroidTrace];
-
-    // Layout
-    const plotLayout: Partial<Plotly.Layout> = {
-      title: `K-Means Clustering - Iteration ${kmeansIteration}`, // Dynamic title
-      autosize: true,
-      // Use transparent background to match page
-      paper_bgcolor: 'rgba(0,0,0,0)',
-      plot_bgcolor: 'rgba(0,0,0,0)', 
-      font: {
-        color: '#cccccc' // Light text for dark background
-      },
-      margin: { l: 40, r: 40, b: 40, t: 60, pad: 4 }, // Adjust margins
-      legend: {
-        x: 0.05,
-        y: 0.95,
-        bgcolor: 'rgba(50,50,50,0.7)',
-        bordercolor: '#aaaaaa',
-        borderwidth: 1
-      },
-      hovermode: 'closest'
-    };
-
-    if (reductionDimensions === 3) {
-      plotLayout.scene = {
-          xaxis: { title: 'Dim 1', color: '#cccccc', gridcolor: '#555555', zerolinecolor: '#777777' },
-          yaxis: { title: 'Dim 2', color: '#cccccc', gridcolor: '#555555', zerolinecolor: '#777777' },
-          zaxis: { title: 'Dim 3', color: '#cccccc', gridcolor: '#555555', zerolinecolor: '#777777' },
-          bgcolor: 'rgba(0,0,0,0)',
-           camera: { eye: { x: 1.5, y: 1.5, z: 1.5 } } // Adjust camera view
+  // Get the category value map (mapping from OHE indices to original values)
+  const categoryValueMap = useMemo<CategoryValueMap>(() => {
+    const result: CategoryValueMap = {};
+    
+    if (!songFeatures) return result;
+    
+    // For each known categorical feature
+    featureColumnsMap.categorical.forEach(category => {
+      // Get all unique values for this category across all songs
+      const uniqueValues = new Set<string>();
+      
+      Object.values(songFeatures).forEach(features => {
+        if (features && features[category as keyof Features]) {
+          const value = features[category as keyof Features];
+          if (typeof value === 'string') {
+            uniqueValues.add(value);
+          }
+        }
+      });
+      
+      // Sort values for consistent ordering
+      result[category] = {
+        values: Array.from(uniqueValues).sort()
       };
+    });
+    
+    return result;
+  }, [songFeatures, featureColumnsMap.categorical]);
+
+  // Helper to get the original categorical value for a song
+  const getCategoricalValueForSong = (songId: string, category: string): string => {
+    if (!songFeatures || !songFeatures[songId]) return 'N/A';
+    
+    const features = songFeatures[songId];
+    if (!features) return 'N/A';
+    
+    const value = features[category as keyof Features];
+    return typeof value === 'string' ? value : 'N/A';
+  };
+
+  // --- Dynamic options for controls ---
+  const getAvailableColorOptions = useMemo(() => {
+    // Start with cluster option
+    let options = [{ value: 'cluster', label: 'Cluster Assignment' }];
+    
+    // Add categorical features from our mapping
+    featureColumnsMap.categorical.forEach(category => {
+      options.push({ 
+        value: `feature:${category}`, 
+        label: `Feature: ${category.charAt(0).toUpperCase() + category.slice(1)}` 
+      });
+    });
+    
+    return options;
+  }, [featureColumnsMap.categorical]);
+
+  const getAvailableAxisFeatures = useMemo(() => {
+    let options: { value: string, label: string }[] = [];
+    
+    if (selectedDataStage === 'clustering') {
+      // For clustering stage, use dimensions from reduction
+      options = [
+        { value: 'dim1', label: 'Dimension 1' }, 
+        { value: 'dim2', label: 'Dimension 2' }
+      ];
+      if (reductionDimensions >= 3) {
+        options.push({ value: 'dim3', label: 'Dimension 3' });
+      }
     } else {
-        plotLayout.xaxis = { title: 'Dimension 1', color: '#cccccc', gridcolor: '#555555', zerolinecolor: '#777777' };
-        plotLayout.yaxis = { title: 'Dimension 2', color: '#cccccc', gridcolor: '#555555', zerolinecolor: '#777777' };
+      // For raw or processed stages, use numerical features
+      options = featureColumnsMap.numerical.map(col => ({
+        value: `col:${col.columnIndex}`,
+        label: col.name
+      }));
     }
+    
+    return options;
+  }, [selectedDataStage, reductionDimensions, featureColumnsMap.numerical]);
 
-    return { plotData, plotLayout };
+  // Set default axis and color selections when stage changes
+  useEffect(() => {
+    // Default color selection
+    if (selectedDataStage === 'clustering') {
+      // For clustering, default to cluster coloring
+      setSelectedColorBy('cluster');
+    } else if (featureColumnsMap.categorical.length > 0) {
+      // For other stages, default to first categorical feature
+      setSelectedColorBy(`feature:${featureColumnsMap.categorical[0]}`);
+    } else {
+      // No categoricals available
+      setSelectedColorBy(null);
+    }
+    
+    // Default axis selections
+    if (selectedDataStage === 'clustering') {
+      // For clustering, use dimensions
+      setSelectedAxisX('dim1');
+      setSelectedAxisY('dim2');
+      if (selectedDimensions === 3) {
+        setSelectedAxisZ('dim3');
+      }
+    } else if (featureColumnsMap.numerical.length > 0) {
+      // For other stages, use first two available numerical features
+      const availableFeatures = featureColumnsMap.numerical;
+      const firstFeatureIndex = availableFeatures.length > 0 ? `col:${availableFeatures[0].columnIndex}` : null;
+      const secondFeatureIndex = availableFeatures.length > 1 ? `col:${availableFeatures[1].columnIndex}` : null;
+      const thirdFeatureIndex = availableFeatures.length > 2 ? `col:${availableFeatures[2].columnIndex}` : null;
+      
+      setSelectedAxisX(firstFeatureIndex);
+      setSelectedAxisY(secondFeatureIndex);
+      if (selectedDimensions === 3) {
+        setSelectedAxisZ(thirdFeatureIndex);
+      }
+    }
+  }, [selectedDataStage, featureColumnsMap.categorical, featureColumnsMap.numerical, selectedDimensions]);
 
+  // Helper function to create detailed hover information
+  const createDetailedHoverText = (songId: string, songName: string, stage: DataStage): string => {
+    let hoverText = `<b>${songName}</b>`;
+    
+    // Add cluster information if available (for any stage)
+    if (kmeansAssignments[songId] !== undefined) {
+      hoverText += `<br><b>Cluster:</b> ${kmeansAssignments[songId]}`;
+    }
+    
+    // Add all available MIR features for the song
+    const features = songFeatures[songId];
+    if (features) {
+      hoverText += '<br><br><b>MIR Features:</b>';
+      
+      // Add single numeric values
+      if (features.energy !== undefined) hoverText += `<br>Energy: ${features.energy.toFixed(3)}`;
+      if (features.entropy !== undefined) hoverText += `<br>Entropy: ${features.entropy.toFixed(3)}`;
+      if (features.dynamicComplexity !== undefined) hoverText += `<br>Dynamic Complexity: ${features.dynamicComplexity.toFixed(3)}`;
+      if (features.loudness !== undefined) hoverText += `<br>Loudness: ${features.loudness.toFixed(3)}`;
+      if (features.rms !== undefined) hoverText += `<br>RMS: ${features.rms.toFixed(3)}`;
+      if (features.keyStrength !== undefined) hoverText += `<br>Key Strength: ${features.keyStrength.toFixed(3)}`;
+      if (features.tuningFrequency !== undefined) hoverText += `<br>Tuning Frequency: ${features.tuningFrequency.toFixed(2)} Hz`;
+      if (features.tuningCents !== undefined) hoverText += `<br>Tuning Cents: ${features.tuningCents.toFixed(2)}`;
+      
+      // Add categorical values
+      if (features.key !== undefined) hoverText += `<br>Key: ${features.key}`;
+      if (features.keyScale !== undefined) hoverText += `<br>Scale: ${features.keyScale}`;
+      
+      // Add summary of array values (first 3 values if array is longer)
+      if (features.mfccMeans && features.mfccMeans.length > 0) {
+        const mfccPreview = features.mfccMeans.slice(0, 3).map(v => v.toFixed(3)).join(', ');
+        hoverText += `<br>MFCC Means: [${mfccPreview}${features.mfccMeans.length > 3 ? ', ...' : ''}]`;
+      }
+      if (features.mfccStdDevs && features.mfccStdDevs.length > 0) {
+        const stdPreview = features.mfccStdDevs.slice(0, 3).map(v => v.toFixed(3)).join(', ');
+        hoverText += `<br>MFCC StdDevs: [${stdPreview}${features.mfccStdDevs.length > 3 ? ', ...' : ''}]`;
+      }
+    }
+    
+    return hoverText;
+  };
+
+  // Handler to toggle legend visibility
+  const handleToggleLegend = (event: ChangeEvent<HTMLInputElement>) => {
+    setShowLegend(event.target.checked);
+  };
+
+  const plotDataAndLayout = useMemo(() => {
+    try { 
+      console.log('[Plot Memo] Recalculating plot data...'); 
+      // Select data source based on stage
+      let dataPoints: Record<string, number[]> = {};
+      let songIds: string[] = [];
+      let dataTitle = '';
+
+      console.log(`[Plot Memo] Selected Stage: ${selectedDataStage}`); 
+
+      switch (selectedDataStage) {
+        case 'raw':
+          if (!unprocessedData || unprocessedData.vectors.length === 0) {
+            console.log('[Plot Memo] No raw data available.'); 
+            return { plotData: [], plotLayout: basePlotLayout }; 
+          }
+          dataTitle = 'Raw Features';
+          songIds = unprocessedData.songIds;
+          unprocessedData.vectors.forEach((vector, idx) => {
+            const songId = unprocessedData.songIds[idx];
+            if (activeSongIds.has(songId)) { dataPoints[songId] = vector; }
+          });
+          break;
+        case 'processed':
+          if (!processedData || processedData.vectors.length === 0) {
+            console.log('[Plot Memo] No processed data available.');
+            return { plotData: [], plotLayout: basePlotLayout };
+          }
+          dataTitle = 'Processed Data';
+          songIds = processedData.songIds;
+          processedData.vectors.forEach((vector, idx) => {
+            const songId = processedData.songIds[idx];
+            if (activeSongIds.has(songId)) { dataPoints[songId] = vector; }
+          });
+          break;
+        case 'clustering':
+        default:
+          if (Object.keys(reducedDataPoints).length === 0) {
+            console.log('[Plot Memo] No reduced data points available.');
+            return { plotData: [], plotLayout: basePlotLayout }; 
+          }
+          dataTitle = `K-Means Clustering - Iteration ${kmeansIteration}`;
+          dataPoints = reducedDataPoints;
+          songIds = Object.keys(reducedDataPoints);
+          break;
+      }
+      
+      const filteredSongIds = songIds.filter(id => activeSongIds.has(id));
+      if (filteredSongIds.length === 0) {
+        console.log('[Plot Memo] No active songs for current stage/filter.'); 
+        return { plotData: [], plotLayout: basePlotLayout }; 
+      }
+      
+      let xAxisIndex = 0, yAxisIndex = 1, zAxisIndex = 2;
+      let xAxisTitle = 'Dim 1', yAxisTitle = 'Dim 2', zAxisTitle = 'Dim 3';
+      const getColumnIndex = (sel: string | null): number | null => sel ? (sel.startsWith('dim') ? parseInt(sel.substring(3))-1 : (sel.startsWith('col:') ? parseInt(sel.substring(4)) : null)) : null;
+      const getAxisTitle = (sel: string | null, defaultPrefix: string): string => {
+        const colIdx = getColumnIndex(sel);
+        if (colIdx === null) return defaultPrefix;
+        if (selectedDataStage === 'clustering') return `${defaultPrefix} ${colIdx + 1}`;
+        const feature = featureColumnsMap.numerical.find(f => f.columnIndex === colIdx);
+        return feature ? feature.name : `${defaultPrefix} ${colIdx + 1}`;
+      };
+
+      xAxisIndex = getColumnIndex(selectedAxisX) ?? 0;
+      yAxisIndex = getColumnIndex(selectedAxisY) ?? 1;
+      zAxisIndex = getColumnIndex(selectedAxisZ) ?? 2;
+      xAxisTitle = getAxisTitle(selectedAxisX, 'Dimension');
+      yAxisTitle = getAxisTitle(selectedAxisY, 'Dimension');
+      zAxisTitle = getAxisTitle(selectedAxisZ, 'Dimension');
+
+      console.log(`[Plot Memo] Axis Indices: X=${xAxisIndex}, Y=${yAxisIndex}, Z=${zAxisIndex}`); 
+      console.log(`[Plot Memo] Axis Titles: X='${xAxisTitle}', Y='${yAxisTitle}', Z='${zAxisTitle}'`); 
+      
+      const traceType = selectedDimensions === 3 ? 'scatter3d' : 'scatter';
+      
+      // Prepare intermediate point representation
+      const intermediatePoints: { 
+        x: number; y: number; z?: number; id: string; name: string; cluster?: number; colorCategory?: string; 
+      }[] = [];
+      filteredSongIds.forEach(id => {
+        const point = dataPoints[id];
+        const song = songMap.get(id);
+        if (point && point.length > Math.max(xAxisIndex, yAxisIndex, zAxisIndex) && song) {
+          intermediatePoints.push({
+            x: point[xAxisIndex], y: point[yAxisIndex],
+            z: selectedDimensions === 3 ? point[zAxisIndex] : undefined,
+            id: id, name: song.name,
+            cluster: selectedDataStage === 'clustering' ? kmeansAssignments[id] : undefined,
+            colorCategory: selectedColorBy?.startsWith('feature:') ? getCategoricalValueForSong(id, selectedColorBy.substring(8)) : undefined
+          });
+        }
+      });
+      
+      console.log(`[Plot Memo] Generated ${intermediatePoints.length} intermediate points.`);
+      if (intermediatePoints.length === 0) {
+        console.log('[Plot Memo] No valid points generated after axis mapping.');
+        return { plotData: [], plotLayout: basePlotLayout }; 
+      }
+      
+      // Determine coloring strategy & Group points
+      const colorByCluster = selectedColorBy === 'cluster' && selectedDataStage === 'clustering';
+      const colorByCategorical = selectedColorBy?.startsWith('feature:');
+      const categoryKey = colorByCategorical ? selectedColorBy!.substring(8) : null;
+      console.log(`[Plot Memo] Color Strategy: ${selectedColorBy ?? 'Default'}`);
+
+      const groupedPoints: Record<string, typeof intermediatePoints> = {};
+      const categoryToColor: Record<string, string> = {};
+      let colorIndexCounter = 0;
+      const defaultGroupName = 'Songs';
+
+      intermediatePoints.forEach(point => {
+        let groupName: string = defaultGroupName;
+        let pointColorNeedsAssign = false;
+
+        if (colorByCluster && point.cluster !== undefined) {
+          groupName = `Cluster ${point.cluster}`;
+          if (!categoryToColor[groupName]) {
+             categoryToColor[groupName] = plotlyColors[point.cluster % plotlyColors.length];
+          }
+        } else if (colorByCategorical && categoryKey && point.colorCategory && point.colorCategory !== 'N/A') {
+          groupName = point.colorCategory;
+          pointColorNeedsAssign = !categoryToColor[groupName];
+        } 
+        
+        if (!groupedPoints[groupName]) {
+          groupedPoints[groupName] = [];
+          // Assign color if needed (either first time seeing category or default)
+          if (!categoryToColor[groupName]) { 
+             const assignedColor = pointColorNeedsAssign 
+               ? plotlyColors[colorIndexCounter++ % plotlyColors.length] 
+               : plotlyColors[0]; // Default color for 'Songs' group
+             categoryToColor[groupName] = assignedColor;
+          }
+        }
+        groupedPoints[groupName].push(point);
+      });
+      console.log(`[Plot Memo] Generated ${Object.keys(groupedPoints).length} groups/traces.`);
+
+      // Generate Traces from Groups
+      const plotData: Partial<Plotly.PlotData>[] = [];
+      Object.entries(groupedPoints).forEach(([groupName, pointsInGroup]) => {
+        if (pointsInGroup.length === 0) return;
+        const traceColor = categoryToColor[groupName];
+        
+        const trace: Partial<Plotly.PlotData> = {
+          x: pointsInGroup.map(p => p.x),
+          y: pointsInGroup.map(p => p.y),
+          type: traceType,
+          mode: 'markers',
+          marker: { color: traceColor, size: 8, opacity: 0.8 },
+          text: pointsInGroup.map(p => createDetailedHoverText(p.id, p.name, selectedDataStage)),
+          hoverinfo: 'text',
+          name: groupName, 
+          showlegend: true 
+        };
+        if (selectedDimensions === 3) {
+          trace.z = pointsInGroup.map(p => p.z).filter((z): z is number => z !== undefined);
+        }
+        plotData.push(trace);
+      });
+      
+      // Add Centroid Trace (if clustering)
+      if (selectedDataStage === 'clustering' && kmeansCentroids.length > 0) {
+        const centroidTrace: Partial<Plotly.PlotData> = {
+          x: kmeansCentroids.map(c => c[xAxisIndex] || 0),
+          y: kmeansCentroids.map(c => c[yAxisIndex] || 0),
+          z: selectedDimensions === 3 ? kmeansCentroids.map(c => c[zAxisIndex] || 0) : undefined,
+          type: traceType,
+          mode: 'markers',
+          marker: {
+            color: kmeansCentroids.map((c, i) => plotlyColors[i % plotlyColors.length]), 
+            size: 14, symbol: 'diamond', opacity: 1, line: { color: '#000000', width: 1 }
+          },
+          text: kmeansCentroids.map((c, i) => `Centroid ${i}`),
+          hoverinfo: 'text',
+          name: 'Centroids', 
+          showlegend: true 
+        };
+        plotData.push(centroidTrace);
+      }
+      
+      // Configure Layout
+      const xAxisConfig = { title: xAxisTitle, type: selectedScaleX, color: '#cccccc', gridcolor: '#555555', zerolinecolor: '#777777' };
+      const yAxisConfig = { title: yAxisTitle, type: selectedScaleY, color: '#cccccc', gridcolor: '#555555', zerolinecolor: '#777777' };
+      const zAxisConfig = selectedDimensions === 3 ? { title: zAxisTitle, type: selectedScaleZ, color: '#cccccc', gridcolor: '#555555', zerolinecolor: '#777777' } : undefined;
+
+      const plotLayout: Partial<Plotly.Layout> = {
+        ...basePlotLayout, 
+        title: dataTitle, 
+        showlegend: showLegend, 
+        // colorway removed - colors set per trace
+        legend: { ...basePlotLayout.legend, traceorder: 'normal' } 
+      };
+      
+      if (selectedDimensions === 3) {
+        plotLayout.scene = { ...(basePlotLayout.scene || {}), xaxis: xAxisConfig as any, yaxis: yAxisConfig as any, zaxis: zAxisConfig as any };
+        delete plotLayout.xaxis; delete plotLayout.yaxis;
+      } else {
+        plotLayout.xaxis = xAxisConfig as any; 
+        plotLayout.yaxis = yAxisConfig as any;
+        delete plotLayout.scene;
+      }
+      
+      console.log('[Plot Memo] Final Plot Data Length:', plotData.length); 
+      console.log('[Plot Memo] Final Plot Layout Title:', plotLayout.title);
+      console.log('[Plot Memo] Final Plot Layout BgColor:', plotLayout.paper_bgcolor, plotLayout.plot_bgcolor);
+      
+      return { plotData, plotLayout };
+    } catch (error) { 
+      console.error('[Plot Memo] Error calculating plot data:', error); 
+      return { plotData: [], plotLayout: { ...basePlotLayout, showlegend: showLegend } }; 
+    }
   }, [
-      activeSongIds, 
-      reducedDataPoints, 
-      kmeansAssignments, 
-      kmeansCentroids, 
-      reductionDimensions, 
-      kmeansIteration,
-      songMap // Include songMap dependency
-    ]);
+    // Dependencies (ensure all used variables are listed)
+    selectedDataStage, unprocessedData, processedData, reducedDataPoints, kmeansAssignments, 
+    kmeansCentroids, reductionDimensions, kmeansIteration, activeSongIds, songMap, 
+    selectedDimensions, selectedAxisX, selectedAxisY, selectedAxisZ, selectedScaleX, 
+    selectedScaleY, selectedScaleZ, selectedColorBy, featureColumnsMap.numerical, 
+    featureColumnsMap.categorical, categoryValueMap, getCategoricalValueForSong, 
+    createDetailedHoverText, songFeatures, showLegend
+  ]);
 
   // --- Control Handlers (Basic Structure) ---
   const handleStageChange = (event: ChangeEvent<HTMLSelectElement>) => {
@@ -240,32 +672,6 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
   };
   // --------------------------------------------
 
-  // --- TODO Phase 3: Helper functions for dynamic options ---
-  const getAvailableColorOptions = () => {
-    // Placeholder
-    let options = [{ value: 'cluster', label: 'Cluster Assignment' }];
-    // Logic to add categorical features based on unprocessedData/songFeatures
-    return options;
-  };
-
-  const getAvailableAxisFeatures = () => {
-      // Placeholder
-      let options: { value: string, label: string }[] = [];
-      if (selectedDataStage === 'clustering') {
-          options = [
-              { value: 'dim1', label: 'Dimension 1' }, 
-              { value: 'dim2', label: 'Dimension 2' },
-              ...(selectedDimensions === 3 ? [{ value: 'dim3', label: 'Dimension 3' }] : [])
-            ];
-      } else {
-          // Logic to get numerical features from unprocessed/processed data
-          // using the mapping helper to be created in Phase 3
-          options = [{ value: 'placeholder_feature_1', label: 'Placeholder Feature 1' }, { value: 'placeholder_feature_2', label: 'Placeholder Feature 2' }];
-      }
-      return options;
-  };
-  // ---------------------------------------------------------
-
   // --- Determine data availability for enabling/disabling controls (Basic) ---
   const isUnprocessedDataAvailable = unprocessedData !== null;
   const isProcessedDataAvailable = processedData !== null;
@@ -277,34 +683,30 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
   return (
     <div
-      className={`p-1 border border-pink-500 flex flex-col items-center justify-start ${className || ''}`}
-      data-augmented-ui="tl-clip-x tr-round br-clip bl-round border"
-      style={{ '--aug-border-color': 'hotpink' } as React.CSSProperties}
+      className={`flex flex-col items-center justify-start ${className || ''}`}
     >
       {/* Plot Area (Takes up most space) */}
-      <div className="w-full h-full flex-grow relative mb-2 min-h-0"> {/* Use flex-grow and relative positioning */}
-          {/* TODO Phase 3: Add message overlay for no data */}
+      <div 
+        className="w-full h-full flex-grow relative mb-2 min-h-0 border border-pink-500 justify-center items-center"
+        data-augmented-ui="tl-clip-x tr-round br-clip bl-round border"
+        style={{ '--aug-border-color': 'hotpink' } as React.CSSProperties}
+      >
           <Plot
               data={plotDataAndLayout.plotData as Plotly.Data[]} // Render even if empty
               layout={plotDataAndLayout.plotLayout} // Render even if empty
               useResizeHandler={true}
               style={{ width: '100%', height: '100%' }} // Let Plotly fill the container
               config={{ responsive: true, displaylogo: false }} // Make responsive and hide Plotly logo
+              className="w-full h-full flex-grow relative mb-2 px-4 min-h-0"
           />
-           {/* Message Overlay (Example) - Refine in Phase 3 */}
-           {plotDataAndLayout.plotData.length === 0 && (
-              <div className="absolute inset-0 flex items-center justify-center bg-gray-900/70 text-gray-400 text-sm pointer-events-none">
-                  No data available for current selection.
-              </div>
-           )}
       </div>
 
       {/* Controls Container (Fixed height at the bottom) */}
       <div 
-        className="w-full flex-shrink-0 p-2 border-t border-pink-700/50 bg-gray-900/80"
+        className="w-full flex-shrink-0 p-2 mt-2 border-t border-b border-pink-700/50 bg-gray-900/80"
         style={{ backdropFilter: 'blur(2px)' }} // Optional: Add blur for better separation
         >
-          {/* Control Row 1 */}
+          {/* Control Row 1: ALWAYS contains Data Stage, Dimensionality, and Color selection */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs mb-2">
               {/* 1. Data Stage */}
               <div className="flex items-center gap-1">
@@ -344,187 +746,142 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
                       value={selectedColorBy ?? ''}
                       onChange={handleColorByChange}
                       className="bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500 min-w-[100px]"
-                      // Disable logic needs refinement based on selected stage in Phase 3
-                      disabled={selectedDataStage === 'clustering' ? !canSelectClustering : (!canSelectRaw && !canSelectProcessed) }
+                      disabled={selectedDataStage === 'clustering' ? !canSelectClustering : (!canSelectRaw && !canSelectProcessed)}
                   >
                       <option value="" disabled>Select...</option>
-                      {/* TODO Phase 3: Dynamically populate based on getAvailableColorOptions() */}
-                      {getAvailableColorOptions().map(opt => (
-                          <option key={opt.value} value={opt.value} disabled={selectedDataStage !== 'clustering' && opt.value === 'cluster'}>{opt.label}</option>
+                      {getAvailableColorOptions.map((opt: { value: string, label: string }) => (
+                        <option 
+                          key={opt.value} 
+                          value={opt.value} 
+                          disabled={selectedDataStage !== 'clustering' && opt.value === 'cluster'}
+                        >
+                          {opt.label}
+                        </option>
                       ))}
-                      {/* Example for categorical feature */}
-                      {selectedDataStage !== 'clustering' && <option value="feature:key">Feature: Key</option>}
                   </select>
               </div>
 
-               {/* Conditionally Render Axis/Scale controls for 2D on first row */}
-              {selectedDimensions === 2 && (
-                  <>
-                      {/* 4. X-Axis Feature */}
-                      <div className="flex items-center gap-1">
-                          <label htmlFor="axis-x-select" className="text-gray-400">X:</label>
-                          <select
-                              id="axis-x-select"
-                              value={selectedAxisX ?? ''}
-                              onChange={(e) => handleAxisChange('X', e.target.value || null)}
-                              className="bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500 min-w-[100px]"
-                              // Disable logic needs refinement in Phase 3
-                              disabled={!canSelectRaw && !canSelectProcessed && !canSelectClustering}
-                          >
-                              <option value="" disabled>Select...</option>
-                              {/* TODO Phase 3: Dynamically populate based on getAvailableAxisFeatures() */}
-                              {getAvailableAxisFeatures().map(opt => (
-                                <option key={opt.value} value={opt.value}>{opt.label}</option>
-                              ))}
-                          </select>
-                      </div>
-                      {/* 5. X-Axis Scale */}
-                      <div className="flex items-center gap-1">
-                          <label htmlFor="scale-x-select" className="text-gray-400">Scale:</label>
-                          <select
-                              id="scale-x-select"
-                              value={selectedScaleX}
-                              onChange={(e) => handleScaleChange('X', e.target.value as AxisScale)}
-                              className="bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500"
-                              disabled={!selectedAxisX}
-                          >
-                              <option value="linear">Linear</option>
-                              <option value="log">Log</option>
-                          </select>
-                      </div>
-                       {/* 4. Y-Axis Feature */}
-                      <div className="flex items-center gap-1">
-                          <label htmlFor="axis-y-select" className="text-gray-400">Y:</label>
-                          <select
-                              id="axis-y-select"
-                              value={selectedAxisY ?? ''}
-                              onChange={(e) => handleAxisChange('Y', e.target.value || null)}
-                              className="bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500 min-w-[100px]"
-                              disabled={!canSelectRaw && !canSelectProcessed && !canSelectClustering}
-                          >
-                              <option value="" disabled>Select...</option>
-                               {/* TODO Phase 3: Dynamically populate based on getAvailableAxisFeatures() */}
-                              {getAvailableAxisFeatures().map(opt => (
-                                <option key={opt.value} value={opt.value}>{opt.label}</option>
-                              ))}
-                          </select>
-                      </div>
-                      {/* 5. Y-Axis Scale */}
-                      <div className="flex items-center gap-1">
-                          <label htmlFor="scale-y-select" className="text-gray-400">Scale:</label>
-                          <select
-                              id="scale-y-select"
-                              value={selectedScaleY}
-                              onChange={(e) => handleScaleChange('Y', e.target.value as AxisScale)}
-                              className="bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500"
-                              disabled={!selectedAxisY}
-                          >
-                              <option value="linear">Linear</option>
-                              <option value="log">Log</option>
-                          </select>
-                      </div>
-                  </>
-              )}
+              {/* 4. Show Legend Toggle */}
+              <div className="flex items-center gap-1">
+                  <input
+                      type="checkbox"
+                      id="show-legend-toggle"
+                      checked={showLegend}
+                      onChange={handleToggleLegend}
+                      className="form-checkbox h-3 w-3 text-pink-500 bg-gray-800 border-gray-600 rounded focus:ring-pink-500/50"
+                  />
+                  <label htmlFor="show-legend-toggle" className="text-gray-400 select-none">Legend</label>
+              </div>
           </div>
 
-          {/* Control Row 2 (Only for 3D) */}
-          {selectedDimensions === 3 && (
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
-                  {/* 4. X-Axis Feature */}
-                  <div className="flex items-center gap-1">
-                      <label htmlFor="axis-x-select-3d" className="text-gray-400">X-Axis:</label>
-                      <select
-                          id="axis-x-select-3d"
-                          value={selectedAxisX ?? ''}
-                          onChange={(e) => handleAxisChange('X', e.target.value || null)}
-                          className="bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500 min-w-[100px]"
-                          disabled={!canSelectRaw && !canSelectProcessed && !canSelectClustering}
-                      >
-                          <option value="" disabled>Select...</option>
-                          {/* TODO Phase 3: Dynamically populate based on getAvailableAxisFeatures() */}
-                          {getAvailableAxisFeatures().map(opt => (
-                                <option key={opt.value} value={opt.value}>{opt.label}</option>
-                           ))}
-                      </select>
-                  </div>
-                  {/* 5. X-Axis Scale */}
-                  <div className="flex items-center gap-1">
-                      <label htmlFor="scale-x-select-3d" className="text-gray-400">Scale:</label>
-                      <select
-                          id="scale-x-select-3d"
-                          value={selectedScaleX}
-                          onChange={(e) => handleScaleChange('X', e.target.value as AxisScale)}
-                          className="bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500"
-                          disabled={!selectedAxisX}
-                      >
-                          <option value="linear">Linear</option>
-                          <option value="log">Log</option>
-                      </select>
-                  </div>
-                   {/* 4. Y-Axis Feature */}
-                  <div className="flex items-center gap-1">
-                      <label htmlFor="axis-y-select-3d" className="text-gray-400">Y-Axis:</label>
-                      <select
-                          id="axis-y-select-3d"
-                          value={selectedAxisY ?? ''}
-                          onChange={(e) => handleAxisChange('Y', e.target.value || null)}
-                          className="bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500 min-w-[100px]"
-                          disabled={!canSelectRaw && !canSelectProcessed && !canSelectClustering}
-                      >
-                          <option value="" disabled>Select...</option>
-                          {/* TODO Phase 3: Dynamically populate based on getAvailableAxisFeatures() */}
-                          {getAvailableAxisFeatures().map(opt => (
-                                <option key={opt.value} value={opt.value}>{opt.label}</option>
-                           ))}
-                      </select>
-                  </div>
-                  {/* 5. Y-Axis Scale */}
-                  <div className="flex items-center gap-1">
-                      <label htmlFor="scale-y-select-3d" className="text-gray-400">Scale:</label>
-                      <select
-                          id="scale-y-select-3d"
-                          value={selectedScaleY}
-                          onChange={(e) => handleScaleChange('Y', e.target.value as AxisScale)}
-                          className="bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500"
-                          disabled={!selectedAxisY}
-                      >
-                          <option value="linear">Linear</option>
-                          <option value="log">Log</option>
-                      </select>
-                  </div>
-                   {/* 4. Z-Axis Feature */}
-                  <div className="flex items-center gap-1">
-                      <label htmlFor="axis-z-select-3d" className="text-gray-400">Z-Axis:</label>
-                      <select
-                          id="axis-z-select-3d"
-                          value={selectedAxisZ ?? ''}
-                          onChange={(e) => handleAxisChange('Z', e.target.value || null)}
-                          className="bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500 min-w-[100px]"
-                          disabled={!canSelectRaw && !canSelectProcessed && !canSelectClustering}
-                      >
-                          <option value="" disabled>Select...</option>
-                           {/* TODO Phase 3: Dynamically populate based on getAvailableAxisFeatures() */}
-                           {getAvailableAxisFeatures().map(opt => (
-                                <option key={opt.value} value={opt.value}>{opt.label}</option>
-                           ))}
-                      </select>
-                  </div>
-                  {/* 5. Z-Axis Scale */}
-                  <div className="flex items-center gap-1">
-                      <label htmlFor="scale-z-select-3d" className="text-gray-400">Scale:</label>
-                      <select
-                          id="scale-z-select-3d"
-                          value={selectedScaleZ}
-                          onChange={(e) => handleScaleChange('Z', e.target.value as AxisScale)}
-                          className="bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500"
-                          disabled={!selectedAxisZ}
-                      >
-                          <option value="linear">Linear</option>
-                          <option value="log">Log</option>
-                      </select>
-                  </div>
+          {/* Control Row 2: ALWAYS contains axis controls, conditionally shows Z-axis based on dimension */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+              {/* X-Axis Feature */}
+              <div className="flex items-center gap-1">
+                  <label htmlFor="axis-x-select" className="text-gray-400">X:</label>
+                  <select
+                      id="axis-x-select"
+                      value={selectedAxisX ?? ''}
+                      onChange={(e) => handleAxisChange('X', e.target.value || null)}
+                      className="bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500 min-w-[100px]"
+                      disabled={(selectedDataStage === 'raw' && !canSelectRaw) || 
+                                (selectedDataStage === 'processed' && !canSelectProcessed) || 
+                                (selectedDataStage === 'clustering' && !canSelectClustering)}
+                  >
+                      <option value="" disabled>Select...</option>
+                      {getAvailableAxisFeatures.map((opt: { value: string, label: string }) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                  </select>
               </div>
-          )}
+              
+              {/* X-Axis Scale */}
+              <div className="flex items-center gap-1">
+                  <label htmlFor="scale-x-select" className="text-gray-400">Scale:</label>
+                  <select
+                      id="scale-x-select"
+                      value={selectedScaleX}
+                      onChange={(e) => handleScaleChange('X', e.target.value as AxisScale)}
+                      className="bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500"
+                      disabled={!selectedAxisX}
+                  >
+                      <option value="linear">Linear</option>
+                      <option value="log">Log</option>
+                  </select>
+              </div>
+              
+              {/* Y-Axis Feature */}
+              <div className="flex items-center gap-1">
+                  <label htmlFor="axis-y-select" className="text-gray-400">Y:</label>
+                  <select
+                      id="axis-y-select"
+                      value={selectedAxisY ?? ''}
+                      onChange={(e) => handleAxisChange('Y', e.target.value || null)}
+                      className="bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500 min-w-[100px]"
+                      disabled={(selectedDataStage === 'raw' && !canSelectRaw) || 
+                               (selectedDataStage === 'processed' && !canSelectProcessed) || 
+                               (selectedDataStage === 'clustering' && !canSelectClustering)}
+                  >
+                      <option value="" disabled>Select...</option>
+                      {getAvailableAxisFeatures.map((opt: { value: string, label: string }) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                  </select>
+              </div>
+              
+              {/* Y-Axis Scale */}
+              <div className="flex items-center gap-1">
+                  <label htmlFor="scale-y-select" className="text-gray-400">Scale:</label>
+                  <select
+                      id="scale-y-select"
+                      value={selectedScaleY}
+                      onChange={(e) => handleScaleChange('Y', e.target.value as AxisScale)}
+                      className="bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500"
+                      disabled={!selectedAxisY}
+                  >
+                      <option value="linear">Linear</option>
+                      <option value="log">Log</option>
+                  </select>
+              </div>
+              
+              {/* Z-Axis Feature - Only shown in 3D mode */}
+              {selectedDimensions === 3 && (
+                <div className="flex items-center gap-1">
+                    <label htmlFor="axis-z-select" className="text-gray-400">Z:</label>
+                    <select
+                        id="axis-z-select"
+                        value={selectedAxisZ ?? ''}
+                        onChange={(e) => handleAxisChange('Z', e.target.value || null)}
+                        className="bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500 min-w-[100px]"
+                        disabled={(selectedDataStage === 'raw' && !canSelectRaw) || 
+                                 (selectedDataStage === 'processed' && !canSelectProcessed) || 
+                                 (selectedDataStage === 'clustering' && !canSelectClustering)}
+                    >
+                        <option value="" disabled>Select...</option>
+                        {getAvailableAxisFeatures.map((opt: { value: string, label: string }) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                    </select>
+                </div>
+              )}
+              
+              {/* Z-Axis Scale - Only shown in 3D mode */}
+              {selectedDimensions === 3 && (
+                <div className="flex items-center gap-1">
+                    <label htmlFor="scale-z-select" className="text-gray-400">Scale:</label>
+                    <select
+                        id="scale-z-select"
+                        value={selectedScaleZ}
+                        onChange={(e) => handleScaleChange('Z', e.target.value as AxisScale)}
+                        className="bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500"
+                        disabled={!selectedAxisZ}
+                    >
+                        <option value="linear">Linear</option>
+                        <option value="log">Log</option>
+                    </select>
+                </div>
+              )}
+          </div>
       </div>
     </div>
   );
