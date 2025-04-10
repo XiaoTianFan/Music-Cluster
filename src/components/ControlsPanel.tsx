@@ -4,13 +4,17 @@ import React, { useState } from 'react';
 interface ControlsPanelProps {
   isProcessing: boolean; // True if MIR extraction is running
   isReducing: boolean; // True if dimensionality reduction is running
+  isClustering: boolean; // True if K-Means clustering is running
   essentiaWorkerReady: boolean;
   activeSongCount: number;
   // Check if *any* of the active songs have successfully computed features
   hasFeaturesForActiveSongs: boolean; 
+  // Check if *any* of the active songs have successfully computed reduced features
+  hasReducedDataForActiveSongs: boolean;
   onExtractFeatures: (selectedFeatures: Set<string>) => void;
   // Type for the reduction method, mirroring page.tsx
   onReduceDimensions: (method: 'pca' | 'tsne' | 'umap', dimensions: number, params?: any) => void;
+  onRunClustering: (k: number) => void; // Handler to start clustering
   className?: string; // Allow passing className for layout adjustments
 }
 
@@ -39,11 +43,14 @@ const availableDimReducers = [
 const ControlsPanel: React.FC<ControlsPanelProps> = ({ 
   isProcessing,
   isReducing,
+  isClustering,
   essentiaWorkerReady,
   activeSongCount,
   hasFeaturesForActiveSongs,
+  hasReducedDataForActiveSongs,
   onExtractFeatures,
   onReduceDimensions,
+  onRunClustering,
   className 
 }) => {
   // State for selected controls
@@ -68,10 +75,11 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
 
   const handleNumClustersChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseInt(e.target.value, 10);
-    if (!isNaN(value) && value > 0) {
+    // Allow value to be 1 or more
+    if (!isNaN(value) && value >= 1) {
         setNumClusters(value);
-    } else if (e.target.value === '') {
-        setNumClusters(1); // Or handle empty input case as needed
+    } else if (e.target.value === '' || value === 0) {
+        setNumClusters(1); // Reset to 1 if empty or 0
     }
   };
 
@@ -83,7 +91,10 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
   };
 
   // Determine if the reduction button should be enabled
-  const canReduce = !isProcessing && !isReducing && activeSongCount > 0 && hasFeaturesForActiveSongs;
+  const canReduce = !isProcessing && !isReducing && !isClustering && activeSongCount > 0 && hasFeaturesForActiveSongs;
+
+  // Determine if the clustering button should be enabled
+  const canCluster = !isProcessing && !isReducing && !isClustering && activeSongCount > 0 && hasReducedDataForActiveSongs && numClusters > 0;
 
   return (
     <div
@@ -201,58 +212,53 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
                 data-augmented-ui="tl-clip br-clip border"
                 style={{ '--aug-border-color': canReduce ? 'cyan' : '#555' } as React.CSSProperties}
                 title={
-                    isProcessing ? "MIR extraction in progress..." :
-                    isReducing ? "Dimension reduction in progress..." :
-                    activeSongCount === 0 ? "Select songs first" :
-                    !hasFeaturesForActiveSongs ? "Extract MIR features first" :
-                    `Reduce dimensions using ${selectedDimReducer.toUpperCase()} to ${targetDimensions}D`
+                    !hasFeaturesForActiveSongs ? "Extract features first" : 
+                    (isProcessing ? "MIR processing..." : 
+                    (isReducing ? "Reducing dimensions..." : 
+                    (isClustering ? "Clustering in progress..." : 
+                    "Run selected reduction method"))) 
                 }
             >
-                {isReducing ? 'Reducing...' : 'Reduce Dimensions'}
+                {isReducing ? 'Reducing...' : `Reduce Dimensions`}
             </button>
         </div>
 
-        {/* === Clustering === */}
+        {/* === K-Means Clustering === */}
          <div 
             className="mb-4 p-3 border border-gray-700/80"
             data-augmented-ui="tl-clip br-clip border"
             style={{ '--aug-border-color': '#555' } as React.CSSProperties} >
-          <h3 className="text-md font-semibold mb-2 text-green-300">K-Means Clustering</h3>
-            <div className="mb-2">
-                <label htmlFor="numClusters" className="text-xs block mb-1 text-gray-400">Number of Clusters (k):</label>
-                <input 
-                    type="number"
-                    id="numClusters"
-                    value={numClusters}
-                    onChange={handleNumClustersChange}
-                    min="1"
-                    step="1"
-                    className="w-20 p-1 text-xs bg-gray-800 border border-gray-600 rounded text-white focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500 disabled:opacity-50"
-                     disabled={isProcessing || isReducing}
-                />
-            </div>
-            {/* ADDED Button Row */}
-            <div className="flex gap-2 mt-2">
-                 <button 
-                    // onClick={handleResetClustering} // Add handler later
-                    disabled={isProcessing || isReducing}
-                    className="flex-1 p-1 text-center rounded font-semibold text-xs disabled:opacity-50 disabled:cursor-not-allowed bg-gray-700 hover:bg-gray-600 text-gray-300 border border-gray-600"
-                    title="Reset Clustering (Not Implemented)"
-                 >
-                    Reset
-                 </button>
-                <button 
-                    // onClick={handleNextIteration} // Add handler later
-                    disabled={isProcessing || isReducing}
-                    className="flex-1 p-1 text-center rounded font-semibold text-xs disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 text-gray-400"
-                    data-augmented-ui="tl-clip br-clip border"
-                    style={{ '--aug-border-color': '#555' } as React.CSSProperties}
-                    title="Next Iteration (Not Implemented)"
-                >
-                    Next Iteration
-                </button>
-            </div>
-        </div>
+           <h3 className="text-md font-semibold mb-2 text-green-300">K-Means Clustering</h3>
+           <div className="flex items-center gap-3 mb-3">
+             <label htmlFor="num-clusters" className="text-xs text-gray-400 flex-shrink-0">Number of Clusters (k):</label>
+             <input
+               id="num-clusters"
+               type="number"
+               min="1"
+               value={numClusters}
+               onChange={handleNumClustersChange}
+               className="p-1 bg-gray-800 border border-gray-600 rounded text-xs w-16 flex-grow"
+               disabled={!hasReducedDataForActiveSongs || isClustering || isProcessing || isReducing}
+             />
+           </div>
+           <button 
+               onClick={() => onRunClustering(numClusters)} 
+               disabled={!canCluster} 
+               className={`w-full p-1 text-center rounded font-semibold text-xs disabled:opacity-50 disabled:cursor-not-allowed ${canCluster ? 'bg-yellow-600 hover:bg-yellow-500 text-black' : 'bg-gray-600 text-gray-400'}`}
+               data-augmented-ui="tl-clip br-clip border"
+               style={{ '--aug-border-color': canCluster ? 'yellow' : '#555' } as React.CSSProperties}
+               title={
+                  !hasReducedDataForActiveSongs ? "Reduce dimensions first" : 
+                  (isProcessing ? "MIR processing..." : 
+                  (isReducing ? "Reducing dimensions..." : 
+                  (isClustering ? "Clustering in progress..." : 
+                  (numClusters <= 0 ? "Set k > 0" : 
+                  "Run K-Means clustering")))) 
+                }
+           >
+              {isClustering ? 'Clustering...' : `Run Clustering (k=${numClusters})`}
+           </button>
+         </div>
       </div>
 
     </div>

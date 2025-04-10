@@ -1,22 +1,43 @@
 'use client'; // Add this directive to make it a Client Component
 
 import React, { useState, ChangeEvent, useRef, useEffect, useCallback, useMemo } from 'react';
+import dynamic from 'next/dynamic'; // Import dynamic
 
 // Import the new panel components
 import SongListPanel from '../components/SongListPanel';
 import ControlsPanel from '../components/ControlsPanel';
-import VisualizationPanel from '../components/VisualizationPanel';
+import LogPanel from '../components/LogPanel'; // Import the new LogPanel
+// Remove the static import of VisualizationPanel
+// import VisualizationPanel from '../components/VisualizationPanel';
 
-// Define a type for our song objects
-interface Song {
+// Dynamically import VisualizationPanel with SSR disabled
+const VisualizationPanel = dynamic(
+  () => import('@/components/VisualizationPanel'),
+  { 
+    ssr: false, 
+    // Optional: Add a loading component while the panel loads on the client
+    loading: () => (
+        <div 
+          className="col-span-2 row-span-1 flex items-center justify-center p-4 border border-pink-500 text-pink-400" 
+          data-augmented-ui="tl-clip-x tr-round br-clip bl-round border" 
+          style={{ '--aug-border-color': 'hotpink' } as React.CSSProperties} // Cast style object
+        >
+          <p>Loading Visualization...</p>
+        </div>
+      )
+  } 
+);
+
+// Define interfaces for data structures
+// Make sure these are EXPORTED if used by child components
+export interface Song {
   id: string; // Using URL or a generated ID for uniqueness
   name: string;
   url: string;
   source: 'default' | 'user';
 }
 
-// Define a type for the extracted features (expand this later)
-interface Features {
+export interface Features {
   mfccMeans?: number[];      
   mfccStdDevs?: number[];    
   energy?: number;          
@@ -34,15 +55,61 @@ interface Features {
   tuningCents?: number;     // Deviation from 440 Hz in cents
 }
 
-// Type for feature status tracking
-type FeatureStatus = 'idle' | 'processing' | 'complete' | 'error';
+// Type for feature processing status
+export type FeatureStatus = 'idle' | 'processing' | 'complete' | 'error';
 
 // List of default songs based on the directory listing
 const defaultSongs: Song[] = [
-  { id: '/audio/The Beatles_Abbey Road_Come Together.mp3', name: 'The Beatles - Come Together.mp3', url: '/audio/The Beatles_Abbey Road_Come Together.mp3', source: 'default' },
-  // Add more default songs here if needed
-  // Example: { id: '/audio/Kraftwerk_The Man-Machine_The Robots.mp3', name: 'Kraftwerk - The Robots.mp3', url: '/audio/Kraftwerk_The Man-Machine_The Robots.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Tchaikovsky - Nutcracker March_Piano Solo.mp3', name: 'Excerpt_Tchaikovsky - Nutcracker March_Piano Solo.mp3', url: '/audio/Excerpt_Tchaikovsky - Nutcracker March_Piano Solo.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Yes - Roundabout.mp3', name: 'Excerpt_Yes - Roundabout.mp3', url: '/audio/Excerpt_Yes - Roundabout.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Grover Washington, Jr.-Bill Withers - Just the Two of Us.mp3', name: 'Excerpt_Grover Washington, Jr.-Bill Withers - Just the Two of Us.mp3', url: '/audio/Excerpt_Grover Washington, Jr.-Bill Withers - Just the Two of Us.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Eric Clapton - Autumn Leaves.mp3', name: 'Excerpt_Eric Clapton - Autumn Leaves.mp3', url: '/audio/Excerpt_Eric Clapton - Autumn Leaves.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Frank Sinatra - Fly Me To The Moon.mp3', name: 'Excerpt_Frank Sinatra - Fly Me To The Moon.mp3', url: '/audio/Excerpt_Frank Sinatra - Fly Me To The Moon.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Genesis - Firth of Fifth.mp3', name: 'Excerpt_Genesis - Firth of Fifth.mp3', url: '/audio/Excerpt_Genesis - Firth of Fifth.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Mariya Takeuchi - Plastic Love.mp3', name: 'Excerpt_Mariya Takeuchi - Plastic Love.mp3', url: '/audio/Excerpt_Mariya Takeuchi - Plastic Love.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Michael Jackson - Billie Jean.mp3', name: 'Excerpt_Michael Jackson - Billie Jean.mp3', url: '/audio/Excerpt_Michael Jackson - Billie Jean.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Queen - Bohemian Rhapsody.mp3', name: 'Excerpt_Queen - Bohemian Rhapsody.mp3', url: '/audio/Excerpt_Queen - Bohemian Rhapsody.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Rachmaninov - Symphony No. 2 Op. 27 III. Adagio Adagio.mp3', name: 'Excerpt_Rachmaninov - Symphony No. 2 Op. 27 III. Adagio Adagio.mp3', url: '/audio/Excerpt_Rachmaninov - Symphony No. 2 Op. 27 III. Adagio Adagio.mp3', source: 'default' },
+  { id: '/audio/Excerpt_The Beatles - Abbey Road_Come Together.mp3', name: 'Excerpt_The Beatles - Abbey Road_Come Together.mp3', url: '/audio/Excerpt_The Beatles - Abbey Road_Come Together.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Yasuha - Flyday Chinatown.mp3', name: 'Excerpt_Yasuha - Flyday Chinatown.mp3', url: '/audio/Excerpt_Yasuha - Flyday Chinatown.mp3', source: 'default' },
+  { id: '/audio/Excerpt_B.B. King - The Thrill Is Gone.mp3', name: 'Excerpt_B.B. King - The Thrill Is Gone.mp3', url: '/audio/Excerpt_B.B. King - The Thrill Is Gone.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Dvorak - Symphony No. 9 (From the New World)_Movement 4.mp3', name: 'Excerpt_Dvorak - Symphony No. 9 (From the New World)_Movement 4.mp3', url: '/audio/Excerpt_Dvorak - Symphony No. 9 (From the New World)_Movement 4.mp3', source: 'default' },
+  { id: '/audio/Excerpt_King Crimson - The Court of the Crimson King.mp3', name: 'Excerpt_King Crimson - The Court of the Crimson King.mp3', url: '/audio/Excerpt_King Crimson - The Court of the Crimson King.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Richard Wagner - Ride of the Valkyries.mp3', name: 'Excerpt_Richard Wagner - Ride of the Valkyries.mp3', url: '/audio/Excerpt_Richard Wagner - Ride of the Valkyries.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Chopin - Nocturne op.9 No.2.mp3', name: 'Excerpt_Chopin - Nocturne op.9 No.2.mp3', url: '/audio/Excerpt_Chopin - Nocturne op.9 No.2.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Debussy - Clair De Lune.mp3', name: 'Excerpt_Debussy - Clair De Lune.mp3', url: '/audio/Excerpt_Debussy - Clair De Lune.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Michael Jaskson - Beat It.mp3', name: 'Excerpt_Michael Jaskson - Beat It.mp3', url: '/audio/Excerpt_Michael Jaskson - Beat It.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Miki Matsubara - Stay With Me.mp3', name: 'Excerpt_Miki Matsubara - Stay With Me.mp3', url: '/audio/Excerpt_Miki Matsubara - Stay With Me.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Schubert - Piano Sonata_D845.mp3', name: 'Excerpt_Schubert - Piano Sonata_D845.mp3', url: '/audio/Excerpt_Schubert - Piano Sonata_D845.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Schubert-Liszt - Erlkoenig.mp3', name: 'Excerpt_Schubert-Liszt - Erlkoenig.mp3', url: '/audio/Excerpt_Schubert-Liszt - Erlkoenig.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Stan Getz - The Girl From Ipanema.mp3', name: 'Excerpt_Stan Getz - The Girl From Ipanema.mp3', url: '/audio/Excerpt_Stan Getz - The Girl From Ipanema.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Tatsuro Yamashita - Christmas Eve.mp3', name: 'Excerpt_Tatsuro Yamashita - Christmas Eve.mp3', url: '/audio/Excerpt_Tatsuro Yamashita - Christmas Eve.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Oscar Peterson - Tea For Two.mp3', name: 'Excerpt_Oscar Peterson - Tea For Two.mp3', url: '/audio/Excerpt_Oscar Peterson - Tea For Two.mp3', source: 'default' },
 ];
+
+// Type for K-Means assignments
+export interface KmeansAssignments {
+    [songId: string]: number; // Map songId to cluster index
+}
+
+// Log level type
+type LogLevel = 'info' | 'warn' | 'error' | 'complete';
+
+// Log message structure
+interface LogMessage {
+  text: string;
+  level: LogLevel;
+  timestamp: string; // Keep timestamp separate for potential future use
+}
+
+// Helper function to compare two sets
+const setsAreEqual = (setA: Set<any>, setB: Set<any>): boolean => {
+  if (setA.size !== setB.size) return false;
+  for (const item of setA) {
+    if (!setB.has(item)) return false;
+  }
+  return true;
+};
 
 export default function DashboardPage() {
   const [songs, setSongs] = useState<Song[]>(defaultSongs);
@@ -51,7 +118,7 @@ export default function DashboardPage() {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [essentiaWorkerReady, setEssentiaWorkerReady] = useState<boolean>(false);
   // State to track which songs are selected for processing
-  const [activeSongIds, setActiveSongIds] = useState<Set<string>>(() => 
+  const [activeSongIds, setActiveSongIds] = useState<Set<string>>(() =>
     new Set(defaultSongs.map(song => song.id)) // Initially, all default songs are active
   );
   // --- DruidJS State ---
@@ -60,130 +127,257 @@ export default function DashboardPage() {
   // Type for reduction method
   type ReductionMethod = 'pca' | 'tsne' | 'umap';
   // ---------------------
+  const [reductionDimensions, setReductionDimensions] = useState<number>(0);
+
+  // --- Log State ---
+  const [logMessages, setLogMessages] = useState<LogMessage[]>([]); // Use LogMessage[]
 
   const workerRef = useRef<Worker | null>(null);
   const druidWorkerRef = useRef<Worker | null>(null); // Ref for Druid worker
   const audioContextRef = useRef<AudioContext | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null); // Ref for the hidden file input
+  const kmeansWorkerRef = useRef<Worker | null>(null);
+  const extractionStartTimeRef = useRef<number | null>(null); // Ref for timing
+
+  // --- K-Means State ---
+  const [kmeansK, setKmeansK] = useState<number>(3); // Default K value
+  const [kmeansIteration, setKmeansIteration] = useState<number>(0);
+  const [kmeansCentroids, setKmeansCentroids] = useState<number[][]>([]);
+  const [kmeansAssignments, setKmeansAssignments] = useState<KmeansAssignments>({});
+  const [isClustering, setIsClustering] = useState<boolean>(false); // K-Means clustering
+
+  // --- Log Helper Function ---
+  const addLogMessage = useCallback((message: string, level: LogLevel = 'info') => {
+      const timestamp = new Date().toLocaleTimeString();
+      const logEntry: LogMessage = { text: message, level, timestamp };
+
+      // Log to the actual console WITH prefix for debugging
+      const prefix = `[${timestamp}] ${level.toUpperCase()}:`;
+      const fullConsoleMessage = `${prefix} ${message}`;
+      switch (level) {
+          case 'info':
+          case 'complete':
+              console.log(fullConsoleMessage);
+              break;
+          case 'warn':
+              console.warn(fullConsoleMessage);
+              break;
+          case 'error':
+              console.error(fullConsoleMessage);
+              break;
+      }
+
+      // Update state with the structured log entry
+      setLogMessages(prevLogs => [...prevLogs, logEntry]);
+  }, []);
 
   // Initialize Workers and AudioContext
   useEffect(() => {
     // Initialize AudioContext
     if (!audioContextRef.current) {
       audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      addLogMessage('AudioContext initialized.', 'info');
     }
 
     // Initialize Essentia Worker
     if (!workerRef.current) {
-        console.log('Creating Essentia Bundled Worker...');
-        workerRef.current = new Worker(/* turbopackIgnore: true */ '/workers/essentia-worker.bundled.js'); 
+        addLogMessage('Creating Essentia Bundled Worker...', 'info');
+        workerRef.current = new Worker(/* turbopackIgnore: true */ '/workers/essentia-worker.bundled.js');
 
         workerRef.current.onmessage = (event) => {
             const { type, payload, songId, features, error } = event.data;
-            console.log('[Essentia Worker] Message received:', event.data);
+            addLogMessage(`[Essentia Worker] Received: ${type}`, 'info');
 
             switch (type) {
                 case 'essentiaReady':
                     setEssentiaWorkerReady(payload);
                     if (!payload) {
-                        console.error('Essentia worker failed to initialize:', error);
+                        addLogMessage(`Essentia worker failed to initialize: ${error}`, 'error');
+                    } else {
+                        addLogMessage('Essentia worker ready.', 'complete');
                     }
                     break;
                 case 'featureExtractionComplete':
                     setSongFeatures(prev => ({ ...prev, [songId]: features }));
                     setFeatureStatus(prev => ({ ...prev, [songId]: 'complete' }));
+                    addLogMessage(`Features extracted for song ID: ${songId}`, 'complete');
                     break;
                 case 'featureExtractionError':
-                    console.error(`[Essentia Worker] Error processing song ${songId}:`, error);
+                    addLogMessage(`[Essentia Worker] Error processing song ${songId}: ${error}`, 'error');
                     setFeatureStatus(prev => ({ ...prev, [songId]: 'error' }));
                     break;
                 default:
-                    console.warn('[Essentia Worker] Unknown message type:', type);
+                    addLogMessage(`[Essentia Worker] Unknown message type: ${type}`, 'warn');
             }
         };
 
         workerRef.current.onerror = (error) => {
-            console.error('Error in Essentia Worker:', error);
-            setEssentiaWorkerReady(false); 
+            addLogMessage(`Error in Essentia Worker: ${error?.message || 'Unknown error'}`, 'error');
+            setEssentiaWorkerReady(false);
             setIsProcessing(false);
         };
-        
+
         workerRef.current.postMessage({ type: 'init' });
     }
 
     // Initialize Druid Worker
     if (!druidWorkerRef.current) {
-        console.log('Creating Druid Bundled Worker...');
+        addLogMessage('Creating Druid Bundled Worker...', 'info');
         druidWorkerRef.current = new Worker(/* turbopackIgnore: true */ '/workers/druid-worker.bundled.js');
 
         druidWorkerRef.current.onmessage = (event) => {
             const { type, payload } = event.data;
-            console.log('[Druid Worker] Message received:', event.data);
-
-            switch (type) {
+            addLogMessage(`[Main] Received Druid worker message: ${type}`);
+            switch(type) {
                 case 'reductionComplete':
-                    const { reducedData, songIds: returnedSongIds } = payload;
-                    // Update state by mapping song IDs to reduced data points
-                    const newPoints = returnedSongIds.reduce((acc: Record<string, number[]>, id: string, index: number) => {
-                        if (reducedData[index]) { // Ensure data exists for the index
-                            acc[id] = reducedData[index];
-                        }
-                        return acc;
-                    }, {});
-                    setReducedDataPoints(prev => ({ ...prev, ...newPoints }));
-                    setIsReducing(false);
-                    console.log('[Druid Worker] Dimensionality reduction complete.');
-                    break;
+                     setIsReducing(false);
+                     const newPoints: Record<string, number[]> = {};
+                     payload.songIds.forEach((id: string, index: number) => {
+                         newPoints[id] = payload.reducedData[index];
+                     });
+                     setReducedDataPoints(prev => ({ ...prev, ...newPoints }));
+                     if (payload.reducedData && payload.reducedData.length > 0 && payload.reducedData[0]) {
+                         setReductionDimensions(payload.reducedData[0].length);
+                     } else {
+                         setReductionDimensions(0); // Reset if no data
+                     }
+                     addLogMessage(`Dimensionality reduction complete. ${payload.songIds.length} points updated.`, 'complete');
+                     break;
                 case 'reductionError':
-                    console.error('[Druid Worker] Reduction error:', payload.error);
-                    setIsReducing(false);
-                    // TODO: Maybe show a notification to the user
-                    break;
+                     setIsReducing(false);
+                     addLogMessage(`Druid Worker Error: ${payload.error}`, 'error');
+                     // TODO: Show error notification
+                     setReductionDimensions(0); // Reset on error
+                     break;
                 default:
-                    console.warn('[Druid Worker] Unknown message type:', type);
+                    addLogMessage(`Unknown message type from Druid worker: ${type}`, 'warn');
             }
         };
 
         druidWorkerRef.current.onerror = (error) => {
-            console.error('Error in Druid Worker:', error);
+            addLogMessage(`Error in Druid Worker: ${error?.message || 'Unknown error'}`, 'error');
             setIsReducing(false);
              // TODO: Maybe show a notification to the user
+        };
+    }
+
+    // K-Means Worker Setup
+    if (!kmeansWorkerRef.current) {
+        addLogMessage('Initializing K-Means worker...', 'info');
+        kmeansWorkerRef.current = new Worker(/* turbopackIgnore: true */ '/workers/kmeans-worker.bundled.js');
+
+        kmeansWorkerRef.current.onmessage = (event) => {
+            const { type, payload } = event.data;
+            addLogMessage(`[Main] Received K-Means worker message: ${type}`); // Log messages
+
+            switch (type) {
+                case 'kmeansIterationUpdate':
+                    setKmeansIteration(payload.iteration);
+                    setKmeansCentroids(payload.centroids);
+                    const newAssignments: KmeansAssignments = {};
+                    payload.songIds.forEach((id: string, index: number) => {
+                        newAssignments[id] = payload.assignments[index];
+                    });
+                    setKmeansAssignments(prev => ({ ...prev, ...newAssignments }));
+                    addLogMessage(`K-Means iteration ${payload.iteration} update received.`, 'complete');
+                    break;
+                case 'kmeansComplete':
+                    setIsClustering(false);
+                    setKmeansCentroids(payload.finalCentroids);
+                    const finalAssignments: KmeansAssignments = {};
+                    payload.songIds.forEach((id: string, index: number) => {
+                        finalAssignments[id] = payload.finalAssignments[index];
+                    });
+                    setKmeansAssignments(finalAssignments);
+                    addLogMessage('K-Means clustering complete.', 'complete');
+                    break;
+                case 'kmeansError':
+                    setIsClustering(false);
+                    addLogMessage(`K-Means Worker Error: ${payload.error}`, 'error');
+                    setKmeansAssignments({});
+                    setKmeansCentroids([]);
+                    setKmeansIteration(0);
+                    break;
+                default:
+                    addLogMessage(`Unknown message type from K-Means worker: ${type}`, 'warn');
+            }
+        };
+
+        kmeansWorkerRef.current.onerror = (error) => {
+            addLogMessage(`K-Means Worker onerror: ${error?.message || 'Unknown error'}`, 'error');
+            setIsClustering(false);
+            setKmeansAssignments({});
+            setKmeansCentroids([]);
+            setKmeansIteration(0);
         };
     }
 
     // Cleanup function
     return () => {
       if (workerRef.current) {
-        console.log('Terminating Essentia Worker...');
+        addLogMessage('Terminating Essentia Worker...', 'info');
         workerRef.current.terminate();
         workerRef.current = null;
       }
       if (druidWorkerRef.current) {
-          console.log('Terminating Druid Worker...');
+          addLogMessage('Terminating Druid Worker...', 'info');
           druidWorkerRef.current.terminate();
           druidWorkerRef.current = null;
       }
+      if (kmeansWorkerRef.current) {
+          addLogMessage('Terminating K-Means worker...', 'info');
+          kmeansWorkerRef.current.terminate();
+          kmeansWorkerRef.current = null;
+      }
       // Close AudioContext if no longer needed elsewhere
       // if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      //   addLogMessage('Closing AudioContext...');
       //   audioContextRef.current.close();
       // }
     };
-  }, []);
+  }, [addLogMessage]); // Add addLogMessage to dependency array
+
 
   // Check if all songs are processed
   useEffect(() => {
     if (!isProcessing) return;
 
-    const allProcessed = songs.every(song => 
+    // Check status ONLY for songs that were supposed to be processed in the current batch
+    // (This logic might need refinement if processing can be interrupted/restarted partially)
+    // For now, assume we check all songs in the main `songs` state.
+    const allProcessed = songs.every(song =>
         featureStatus[song.id] === 'complete' || featureStatus[song.id] === 'error'
     );
 
     if (allProcessed) {
+        const startTime = extractionStartTimeRef.current;
+        let durationMessage = 'All requested song processing finished.';
+
+        if (startTime) { // Check if a timer was started for this batch
+            const endTime = performance.now();
+            const durationMs = endTime - startTime;
+            durationMessage = `Total feature extraction time: ${(durationMs / 1000).toFixed(2)} seconds.`;
+            extractionStartTimeRef.current = null; // Reset timer
+        }
+
         setIsProcessing(false);
-        console.log('All songs processed.');
-        console.log('Features:', songFeatures);
+        addLogMessage(durationMessage, 'complete');
+
+        // --- TEMPORARY CODE START ---
+        // Log the final features object ONLY when processing finishes
+        // Ensure this runs only when default songs were processed for caching
+        const onlyDefaultSongs = songs.every(s => s.source === 'default');
+        if (onlyDefaultSongs && songs.length === defaultSongs.length) {
+            console.log("=== COPY FEATURE DATA BELOW ===");
+            console.log(JSON.stringify(songFeatures, null, 2)); // Log as pretty-printed JSON string
+            console.log("=== COPY FEATURE DATA ABOVE ===");
+            addLogMessage('Default song features logged to console for cache generation.', 'info');
+        }
+        // --- TEMPORARY CODE END ---
+
+        // addLogMessage(`Final Features: ${JSON.stringify(songFeatures)}`); // Could be very verbose
     }
-  }, [featureStatus, songs, isProcessing, songFeatures]);
+  }, [featureStatus, songs, isProcessing, songFeatures, addLogMessage]); // Add songFeatures here if not already present
 
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -193,13 +387,15 @@ export default function DashboardPage() {
     const newSongs: Song[] = [];
     const currentSongIds = new Set(songs.map(s => s.id)); // Use ID for checking duplicates
     const newActiveIds = new Set<string>();
+    let addedCount = 0;
+    let skippedCount = 0;
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       if (file.type.startsWith('audio/')) {
         const objectURL = URL.createObjectURL(file);
         // Simple check if ID (objectURL) already exists - less robust than name but ok for demo
-        if (!currentSongIds.has(objectURL)) { 
+        if (!currentSongIds.has(objectURL)) {
             const newSong = {
                id: objectURL, // Use object URL as a unique ID
                name: file.name,
@@ -209,9 +405,16 @@ export default function DashboardPage() {
             newSongs.push(newSong);
             newActiveIds.add(newSong.id); // Make newly added songs active by default
             currentSongIds.add(objectURL); // Add to current set to prevent duplicates within the same upload batch
+            addedCount++;
+        } else {
+            skippedCount++;
+            URL.revokeObjectURL(objectURL); // Revoke URL if song is skipped
         }
         // Note: We might want to revoke object URLs later when they're no longer needed
         // URL.revokeObjectURL(objectURL);
+      } else {
+          skippedCount++;
+          addLogMessage(`Skipped non-audio file: ${file.name}`, 'warn');
       }
     }
 
@@ -224,7 +427,11 @@ export default function DashboardPage() {
           return acc;
       }, {} as Record<string, FeatureStatus>);
       setFeatureStatus(prev => ({...prev, ...newStatus}));
+      addLogMessage(`Added ${addedCount} new song(s).`, 'complete');
     }
+     if (skippedCount > 0) {
+        addLogMessage(`Skipped ${skippedCount} file(s) (duplicates or non-audio).`, 'warn');
+     }
 
     // Reset file input to allow selecting the same file again if removed
     event.target.value = '';
@@ -232,6 +439,9 @@ export default function DashboardPage() {
 
   const handleRemoveSong = (songIdToRemove: string) => {
     const songToRemove = songs.find(song => song.id === songIdToRemove);
+    const songName = songToRemove?.name || songIdToRemove; // Use name if available
+
+    setSongs(prevSongs => prevSongs.filter(song => song.id !== songIdToRemove));
     // Also remove features and status
     setSongFeatures(prev => {
         const newState = { ...prev };
@@ -249,22 +459,40 @@ export default function DashboardPage() {
       newActive.delete(songIdToRemove);
       return newActive;
     });
-    
+    // Remove from reduced data
+    setReducedDataPoints(prev => {
+        const newState = { ...prev };
+        delete newState[songIdToRemove];
+        return newState;
+    });
+     // Remove from K-Means assignments
+    setKmeansAssignments(prev => {
+        const newState = { ...prev };
+        delete newState[songIdToRemove];
+        return newState;
+    });
+
+
     // Revoke object URL if it's a user-uploaded file being removed
     if (songToRemove && songToRemove.source === 'user') {
         URL.revokeObjectURL(songToRemove.url);
+        addLogMessage(`Removed user song: ${songName} and revoked URL.`, 'complete');
+    } else if (songToRemove) {
+        addLogMessage(`Removed default song: ${songName}.`, 'complete');
     }
-    setSongs(prevSongs => prevSongs.filter(song => song.id !== songIdToRemove));
   };
 
   // Handler to toggle a song's active state
   const handleToggleSongActive = (songId: string) => {
       setActiveSongIds(prevActive => {
           const newActive = new Set(prevActive);
+          const songName = songs.find(s => s.id === songId)?.name || songId;
           if (newActive.has(songId)) {
               newActive.delete(songId);
+              addLogMessage(`Deactivated song: ${songName}`, 'complete');
           } else {
               newActive.add(songId);
+              addLogMessage(`Activated song: ${songName}`, 'complete');
           }
           return newActive;
       });
@@ -272,160 +500,250 @@ export default function DashboardPage() {
 
   // Handler to trigger the hidden file input
   const handleUploadClick = () => {
+      addLogMessage('Upload button clicked, triggering file input.', 'complete');
       fileInputRef.current?.click();
   };
 
   // Function to fetch and decode audio
   const getDecodedAudio = useCallback(async (song: Song): Promise<AudioBuffer | null> => {
       if (!audioContextRef.current) {
-          console.error('AudioContext not initialized');
+          addLogMessage('AudioContext not initialized', 'error');
           return null;
       }
       try {
+          addLogMessage(`Fetching audio for ${song.name}...`, 'info');
           const response = await fetch(song.url);
           if (!response.ok) {
-              throw new Error(`Failed to fetch audio: ${response.statusText}`);
+              throw new Error(`Failed to fetch audio: ${response.statusText} (URL: ${song.url})`);
           }
           const arrayBuffer = await response.arrayBuffer();
+          addLogMessage(`Decoding audio for ${song.name}...`, 'info');
           const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
+          addLogMessage(`Successfully decoded audio for ${song.name}.`, 'complete');
           return audioBuffer;
-      } catch (error) {
-          console.error(`Error decoding audio for ${song.name}:`, error);
+      } catch (error: any) {
+          addLogMessage(`Error decoding audio for ${song.name}: ${error.message}`, 'error');
           setFeatureStatus(prev => ({ ...prev, [song.id]: 'error' }));
           return null;
       }
-  }, []); // Depends only on audioContextRef which is stable
+  }, [addLogMessage]); // Add addLogMessage dependency
 
   // Function to trigger feature extraction for *active* songs
   const handleExtractFeatures = useCallback(async (selectedFeatures: Set<string>) => {
+    // --- START: Cache Check Logic ---
+    const onlyDefaultSongs = songs.every(s => s.source === 'default');
+    const allSongsActive = activeSongIds.size === songs.length;
+    const isDefaultScenario = songs.length === defaultSongs.length && onlyDefaultSongs && allSongsActive;
+
+    if (isDefaultScenario) {
+      addLogMessage('Checking for cached features (default song scenario)...', 'info');
+      try {
+        const response = await fetch('/default_features.json');
+        if (!response.ok) {
+          throw new Error(`Failed to fetch cache file: ${response.statusText}`);
+        }
+        const cacheData = await response.json();
+
+        if (!cacheData || !cacheData.cachedFeatureKeys || !cacheData.songData) {
+           addLogMessage('Cache file format invalid. Proceeding with worker.', 'warn');
+        } else {
+          const cachedKeysSet = new Set(cacheData.cachedFeatureKeys);
+          // NOTE: Here we need to map the selected feature IDs (like 'mfcc')
+          //       to the actual keys used in the Features interface and cache (like 'mfccMeans', 'mfccStdDevs').
+          //       This mapping logic depends on how features are selected and stored.
+          //       FOR NOW: Assume a direct mapping or that selectedFeatures uses the final keys.
+          //       *** This comparison might need refinement based on actual feature selection IDs ***
+          const selectedKeysSet = selectedFeatures; // Assuming selectedFeatures contains the final keys for now
+
+          if (setsAreEqual(selectedKeysSet, cachedKeysSet)) {
+            addLogMessage('Selected features match cache. Loading pre-computed features...', 'complete');
+
+            // Validate that all required song IDs are in the cache
+            let allDefaultSongsInCache = true;
+            for (const song of defaultSongs) {
+              if (!(song.id in cacheData.songData)) {
+                allDefaultSongsInCache = false;
+                addLogMessage(`Cache missing data for default song: ${song.name}. Proceeding with worker.`, 'warn');
+                break;
+              }
+            }
+
+            if (allDefaultSongsInCache) {
+              // Apply cached data
+              setSongFeatures(cacheData.songData);
+              const completeStatus = defaultSongs.reduce((acc, song) => {
+                  acc[song.id] = 'complete';
+                  return acc;
+              }, {} as Record<string, FeatureStatus>);
+              setFeatureStatus(completeStatus);
+
+               // Clear any previous reduction/clustering results if reloading features
+              setReducedDataPoints({});
+              setKmeansAssignments({});
+              setKmeansCentroids([]);
+              setKmeansIteration(0);
+              setReductionDimensions(0); // Reset dimensions indicator
+
+              addLogMessage('Successfully loaded features from cache.', 'complete');
+              setIsProcessing(false); // Ensure processing flag is off
+              return; // Exit the function early
+            }
+          } else {
+            addLogMessage('Cache skipped: Selected features do not match cached features.', 'info');
+            // Log differences for debugging
+            console.log('Selected Features:', selectedKeysSet);
+            console.log('Cached Features:', cachedKeysSet);
+          }
+        }
+      } catch (error: any) {
+        addLogMessage(`Failed to load or process feature cache: ${error.message}. Proceeding with worker.`, 'warn');
+      }
+    }
+    // --- END: Cache Check Logic ---
+
+    // --- Original Worker Logic (Fallback) ---
     if (!essentiaWorkerReady || isProcessing || !workerRef.current) {
-        console.warn('Worker not ready or already processing.');
+        addLogMessage('Worker not ready or already processing. Extraction aborted.', 'warn');
         return;
     }
     if (selectedFeatures.size === 0) {
-        console.warn('No features selected for extraction.');
-        // Optionally show a message to the user
+        addLogMessage('No features selected for extraction.', 'warn');
         return;
     }
 
-    console.log(`Starting extraction for features [${[...selectedFeatures].join(', ')}] on ${activeSongIds.size} active songs...`);
+    addLogMessage(`Starting worker extraction for features [${[...selectedFeatures].join(', ')}] on ${activeSongIds.size} active songs...`, 'info');
+    extractionStartTimeRef.current = performance.now(); // Record start time
     setIsProcessing(true);
 
-    // Filter songs that are marked as active
-    const songsToProcess = songs.filter(song => activeSongIds.has(song.id)); 
+    const songsToProcess = songs.filter(song => activeSongIds.has(song.id));
 
     if (songsToProcess.length === 0) {
-        console.log('No active songs to process.');
+        addLogMessage('No active songs selected to process.', 'info');
         setIsProcessing(false);
         return;
     }
 
-    // Reset status only for the active songs we are about to process
     const statusUpdates = songsToProcess.reduce((acc, song) => {
         acc[song.id] = 'processing';
         return acc;
     }, {} as Record<string, FeatureStatus>);
     setFeatureStatus(prev => ({ ...prev, ...statusUpdates }));
 
-    // Clear features only for the songs being re-processed.
     const featureUpdates = songsToProcess.reduce((acc, song) => {
-        acc[song.id] = null; // Clear previous features for these songs
+        acc[song.id] = null;
         return acc;
     }, {} as Record<string, Features | null>);
      setSongFeatures(prev => ({ ...prev, ...featureUpdates }));
+     setReducedDataPoints(prev => {
+         const clearedState = { ...prev };
+         songsToProcess.forEach(song => delete clearedState[song.id]);
+         return clearedState;
+     });
+     setKmeansAssignments(prev => {
+        const clearedState = { ...prev };
+        songsToProcess.forEach(song => delete clearedState[song.id]);
+        return clearedState;
+     });
+     setKmeansCentroids([]);
+     setReductionDimensions(0); // Reset dimensions indicator
 
 
-    for (const song of songsToProcess) { // Use the filtered list
-        console.log(`Processing ${song.name}...`);
+    for (const song of songsToProcess) {
+        addLogMessage(`Requesting features for ${song.name}...`, 'info');
         const audioBuffer = await getDecodedAudio(song);
 
         if (audioBuffer && workerRef.current) {
-            // Revert to only sending mono data
-            const audioData = audioBuffer.getChannelData(0); // Use first channel (mono)
-            const audioVector = Array.from(audioData); 
+            const audioData = audioBuffer.getChannelData(0);
+            const audioVector = Array.from(audioData);
 
              workerRef.current.postMessage({
                 type: 'extractFeatures',
                 payload: {
                     songId: song.id,
-                    audioVector: audioVector, // Send mono vector
+                    audioVector: audioVector,
                     sampleRate: audioBuffer.sampleRate,
-                    featuresToExtract: [...selectedFeatures] 
+                    featuresToExtract: [...selectedFeatures]
                 }
             });
         } else {
-             console.warn(`Skipping ${song.name} due to decoding error or missing worker.`);
-             // Status already set to 'error' in getDecodedAudio if decoding failed
-             if (!audioBuffer) {
+             addLogMessage(`Skipping ${song.name} due to decoding error or missing worker.`, 'warn');
+             if (!audioBuffer && featureStatus[song.id] !== 'error') {
                 setFeatureStatus(prev => ({ ...prev, [song.id]: 'error' }));
              }
         }
     }
-  }, [songs, getDecodedAudio, essentiaWorkerReady, isProcessing, activeSongIds]);
+  }, [songs, getDecodedAudio, essentiaWorkerReady, isProcessing, activeSongIds, addLogMessage, featureStatus, setSongFeatures, setFeatureStatus, setReducedDataPoints, setKmeansAssignments, setKmeansCentroids, setKmeansIteration, setReductionDimensions]); // Added state setters to dependency array
 
   // Function to trigger dimensionality reduction
   const handleReduceDimensions = useCallback((method: ReductionMethod, dimensions: number, params?: any) => {
     if (!druidWorkerRef.current || isReducing) {
-        console.warn('Druid worker not ready or already reducing.');
+        addLogMessage('Druid worker not ready or already reducing.', 'warn');
         return;
     }
 
-    console.log(`Starting dimensionality reduction with method: ${method}, dimensions: ${dimensions}`);
+    addLogMessage(`Starting dimensionality reduction with method: ${method}, dimensions: ${dimensions}`, 'info');
     setIsReducing(true);
-    // Clear previous results? Or merge? For now, let's clear for the active set.
+    // Clear previous reduced points for active songs and related k-means
     setReducedDataPoints(prev => {
         const clearedState = { ...prev };
         activeSongIds.forEach(id => delete clearedState[id]);
         return clearedState;
     });
+    setKmeansAssignments({});
+    setKmeansCentroids([]);
+    setKmeansIteration(0);
 
     // 1. Get features for active songs
     const activeFeatures: { id: string; features: Features }[] = [];
+    let songsWithoutCompleteFeaturesCount = 0;
     activeSongIds.forEach(id => {
         const features = songFeatures[id];
-        // Only include songs that have successfully computed features
         if (features && featureStatus[id] === 'complete') {
             activeFeatures.push({ id, features });
+        } else {
+            songsWithoutCompleteFeaturesCount++;
         }
     });
 
+     if (songsWithoutCompleteFeaturesCount > 0) {
+        addLogMessage(`Skipping ${songsWithoutCompleteFeaturesCount} active song(s) without complete features for reduction.`, 'warn');
+     }
+
     if (activeFeatures.length === 0) {
-        console.warn('No active songs with successfully extracted features found.');
+        addLogMessage('No active songs with successfully extracted features found for reduction.', 'warn');
         setIsReducing(false);
         return;
     }
-    
+
      // Basic check: Need more samples than dimensions
     if (activeFeatures.length <= dimensions) {
-        console.warn(`Insufficient data points (${activeFeatures.length}) for ${dimensions} dimensions.`);
+        addLogMessage(`Insufficient data points (${activeFeatures.length}) for ${dimensions} dimensions. Need more points than dimensions.`, 'warn');
         setIsReducing(false);
         // TODO: Show notification to user
         return;
     }
 
     // 2. Construct the featureVectors array and songIds array
-    //    IMPORTANT: Decide WHICH features to use and HOW to combine them.
-    //    For now, let's concatenate mfccMeans and mfccStdDevs if available.
     const featureVectors: number[][] = [];
     const vectorSongIds: string[] = [];
 
-    // --- Define Canonical Feature Order ---
+    // Define Canonical Feature Order
     const canonicalFeatureOrder: (keyof Features)[] = [
-        'energy', 'entropy', 'loudness', 'rms', 'dynamicComplexity', 'keyStrength', 
+        'energy', 'entropy', 'loudness', 'rms', 'dynamicComplexity', 'keyStrength',
         'tuningFrequency', 'tuningCents',
-        'mfccMeans', 'mfccStdDevs', // Array features
-        'key', 'keyScale' // String features last for one-hot encoding part
+        'mfccMeans', 'mfccStdDevs', // Array features last before strings
+        // String features should be handled specifically for one-hot encoding
+        'key', 'keyScale'
     ];
 
-    // --- Determine Common Features Present in ALL Active Songs ---
-    let commonFeatures = new Set<keyof Features>(canonicalFeatureOrder);
+    // Determine Common Features Present in ALL Active Songs being processed
+    let commonFeatures = new Set<keyof Features>();
     if (activeFeatures.length > 0) {
-        // Initialize with features of the first song
         const firstFeatures = activeFeatures[0].features;
-        commonFeatures = new Set(canonicalFeatureOrder.filter(key => 
+        // Initialize with features available in the first song
+        commonFeatures = new Set(canonicalFeatureOrder.filter(key =>
             firstFeatures[key] !== undefined && firstFeatures[key] !== null
         ));
-
         // Intersect with features of subsequent songs
         for (let i = 1; i < activeFeatures.length; i++) {
             const currentFeatures = activeFeatures[i].features;
@@ -438,14 +756,13 @@ export default function DashboardPage() {
     }
 
     if (commonFeatures.size === 0) {
-        console.warn('No features are commonly present across all active songs.');
+        addLogMessage('No features are commonly present across all selected active songs.', 'warn');
         setIsReducing(false);
-        // TODO: Notify user
         return;
     }
-    console.log('Common features selected for analysis:', Array.from(commonFeatures));
+    addLogMessage(`Common features identified for analysis: [${Array.from(commonFeatures).join(', ')}]`, 'complete');
 
-    // --- One-Hot Encoding Prep (only for common string features) ---
+    // One-Hot Encoding Prep (only for common string features)
     const uniqueKeys = new Set<string>();
     const uniqueScales = new Set<string>();
     let keyToIndex: Map<string, number> | null = null;
@@ -454,100 +771,93 @@ export default function DashboardPage() {
     let numScaleDimensions = 0;
 
     if (commonFeatures.has('key')) {
-        activeFeatures.forEach(({ features }) => {
-            // We already know key is non-null from commonFeatures check
-            uniqueKeys.add(features.key!);
-        });
+        activeFeatures.forEach(({ features }) => { uniqueKeys.add(features.key!); });
         const keyList = Array.from(uniqueKeys).sort();
         keyToIndex = new Map(keyList.map((k, i) => [k, i]));
         numKeyDimensions = keyList.length;
-        console.log(`One-hot encoding prepared for 'key' with ${numKeyDimensions} dimensions.`);
+        addLogMessage(`Preparing one-hot encoding for 'key' (${numKeyDimensions} dimensions).`, 'complete');
     }
 
     if (commonFeatures.has('keyScale')) {
-        activeFeatures.forEach(({ features }) => {
-            uniqueScales.add(features.keyScale!);
-        });
+        activeFeatures.forEach(({ features }) => { uniqueScales.add(features.keyScale!); });
         const scaleList = Array.from(uniqueScales).sort();
         scaleToIndex = new Map(scaleList.map((s, i) => [s, i]));
         numScaleDimensions = scaleList.length;
-        console.log(`One-hot encoding prepared for 'keyScale' with ${numScaleDimensions} dimensions.`);
+        addLogMessage(`Preparing one-hot encoding for 'keyScale' (${numScaleDimensions} dimensions).`, 'complete');
     }
-    // -----------------------------
 
+    // Construct vectors using common features in canonical order
+    let inconsistencyFound = false;
     activeFeatures.forEach(({ id, features }) => {
         const vec: number[] = [];
-
-        // Iterate through the canonical order, but only include common features
         for (const key of canonicalFeatureOrder) {
-            if (!commonFeatures.has(key)) {
-                continue; // Skip features not present in all active songs
-            }
+            if (!commonFeatures.has(key)) continue;
 
-            const value = features[key]; // We know value is not null/undefined here
+            const value = features[key]!; // Value guaranteed to exist
 
-            // Handle based on type (and if it's a string feature)
             if (key === 'key' && keyToIndex) {
                 const keyOneHot = Array(numKeyDimensions).fill(0);
                 const index = keyToIndex.get(value as string);
-                if (index !== undefined) { // Should always be found if logic is correct
-                    keyOneHot[index] = 1;
-                    vec.push(...keyOneHot);
-                } else {
-                     console.error(`Logic error: Key '${value}' for song ${id} not found in keyToIndex map.`);
-                     // Handle this potential inconsistency? Skip song? For now, log error.
-                }
+                if (index !== undefined) keyOneHot[index] = 1;
+                else { addLogMessage(`Logic error: Key '${value}' for song ${id} not found in keyToIndex map.`, 'error'); inconsistencyFound = true; }
+                vec.push(...keyOneHot);
             } else if (key === 'keyScale' && scaleToIndex) {
                 const scaleOneHot = Array(numScaleDimensions).fill(0);
                 const index = scaleToIndex.get(value as string);
-                if (index !== undefined) {
-                     scaleOneHot[index] = 1;
-                    vec.push(...scaleOneHot);
-                } else {
-                    console.error(`Logic error: Scale '${value}' for song ${id} not found in scaleToIndex map.`);
-                }
+                if (index !== undefined) scaleOneHot[index] = 1;
+                else { addLogMessage(`Logic error: Scale '${value}' for song ${id} not found in scaleToIndex map.`, 'error'); inconsistencyFound = true; }
+                vec.push(...scaleOneHot);
             } else if (Array.isArray(value)) {
-                // Assume numeric array based on Features type & commonFeatures check
                 vec.push(...(value as number[]));
             } else if (typeof value === 'number') {
                 vec.push(value);
             }
-            // Else: non-string, non-array, non-number - should not happen based on Features type
         }
-        
-        // Add the fully constructed vector if it's not empty (it shouldn't be if commonFeatures > 0)
-        if (vec.length > 0) { 
+
+        if (vec.length > 0 && !inconsistencyFound) {
             featureVectors.push(vec);
             vectorSongIds.push(id);
-        } else {
-            // This case should theoretically not be reached if commonFeatures.size > 0
-            console.warn(`Song ${id} resulted in an empty vector despite having common features.`);
+        } else if (!inconsistencyFound) {
+             addLogMessage(`Song ${id} resulted in an empty vector despite having common features.`, 'warn');
         }
     });
 
-    // Check if all vectors have the same dimension after construction
+    if (inconsistencyFound) {
+        addLogMessage('Inconsistencies found during one-hot encoding. Aborting reduction.', 'error');
+        setIsReducing(false);
+        return;
+    }
+
+    // Check vector consistency and dimensions
     if (featureVectors.length > 0) {
         const firstLen = featureVectors[0].length;
         if (!featureVectors.every(v => v.length === firstLen)) {
-             console.error('Feature vectors have inconsistent lengths. Cannot proceed.');
+             addLogMessage('Constructed feature vectors have inconsistent lengths. Cannot proceed with reduction.', 'error');
              setIsReducing(false);
-             // TODO: Show error notification
              return;
         }
         if (firstLen === 0) {
-            console.warn('Constructed feature vectors are empty.');
+            addLogMessage('Constructed feature vectors are empty (length 0). Cannot reduce.', 'warn');
              setIsReducing(false);
              return;
         }
-        const finalDimension = featureVectors[0].length; // Get dimension after all features added
-        console.log(`Prepared ${featureVectors.length} vectors for reduction, each with ${finalDimension} dimensions (including one-hot).`);
+        addLogMessage(`Prepared ${featureVectors.length} vectors for reduction, each with ${firstLen} dimensions (incl. one-hot).`, 'complete');
+
+        // Check if target dimensions exceed source dimensions
+        if (dimensions >= firstLen) {
+            addLogMessage(`Target dimensions (${dimensions}) must be less than source dimensions (${firstLen}). Aborting reduction.`, 'warn');
+            setIsReducing(false);
+            return;
+        }
+
     } else {
-         console.warn('No valid feature vectors constructed for reduction.');
+         addLogMessage('No valid feature vectors constructed for reduction.', 'warn');
          setIsReducing(false);
          return;
     }
 
     // 3. Post message to worker
+    addLogMessage(`Sending ${featureVectors.length} vectors to Druid worker for reduction...`, 'info');
     druidWorkerRef.current.postMessage({
         type: 'reduceDimensions',
         payload: {
@@ -555,18 +865,109 @@ export default function DashboardPage() {
             songIds: vectorSongIds,
             method: method,
             dimensions: dimensions,
-            ...(params && { ...params }) // Include optional params like perplexity, neighbors
+            ...(params && { ...params }) // Include optional params
         }
     });
 
-}, [activeSongIds, songFeatures, featureStatus, isReducing]);
+}, [activeSongIds, songFeatures, featureStatus, isReducing, addLogMessage]); // Added addLogMessage
+
 
   // Calculate derived state: Check if any active song has completed features
   const hasFeaturesForActiveSongs = useMemo(() => {
-      return Array.from(activeSongIds).some(id => 
+      return Array.from(activeSongIds).some(id =>
           featureStatus[id] === 'complete' && songFeatures[id] != null
       );
   }, [activeSongIds, featureStatus, songFeatures]);
+
+
+  // --- Clustering Handler ---
+  const handleRunClustering = useCallback((k: number) => {
+      if (!kmeansWorkerRef.current || isClustering || isProcessing || isReducing) {
+          addLogMessage('Cannot start clustering: Worker not ready or another process is active.', 'warn');
+          return;
+      }
+
+      const activeReducedData: { id: string, vector: number[] }[] = [];
+      let skippedCount = 0;
+      let dimensionMismatchCount = 0;
+      const targetDim = reductionDimensions; // Capture current target dimension
+
+      activeSongIds.forEach(id => {
+          const vector = reducedDataPoints[id];
+          if (vector && vector.length > 0) {
+              // Use targetDim for check if it's > 0, otherwise just check if vector exists
+              if (targetDim > 0 && vector.length !== targetDim) {
+                  dimensionMismatchCount++;
+              } else {
+                  activeReducedData.push({ id, vector });
+              }
+          } else {
+              skippedCount++;
+          }
+      });
+
+      if (skippedCount > 0) {
+          addLogMessage(`Skipping ${skippedCount} active songs without reduced data for clustering.`, 'warn');
+      }
+      if (dimensionMismatchCount > 0) {
+          addLogMessage(`Skipping ${dimensionMismatchCount} active songs with mismatched dimensions (expected ${targetDim}) for clustering.`, 'warn');
+      }
+
+
+      if (activeReducedData.length === 0) {
+          addLogMessage('No valid reduced data points found for active songs to cluster.', 'warn');
+          return;
+      }
+
+      if (k <= 0) {
+          addLogMessage(`Invalid k value: ${k}. Must be greater than 0.`, 'warn');
+          return;
+      }
+
+       if (activeReducedData.length < k) {
+          addLogMessage(`Cannot cluster: Not enough data points (${activeReducedData.length}) for k=${k}. Need at least k points.`, 'warn');
+          return;
+      }
+
+
+      const dataForWorker = activeReducedData.map(d => d.vector);
+      const idsForWorker = activeReducedData.map(d => d.id);
+
+      addLogMessage(`Starting K-Means clustering with k=${k} for ${dataForWorker.length} points...`, 'info');
+      setIsClustering(true);
+      setKmeansIteration(0);
+      setKmeansCentroids([]);
+      setKmeansAssignments({});
+      setKmeansK(k); // Store the requested K
+
+      kmeansWorkerRef.current.postMessage({
+          type: 'startTraining',
+          payload: {
+              reducedData: dataForWorker,
+              songIds: idsForWorker,
+              k: k,
+              // maxIter: 50 // Optionally override worker default
+          }
+      });
+
+  }, [isClustering, isProcessing, isReducing, activeSongIds, reducedDataPoints, reductionDimensions, kmeansWorkerRef, addLogMessage]); // Added addLogMessage
+
+  // --- Derived State ---
+    const hasReducedDataForActiveSongs = useMemo(() => {
+      const targetDim = reductionDimensions; // Capture current target dimension
+      return Array.from(activeSongIds).some(id => {
+          const point = reducedDataPoints[id];
+          // Check if point exists and either dimensions match or no specific dimension is set yet
+          return point != null && point.length > 0 && (targetDim === 0 || point.length === targetDim);
+      });
+  }, [activeSongIds, reducedDataPoints, reductionDimensions]);
+
+  // Filter logs for display in the panel
+  const filteredLogMessages = useMemo(() => {
+      return logMessages.filter(log => 
+          log.level === 'warn' || log.level === 'error' || log.level === 'complete'
+      );
+  }, [logMessages]);
 
   return (
     <main className="flex flex-col min-h-screen p-4 bg-gray-900 text-gray-100 font-[family-name:var(--font-geist-mono)]">
@@ -589,17 +990,26 @@ export default function DashboardPage() {
       >
         <h1 className="px-4 text-xl font-bold text-cyan-400">SongCluster Dashboard</h1>
         <div className="text-sm text-cyan-300">
-          {isProcessing ? 'Processing Audio... ' : 'Ready'}
+          {isProcessing ? 'Processing Audio... ' : ''}
+          {isReducing ? 'Reducing Dimensions... ' : ''}
+          {isClustering ? `Clustering (Iter: ${kmeansIteration})... ` : ''}
+          {!isProcessing && !isReducing && !isClustering ? 'Ready ' : ''}
           ({songs.filter(s => featureStatus[s.id] === 'complete').length} / {songs.length} songs complete)
           {!essentiaWorkerReady && <span className="text-red-500 ml-2">Worker Error!</span>}
         </div>
       </div>
 
-      {/* New Grid Layout - Updated */}
-      <div className="flex-grow grid grid-cols-2 grid-rows-[auto_1fr] gap-4"> {/* Changed grid-cols-3 to grid-cols-2 */}
-        {/* Song List Panel */}
-        <SongListPanel 
-          className="col-span-1 row-span-1"  // Changed col-span-2 to col-span-1
+      {/* New Grid Layout - Updated Order */}
+      <div className="flex-grow grid grid-cols-3 grid-rows-[auto_1fr] gap-4">
+        {/* Log Panel (First Column) */}
+        <LogPanel
+           className="col-span-1 row-span-1"
+           logs={filteredLogMessages}
+        />
+
+        {/* Song List Panel (Second Column) */}
+        <SongListPanel
+          className="col-span-1 row-span-1"
           songs={songs}
           featureStatus={featureStatus}
           activeSongIds={activeSongIds}
@@ -609,20 +1019,32 @@ export default function DashboardPage() {
           onUploadClick={handleUploadClick}
         />
 
-        {/* Controls Panel */}
-        <ControlsPanel 
-          className="col-span-1 row-span-1" // Changed row-span-2 to row-span-1
+        {/* Controls Panel (Third Column)*/}
+        <ControlsPanel
+          className="col-span-1 row-span-1"
           isProcessing={isProcessing}
-          isReducing={isReducing} // Pass down reducing state
+          isReducing={isReducing}
+          isClustering={isClustering}
           essentiaWorkerReady={essentiaWorkerReady}
           activeSongCount={activeSongIds.size}
-          hasFeaturesForActiveSongs={hasFeaturesForActiveSongs} // Pass down derived state
+          hasFeaturesForActiveSongs={hasFeaturesForActiveSongs}
+          hasReducedDataForActiveSongs={hasReducedDataForActiveSongs}
           onExtractFeatures={handleExtractFeatures}
-          onReduceDimensions={handleReduceDimensions} // Pass down handler
+          onReduceDimensions={handleReduceDimensions}
+          onRunClustering={handleRunClustering}
         />
 
-        {/* Visualization Panel */}
-        <VisualizationPanel className="col-span-2 row-span-1"/> {/* Changed row-span-1 (implicitly) and added col-span-2 */}
+        {/* Visualization Panel (Spanning Full Width Below) */}
+        <VisualizationPanel
+          className="col-span-3 row-span-1"
+          activeSongIds={activeSongIds}
+          songs={songs}
+          reducedDataPoints={reducedDataPoints}
+          reductionDimensions={reductionDimensions}
+          kmeansAssignments={kmeansAssignments}
+          kmeansCentroids={kmeansCentroids}
+          kmeansIteration={kmeansIteration}
+        />
       </div>
 
       {/* Footer Placeholder (Optional) */}
