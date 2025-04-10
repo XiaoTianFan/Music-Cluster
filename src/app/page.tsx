@@ -1493,7 +1493,7 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Footer Placeholder (Optional) */}
+      {/* Footer Placeholder */}
       <footer
         className="w-full h-10 mt-4 p-2 text-center text-xs text-gray-500 border-t border-gray-700"
          data-augmented-ui="tl-clip tr-clip border"

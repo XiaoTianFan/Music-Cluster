@@ -191,7 +191,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
             data-augmented-ui="tl-clip br-clip border" 
             style={{ '--aug-border-color': '#555' } as React.CSSProperties}
         >
-            <h3 className="text-md font-semibold mb-2 text-green-300">Data Processing (Optional)</h3>
+            <h3 className="text-md font-semibold mb-2 text-green-300">Data Processing</h3>
             {/* Method Selection */} 
             <div className="mb-3">
                 <span className="text-xs block mb-1 text-gray-400">Method:</span>
