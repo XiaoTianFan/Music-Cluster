@@ -8,12 +8,17 @@ interface Song {
   source: 'default' | 'user';
 }
 type FeatureStatus = 'idle' | 'processing' | 'complete' | 'error';
+// TYPE IMPORT: Import KmeansAssignments if defined globally, or define here
+interface KmeansAssignments {
+    [songId: string]: number; // Map songId to cluster index
+}
 
 // Define props based on analysis of page.tsx
 interface SongListPanelProps {
   songs: Song[];
   featureStatus: Record<string, FeatureStatus>;
   activeSongIds: Set<string>; // Set of IDs for songs included in processing
+  kmeansAssignments: KmeansAssignments; // <-- ADDED PROP
   isProcessing: boolean;
   onToggleSongActive: (songId: string) => void;
   onRemoveSong: (songId: string) => void;
@@ -25,10 +30,54 @@ interface SongListPanelProps {
   className?: string; // Allow passing className for layout adjustments
 }
 
+// --- ADDED: Color definitions (should match VisualizationPanel) ---
+const plotlyColors = [
+  '#1f77b4',  // Muted blue
+  '#ff7f0e',  // Safety orange
+  '#2ca02c',  // Cooked asparagus green
+  '#d62728',  // Brick red
+  '#9467bd',  // Muted purple
+  '#8c564b',  // Chestnut brown
+  '#e377c2',  // Raspberry yogurt pink
+  '#7f7f7f',  // Middle gray
+  '#bcbd22',  // Curry yellow-green
+  '#17becf',  // Blue-teal
+  '#aec7e8',  // Light blue
+  '#ffbb78',  // Light orange
+  '#98df8a',  // Light green
+  '#ff9896',  // Light red
+  '#c5b0d5',  // Light purple
+  '#c49c94',  // Light brown
+  '#f7b6d2',  // Light pink
+  '#c7c7c7',  // Light gray
+  '#dbdb8d',  // Light yellow-green
+  '#9edae5',  // Light blue-teal
+  '#393b79',  // Dark blue
+  '#843c39',  // Dark red
+  '#5254a3',  // Dark purple
+  '#8c6d31',  // Dark brown
+  '#637939',  // Dark green
+  '#8ca252',  // Olive green
+  '#b5cf6b',  // Lime green
+  '#cedb9c',  // Pale green
+  '#8c6d31',  // Dark gold
+  '#bd9e39'   // Gold
+];
+
+// --- ADDED: Helper function to convert hex to RGBA ---
+const hexToRgba = (hex: string, alpha: number): string => {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+// --------------------------------------------------------
+
 const SongListPanel: React.FC<SongListPanelProps> = ({ 
   songs, 
   featureStatus, 
   activeSongIds,
+  kmeansAssignments, // <-- Destructure added prop
   isProcessing,
   onToggleSongActive,
   onRemoveSong, 
@@ -45,13 +94,39 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
   // Sort songs: user songs first, then default songs (alphabetically within groups)
   const sortedSongs = React.useMemo(() => {
     return [...songs].sort((a, b) => {
-      // Primary sort: user source first
+      // NEW Primary sort: selected first
+      const aIsActive = activeSongIds.has(a.id);
+      const bIsActive = activeSongIds.has(b.id);
+      if (aIsActive && !bIsActive) return -1;
+      if (!aIsActive && bIsActive) return 1;
+      
+      // NEW: Secondary sort (within active songs): by cluster index
+      if (aIsActive && bIsActive) {
+          const clusterA = kmeansAssignments[a.id];
+          const clusterB = kmeansAssignments[b.id];
+
+          // Put assigned songs before unassigned
+          if (clusterA !== undefined && clusterB === undefined) return -1;
+          if (clusterA === undefined && clusterB !== undefined) return 1;
+          
+          // Sort by cluster index if both assigned
+          if (clusterA !== undefined && clusterB !== undefined) {
+              if (clusterA < clusterB) return -1;
+              if (clusterA > clusterB) return 1;
+              // If clusters are the same, fall through to tertiary sort
+          }
+          // If neither is assigned within active group, fall through
+      }
+      
+      // Tertiary sort: user source first (applies to non-active OR active with same cluster/no cluster)
       if (a.source === 'user' && b.source !== 'user') return -1;
       if (a.source !== 'user' && b.source === 'user') return 1;
-      // Secondary sort: alphabetically by name
+      
+      // Quaternary sort: alphabetically by name
       return a.name.localeCompare(b.name);
     });
-  }, [songs]);
+  // UPDATE: Added activeSongIds dependency + kmeansAssignments
+  }, [songs, activeSongIds, kmeansAssignments]);
 
   // Drag and Drop Handlers
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
@@ -132,55 +207,69 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
       <div className="flex-grow overflow-y-auto mb-2 hide-scrollbar relative z-0"> {/* Ensure list is below hint */}
          <ul className="list-none p-0">
             {/* Map over the SORTED 'songs' array */}
-            {sortedSongs.map((song) => ( 
-            <li key={song.id} className="group flex justify-between items-center text-xs mb-1 p-1 pr-2 hover:bg-gray-800/50 border-b border-gray-700/50 relative"> {/* Add group and relative positioning */}
-                <div className="flex items-center flex-grow mr-2 min-w-0 overflow-hidden">
-                    <input 
-                        type="checkbox" 
-                        checked={activeSongIds.has(song.id)}
-                        onChange={() => onToggleSongActive(song.id)}
-                        disabled={isProcessing} // Disable toggle while processing maybe?
-                        className="mr-2 flex-shrink-0 accent-cyan-500 cursor-pointer disabled:cursor-not-allowed"
-                        title={activeSongIds.has(song.id) ? "Exclude from processing" : "Include in processing"}
-                    />
-                    {/* Song Name - Takes up available space and truncates */}
-                    <span title={song.name} className="truncate flex-grow mr-2">
-                        {song.name}
-                    </span>
-                    {/* Container for details button and status */}
-                    <span className="flex-shrink-0 flex items-center gap-1"> 
-                        {/* Details Button (conditional) */}
-                        {featureStatus[song.id] === 'complete' && (
-                            <button
-                                onClick={() => onShowDetails(song.id)}
-                                className="text-blue-400 hover:text-blue-300 text-xs px-1 py-0.5 rounded bg-gray-700 hover:bg-gray-600 border border-blue-900/50"
-                                title="Show Details"
-                                // disabled={isProcessing} // Decide if viewing details should be blocked by global processing
-                            >
-                                Show
-                            </button>
-                        )}
-                        
-                        {/* Status Indicator */}
-                        <span> {/* Wrap status in span for alignment */}
-                            {featureStatus[song.id] === 'processing' && <span className="text-yellow-400">(Proc...)</span>}
-                            {featureStatus[song.id] === 'complete' && <span className="text-green-400">(Done)</span>}
-                            {featureStatus[song.id] === 'error' && <span className="text-red-500">(Error)</span>}
-                        </span>
-                    </span>
-                </div>
-                {/* Remove song.source === 'user' condition */}
-                {/* Add group-hover visibility and adjust positioning/styling */}
-                <button
-                    onClick={() => onRemoveSong(song.id)}
-                    className="absolute right-1 top-1/2 -translate-y-1/2 invisible group-hover:visible text-red-600 hover:text-red-400 text-xs px-1 py-0.5 rounded bg-gray-700 hover:bg-gray-600 flex-shrink-0 border border-red-900/50 z-10" // Added positioning, visibility, z-index
-                    disabled={isProcessing} // Disable remove while processing
-                    title="Remove Song" // Generic title
-                >
-                    X
-                </button>
-            </li>
-            ))}
+            {sortedSongs.map((song) => { 
+                // --- ADDED: Background color logic ---
+                let backgroundColor = 'transparent';
+                const clusterIndex = kmeansAssignments[song.id];
+                if (clusterIndex !== undefined) {
+                    const baseColor = plotlyColors[clusterIndex % plotlyColors.length];
+                    backgroundColor = hexToRgba(baseColor, 0.3); // 30% opacity
+                }
+                // -------------------------------------
+                return (
+                    <li 
+                        key={song.id} 
+                        className="group flex justify-between items-center text-xs p-1 pr-2 hover:bg-gray-800/50 border-b border-gray-700/50 relative" 
+                        style={{ backgroundColor }} // <-- APPLY STYLE
+                    >
+                        <div className="flex items-center flex-grow min-w-0 overflow-hidden">
+                            <input 
+                                type="checkbox" 
+                                checked={activeSongIds.has(song.id)}
+                                onChange={() => onToggleSongActive(song.id)}
+                                disabled={isProcessing} // Disable toggle while processing maybe?
+                                className="mr-2 flex-shrink-0 accent-cyan-500 cursor-pointer disabled:cursor-not-allowed"
+                                title={activeSongIds.has(song.id) ? "Exclude from processing" : "Include in processing"}
+                            />
+                            {/* Song Name - Takes up available space and truncates */}
+                            <span title={song.name} className="truncate flex-grow mr-2">
+                                {song.name}
+                            </span>
+                            {/* Container for details button and status */}
+                            <span className="flex-shrink-0 flex items-center gap-1"> 
+                                {/* Details Button (conditional) */}
+                                {featureStatus[song.id] === 'complete' && (
+                                    <button
+                                        onClick={() => onShowDetails(song.id)}
+                                        className="text-blue-400 hover:text-blue-300 text-xs px-1 py-0 rounded bg-gray-700 hover:bg-gray-600 border border-blue-900/50"
+                                        title="Show Details"
+                                        // disabled={isProcessing} // Decide if viewing details should be blocked by global processing
+                                    >
+                                        Show
+                                    </button>
+                                )}
+                                
+                                {/* Status Indicator */}
+                                <span> {/* Wrap status in span for alignment */}
+                                    {featureStatus[song.id] === 'processing' && <span className="text-yellow-400">(Proc...)</span>}
+                                    {featureStatus[song.id] === 'complete' && <span className="text-green-400">(Done)</span>}
+                                    {featureStatus[song.id] === 'error' && <span className="text-red-500">(Error)</span>}
+                                </span>
+                            </span>
+                        </div>
+                        {/* Remove song.source === 'user' condition */}
+                        {/* Add group-hover visibility and adjust positioning/styling */}
+                        <button
+                            onClick={() => onRemoveSong(song.id)}
+                            className="absolute right-1 top-1/2 -translate-y-1/2 invisible group-hover:visible text-red-600 hover:text-red-400 text-xs px-1 py-0.5 rounded bg-gray-700 hover:bg-gray-600 flex-shrink-0 border border-red-900/50 z-10" // Added positioning, visibility, z-index
+                            disabled={isProcessing} // Disable remove while processing
+                            title="Remove Song" // Generic title
+                        >
+                            X
+                        </button>
+                    </li>
+                );
+            })}
         </ul>
       </div>
 

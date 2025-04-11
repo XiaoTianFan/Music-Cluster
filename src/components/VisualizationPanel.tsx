@@ -186,7 +186,6 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
   const [selectedScaleY, setSelectedScaleY] = useState<AxisScale>('linear');
   const [selectedScaleZ, setSelectedScaleZ] = useState<AxisScale>('linear');
   const [showLegend, setShowLegend] = useState<boolean>(false); // State for legend visibility
-  const [currentStage, setCurrentStage] = useState<VisualizationStage>('clusters'); // Default view
   const [isFeatureTableVisible, setIsFeatureTableVisible] = useState(false);
   const [featureTableData, setFeatureTableData] = useState<Array<Record<string, any>> | null>(null);
   // -------------------------------------------------
@@ -404,35 +403,35 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
   // --- Auto-Switch Logic --- 
   useEffect(() => {
-    console.log(`[VizPanel] useEffect triggered. latestSuccessfulStage: ${latestSuccessfulStage}, currentStage: ${currentStage}`);
+    // console.log(`[VizPanel] useEffect triggered. latestSuccessfulStage: ${latestSuccessfulStage}`);
 
     // Map parent stage to panel stage
-    let targetStage: VisualizationStage | null = null;
-    if (latestSuccessfulStage === 'features') targetStage = 'features';
-    else if (latestSuccessfulStage === 'processed') targetStage = 'processed'; // Assuming panel has a 'processed' view
-    else if (latestSuccessfulStage === 'reduced') targetStage = 'reduced';
-    else if (latestSuccessfulStage === 'kmeans') targetStage = 'clusters';
+    let targetStage: DataStage | null = null; // Use DataStage type directly
+    if (latestSuccessfulStage === 'features') targetStage = 'raw'; // Map 'features' -> 'raw'
+    else if (latestSuccessfulStage === 'processed') targetStage = 'processed';
+    else if (latestSuccessfulStage === 'reduced') targetStage = 'reduction';
+    else if (latestSuccessfulStage === 'kmeans') targetStage = 'clustering';
 
-    if (targetStage && targetStage !== currentStage) {
+    if (targetStage && targetStage !== selectedDataStage) { // Compare with selectedDataStage
         // Check if data for the target stage exists before switching
         let dataExists = false;
-        if (targetStage === 'features' && Object.keys(songFeatures).length > 0) dataExists = true;
-        // Add check for 'unprocessed' stage if VisualizationPanel supports it
-        // if (targetStage === 'unprocessed' && unprocessedData?.vectors.length > 0) dataExists = true; 
-        else if (targetStage === 'processed' && processedData && processedData.vectors && processedData.vectors.length > 0) dataExists = true;
-        else if (targetStage === 'reduced' && Object.keys(reducedDataPoints).length > 0) dataExists = true;
-        else if (targetStage === 'clusters' && Object.keys(reducedDataPoints).length > 0) dataExists = true; // Clusters view depends on reduced points
+        if (targetStage === 'raw' && unprocessedData?.vectors && unprocessedData.vectors.length > 0) dataExists = true; 
+        else if (targetStage === 'processed' && processedData?.vectors && processedData.vectors.length > 0) dataExists = true;
+        else if (targetStage === 'reduction' && Object.keys(reducedDataPoints).length > 0) dataExists = true;
+        // UPDATED CHECK: Verify both reduced points and assignments exist for clustering stage
+        else if (targetStage === 'clustering' && Object.keys(reducedDataPoints).length > 0 && Object.keys(kmeansAssignments).length > 0) dataExists = true; 
 
         if (dataExists) {
-            console.log(`[VizPanel] Auto-switching view from ${currentStage} to ${targetStage}`);
-            setCurrentStage(targetStage);
+            console.log(`[VizPanel] Auto-switching view from ${selectedDataStage} to ${targetStage}`);
+            setSelectedDataStage(targetStage); // <-- UPDATE: Set the correct state
         } else {
-            console.log(`[VizPanel] Auto-switch to ${targetStage} skipped: Data not available.`);
+            // console.log(`[VizPanel] Auto-switch to ${targetStage} skipped: Data not available.`);
         }
     } else {
-        console.log(`[VizPanel] Auto-switch condition not met (target: ${targetStage}, current: ${currentStage})`);
+        // console.log(`[VizPanel] Auto-switch condition not met (target: ${targetStage}, current selected: ${selectedDataStage})`);
     }
-  }, [latestSuccessfulStage, songFeatures, processedData, reducedDataPoints, currentStage]); // Dependencies
+  // UPDATED DEPENDENCIES: Added kmeansAssignments and setSelectedDataStage
+  }, [latestSuccessfulStage, songFeatures, unprocessedData, processedData, reducedDataPoints, kmeansAssignments, selectedDataStage, setSelectedDataStage]); 
 
   // Helper function to create detailed hover information
   const createDetailedHoverText = (songId: string, songName: string, stage: DataStage): string => {

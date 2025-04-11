@@ -1598,6 +1598,7 @@ export default function DashboardPage() {
           onSelectAll={handleSelectAll}
           onClearAll={handleClearAll}
           onShowDetails={handleShowDetails}
+          kmeansAssignments={kmeansAssignments} // <-- ADD THIS PROP
         />
 
         {/* Visualization Panel (Middle Column, Top Row) */}
