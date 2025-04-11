@@ -13,6 +13,7 @@
     "@saehrimnir/druidjs": "^0.7.3",
     "@tensorflow/tfjs": "^4.22.0",
     "@types/d3": "^7.4.3",
+    "@vercel/analytics": "^1.5.0",
     "augmented-ui": "^2.0.0",
     "d3": "^7.9.0",
     "essentia.js": "^0.1.3",

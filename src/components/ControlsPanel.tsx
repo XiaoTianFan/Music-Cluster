@@ -23,7 +23,8 @@ interface ControlsPanelProps {
   // Type for the reduction method, mirroring page.tsx
   onReduceDimensions: (method: ReductionMethod, dimensions: number, params?: Record<string, unknown>) => void;
   onRunClustering: (k: number) => void; // Handler to start clustering
-  onShowExplanation: (featureId: string) => void; // <-- Add the new prop
+  onShowExplanation: (featureId: string) => void; // For MIR features
+  onShowAlgoExplanation: (algorithmId: string) => void; // <-- ADDED: For algorithms
   className?: string; // Allow passing className for layout adjustments
   // --- NEW Props for Manual K-Means Control ---
   isKmeansInitialized: boolean;
@@ -67,7 +68,8 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
   onProcessData,
   onReduceDimensions,
   onRunClustering,
-  onShowExplanation, // <-- Destructure the prop
+  onShowExplanation,
+  onShowAlgoExplanation, // <-- Destructure the new prop
   className,
   // --- NEW Props for Manual K-Means Control ---
   isKmeansInitialized,
@@ -154,7 +156,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
           <h3 className="text-md font-semibold mb-2 text-green-300">MIR Features</h3>
           <div className="flex flex-wrap gap-x-4 gap-y-1 flex-grow">
             {availableMirFeatures.map(feature => (
-              <div key={feature.id} className="flex items-center justify-between group text-xs">
+              <div key={feature.id} className="relative group flex items-center justify-between text-xs">
                 <label htmlFor={`feature-${feature.id}`} className="flex items-center cursor-pointer">
                   <input 
                     type="checkbox"
@@ -168,9 +170,9 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
                 </label>
                 <button 
                   onClick={() => onShowExplanation(feature.id)}
-                  className="ml-2 px-1 py-0.5 text-xs bg-gray-700 hover:bg-gray-600 text-blue-300 hover:text-blue-200 border border-blue-900/50 invisible group-hover:visible disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="absolute right-0 top-1/2 -translate-y-1/2 px-1 py-0.5 text-xs bg-gray-700 hover:bg-gray-600 text-blue-300 hover:text-blue-200 border border-blue-900/50 invisible group-hover:visible disabled:opacity-50 disabled:cursor-not-allowed z-10"
                   title={`Explain ${feature.name}`}
-                  disabled={isProcessing}
+                  
                 >
                   ?
                 </button>
@@ -208,25 +210,33 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
                 <span className="text-xs block mb-1 text-gray-400">Method:</span>
                 <div className="flex gap-2 flex-wrap">
                     {['standardize', 'normalize'].map(method => (
-                        <label key={method} className="text-xs px-1 py-1 cursor-pointer border border-transparent hover:border-green-500/50 data-[checked=true]:bg-green-800/50 data-[checked=true]:border-green-600" data-checked={selectedProcessingMethod === method}>
-                            <input 
-                                type="radio" 
-                                name="processingMethod" 
-                                value={method}
-                                checked={selectedProcessingMethod === method}
-                                onChange={(e) => setSelectedProcessingMethod(e.target.value as ProcessingMethod)}
-                                className="hidden" // Style the label instead
-                                // Enable changing method unless MIR extraction is running or no features exist
-                                disabled={isProcessing || !hasFeaturesForActiveSongs}
-                            />
-                            {method === 'standardize' ? 'Standardize (Z-score)' : 'Normalize (Min-Max)'}
-                        </label>
+                        <div key={method} className="relative group flex items-center">
+                            <label className="text-xs pl-1 py-1 cursor-pointer border border-transparent hover:border-green-500/50 data-[checked=true]:bg-green-800/50 data-[checked=true]:border-green-600" data-checked={selectedProcessingMethod === method}>
+                                <input 
+                                    type="radio" 
+                                    name="processingMethod" 
+                                    value={method}
+                                    checked={selectedProcessingMethod === method}
+                                    onChange={(e) => setSelectedProcessingMethod(e.target.value as ProcessingMethod)}
+                                    className="hidden"
+                                    disabled={isProcessing || !hasFeaturesForActiveSongs}
+                                />
+                                {method === 'standardize' ? 'Standardize (Z-score)' : 'Normalize (Min-Max)'}
+                            </label>
+                            <button
+                                onClick={() => onShowAlgoExplanation(method)}
+                                className="absolute right-0 top-1/2 -translate-y-1/2 ml-1 px-1 py-0.5 text-xs bg-gray-700 hover:bg-gray-600 text-blue-300 hover:text-blue-200 border border-blue-900/50 invisible group-hover:visible disabled:opacity-50 disabled:cursor-not-allowed z-10"
+                                title={`Explain ${method === 'standardize' ? 'Standardization' : 'Normalization'}`}
+                            >
+                                ?
+                            </button>
+                        </div>
                     ))}
                 </div>
             </div>
             {/* Normalization Range (Conditional) */} 
             {selectedProcessingMethod === 'normalize' && (
-                <div className="mb-3 ml-4"> {/* Indent range selection */} 
+                <div className="mb-3 ml-4">
                    <span className="text-xs block mb-1 text-gray-400">Normalization Range:</span>
                     <div className="flex gap-3 flex-wrap">
                         {['[0,1]', '[-1,1]'].map(range => (
@@ -237,8 +247,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
                                     value={range}
                                     checked={selectedNormalizationRange === range}
                                     onChange={(e) => setSelectedNormalizationRange(e.target.value as '[0,1]' | '[-1,1]')}
-                                    className="hidden" // Style the label instead
-                                    // Enable changing range unless MIR extraction is running or no features exist
+                                    className="hidden"
                                     disabled={isProcessing || !hasFeaturesForActiveSongs}
                                 />
                                 {range}
@@ -249,7 +258,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
             )}
             {/* Process Data Button */} 
              <button 
-                 onClick={handleStartProcessing} // Wire up the new handler
+                 onClick={handleStartProcessing}
                  disabled={!canProcessData} 
                  className={`w-full p-1 mt-1 text-center font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed ${canProcessData ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-600 text-gray-400'}`}
                  data-augmented-ui="tl-clip br-clip border"
@@ -279,18 +288,27 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
                <span className="text-xs block mb-1 text-gray-400">Algorithm:</span>
                <div className="flex gap-2 flex-wrap">
                   {availableDimReducers.map(reducer => (
-                      <label key={reducer.id} className="text-xs px-2 py-1 cursor-pointer border border-transparent hover:border-green-500/50 data-[checked=true]:bg-green-800/50 data-[checked=true]:border-green-600" data-checked={selectedDimReducer === reducer.id}>
-                          <input 
-                              type="radio" 
-                              name="dimReducer" 
-                              value={reducer.id}
-                              checked={selectedDimReducer === reducer.id}
-                              onChange={(e) => setSelectedDimReducer(e.target.value as 'pca' | 'tsne' | 'umap')}
-                              className="hidden" // Style the label instead
-                               disabled={isProcessing || isReducing}
-                          />
-                          {reducer.name}
-                      </label>
+                      <div key={reducer.id} className="relative group flex items-center">
+                          <label className="text-xs pl-1 py-1 cursor-pointer border border-transparent hover:border-green-500/50 data-[checked=true]:bg-green-800/50 data-[checked=true]:border-green-600" data-checked={selectedDimReducer === reducer.id}>
+                              <input 
+                                  type="radio" 
+                                  name="dimReducer" 
+                                  value={reducer.id}
+                                  checked={selectedDimReducer === reducer.id}
+                                  onChange={(e) => setSelectedDimReducer(e.target.value as ReductionMethod)}
+                                  className="hidden"
+                                  disabled={isProcessing || isProcessingData || isReducing}
+                              />
+                              {reducer.name}
+                          </label>
+                          <button
+                              onClick={() => onShowAlgoExplanation(reducer.id)}
+                              className="absolute right-0 top-1/2 -translate-y-1/2 ml-1 px-1 py-0.5 text-xs bg-gray-700 hover:bg-gray-600 text-blue-300 hover:text-blue-200 border border-blue-900/50 invisible group-hover:visible disabled:opacity-50 disabled:cursor-not-allowed z-10"
+                              title={`Explain ${reducer.name}`}
+                          >
+                              ?
+                          </button>
+                      </div>
                   ))}
               </div>
             </div>
@@ -327,8 +345,8 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
           </div>
           {/* ADDED Proceed Button - Updated Logic */}
            <button 
-                onClick={handleProceedReduction} // Wire up the handler
-                disabled={!canReduceDimensions} // Use the calculated enabled state
+                onClick={handleProceedReduction}
+                disabled={!canReduceDimensions}
                 className={`w-full p-1 text-center font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed ${canReduceDimensions ? 'bg-cyan-600 hover:bg-cyan-500 text-white' : 'bg-gray-600 text-gray-400'}`}
                 data-augmented-ui="tl-clip br-clip border"
                 style={{ '--aug-border-color': canReduceDimensions ? 'cyan' : '#555' } as React.CSSProperties}
@@ -338,7 +356,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
                     isProcessing ? "Feature extraction active..." :
                     isProcessingData ? "Data processing active..." :
                     isReducing ? "Dimension reduction active..." :
-                    "Run selected reduction method" // Default title if enabled
+                    "Run selected reduction method"
                 }
             >
                 {isReducing ? 'Reducing...' : `Reduce Dimensions`}
@@ -347,10 +365,18 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
 
         {/* === K-Means Clustering === */}
          <div 
-            className="mb-4 p-3 border border-gray-700/80"
+            className="mb-4 p-3 border border-gray-700/80 relative group"
             data-augmented-ui="tl-clip br-clip border"
             style={{ '--aug-border-color': '#555' } as React.CSSProperties} >
            <h3 className="text-md font-semibold mb-2 text-green-300">K-Means Clustering</h3>
+           <button
+               onClick={() => onShowAlgoExplanation('kmeans')}
+               className="absolute top-1 right-1 px-1 py-0.5 text-xs bg-gray-700 hover:bg-gray-600 text-blue-300 hover:text-blue-200 border border-blue-900/50 invisible group-hover:visible disabled:opacity-50 disabled:cursor-not-allowed z-10"
+               title="Explain K-Means Clustering"
+               
+           >
+               ?
+           </button>
            <div className="flex items-center gap-3 mb-2">
              <label htmlFor="num-clusters" className="text-xs text-gray-400 flex-shrink-0">Number of Clusters (k):</label>
              <input
@@ -377,10 +403,9 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
                   isProcessingData ? "Processing data..." : 
                   isReducing ? "Reducing dimensions..." : 
                   isClusteringActive ? "Re-Initialize K-Means (will reset current progress)" :
-                  "Initialize K-Means Clustering" // Default title if enabled
+                  "Initialize K-Means Clustering"
                 }
            >
-               {/* Text changes based on whether clustering is active */} 
                {isClusteringActive ? 'Re-Initialize Clustering' : `Initialize Clustering (k=${numClusters})`}
            </button>
 

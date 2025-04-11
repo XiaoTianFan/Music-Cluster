@@ -10,6 +10,7 @@ import LogPanel from '../components/LogPanel'; // Import the new LogPanel
 import SongDetailsDialog from '../components/SongDetailsDialog'; // Import the new dialog component
 import FeatureExplanationDialog from '../components/FeatureExplanationDialog'; // Import the explanation dialog
 import AboutDialog from '../components/AboutDialog'; // Import the About dialog
+import ExplanationDialog from '../components/ExplanationDialog'; // <-- Import the new generic dialog
 // Remove the static import of VisualizationPanel
 // import VisualizationPanel from '../components/VisualizationPanel';
 
@@ -328,6 +329,12 @@ export default function DashboardPage() {
   const [isExplanationOpen, setIsExplanationOpen] = useState(false);
   const [explainedFeatureId, setExplainedFeatureId] = useState<string | null>(null);
 
+  // --- NEW: State for Algorithm Explanations ---
+  const [algorithmExplanations, setAlgorithmExplanations] = useState<Record<string, { name: string, explanation: string }> | null>(null);
+  const [isAlgoExplanationOpen, setIsAlgoExplanationOpen] = useState<boolean>(false);
+  const [explainedAlgorithmId, setExplainedAlgorithmId] = useState<string | null>(null);
+  // -------------------------------------------
+
   // --- State for About Dialog ---
   const [isAboutDialogOpen, setIsAboutDialogOpen] = useState<boolean>(false);
 
@@ -353,6 +360,9 @@ export default function DashboardPage() {
   const [visualizationDisplayStage, setVisualizationDisplayStage] = useState<ProcessingStage>(null);
   // --- NEW: State for available feature keys --- 
   const [availableFeatureKeys, setAvailableFeatureKeys] = useState<string[] | null>(null);
+
+  // --- NEW: Ref to store target IDs for completion check ---
+  const initialTargetSongIdsRef = useRef<Set<string>>(new Set());
 
   // --- Log Helper Function ---
   const addLogMessage = useCallback((message: string, level: LogLevel = 'info') => {
@@ -646,6 +656,36 @@ export default function DashboardPage() {
         addLogMessage(`Failed to load feature explanations: ${error.message}`, 'error');
         setExplanations({}); // Set to empty object to indicate loading failed but allow UI to proceed
       });
+
+    // --- NEW: Fetch Algorithm Explanations ---
+    addLogMessage('Fetching algorithm explanations...', 'info');
+    fetch('/algorithmExplanations.json')
+      .then(response => {
+          if (!response.ok) {
+              // Handle 404 specifically as just 'not found', not necessarily a hard error
+              if (response.status === 404) {
+                  addLogMessage('Algorithm explanations file not found (404).', 'warn');
+                  return {}; // Return empty object if not found
+              }
+              throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          return response.json();
+      })
+      .then(data => {
+          setAlgorithmExplanations(data);
+          if (Object.keys(data).length > 0) {
+              addLogMessage('Algorithm explanations loaded successfully.', 'complete');
+          } else {
+              addLogMessage('Algorithm explanations file was empty or not found.', 'info');
+          }
+      })
+      .catch(error => {
+          console.error('Error fetching algorithm explanations:', error);
+          addLogMessage(`Failed to load algorithm explanations: ${error.message}`, 'error');
+          setAlgorithmExplanations({}); // Set to empty object on error
+      });
+    // ---------------------------------------
+
   }, [addLogMessage]); // Run once on mount
 
   // MOVE: Move handleResetKmeans definition here
@@ -684,132 +724,134 @@ export default function DashboardPage() {
       activeSongIds, reducedDataPoints, processedData, featureStatus, songFeatures, 
       setLatestSuccessfulStage]);
 
-  // Check if all songs are processed (Feature Extraction Completion Check)
+  // --- MODIFIED: Feature Extraction Completion Check useEffect ---
   useEffect(() => {
-    if (!isProcessing) return; // Only run when MIR extraction is processing
+    // Check if we have target IDs and if the featureStatus state is available
+    if (initialTargetSongIdsRef.current.size === 0 || !featureStatus) return;
 
-    // Check if there are any songs STILL marked as 'processing'
-    // This correctly identifies when the *current batch* has finished,
-    // regardless of whether all songs or only a subset were processed.
-    // We specifically check the IDs that were part of the current batch.
-    const stillProcessing = Array.from(processingSongIds).some(id => featureStatus[id] === 'processing');
+    // Add log for when the check starts
+    // addLogMessage(`[Completion Check] Running for ${initialTargetSongIdsRef.current.size} target songs...`, 'info');
 
-    // If NO songs in the batch are 'processing' anymore, AND we *were* processing, then the batch is done.
-    if (!stillProcessing && processingSongIds.size > 0) { // Ensure we were actually processing a batch
-        const startTime = extractionStartTimeRef.current;
-        let durationMessage = 'All requested song processing finished.';
-
-        // Calculate duration only if a start time was recorded for this batch
-        if (startTime) {
-            const endTime = performance.now();
-            const durationMs = endTime - startTime;
-            durationMessage = `Total feature extraction time for the batch: ${(durationMs / 1000).toFixed(2)} seconds.`;
-            extractionStartTimeRef.current = null; // Reset timer
-        }
-
-        setIsProcessing(false); // Mark MIR processing as complete
-        setProcessingSongIds(new Set()); // Clear the processing batch IDs
-        addLogMessage(durationMessage, 'complete');
-
-        // --- Clear downstream state when NEW features are extracted ---
-        setUnprocessedData(null);
-        setProcessedData(null);
-        setReducedDataPoints({});
-        // Keep KmeansAssignments here, only clear if reset is intended
-        // setKmeansAssignments({}); 
-        // setKmeansCentroids([]);
-        // setKmeansIteration(0);
-        // Instead of clearing K-Means state directly, call the reset function
-        handleResetKmeans(); // Reset K-Means state and worker
-        // Clear reduction dimensions indicator
-        setReductionDimensions(0);
-        addLogMessage('Downstream processing results cleared due to new feature extraction.', 'info');
-        
-        // If features were successfully extracted for any active song, update stage
-        const featuresComplete = Array.from(activeSongIds).some(id => featureStatus[id] === 'complete');
-        if(featuresComplete) {
-            setLatestSuccessfulStage('features');
-            addLogMessage('Feature extraction complete. Updating latest stage to: features', 'info');
-        } else {
-            setLatestSuccessfulStage(null); // Reset if no features completed
-        }
-        
-        // --- IMPROVEMENT: Automatically generate raw data matrix after extraction completes ---
-        // Get features for active songs that now have complete features
-        const activeFeatures: { id: string; features: Features }[] = [];
-        activeSongIds.forEach(id => {
-            const features = songFeatures[id];
-            const status = featureStatus[id];
-            if (features && status === 'complete') {
-                activeFeatures.push({ id, features });
-            }
-        });
-        
-        // Only proceed if there are active songs with complete features
-        if (activeFeatures.length > 0) {
-            addLogMessage('Automatically preparing raw data matrix after feature extraction...', 'info');
-            const matrixResult = prepareMatrix(activeFeatures, addLogMessage);
-            
-            if (matrixResult) {
-                // Store unprocessed data (just the raw matrix, not triggering processing)
-                setUnprocessedData(matrixResult);
-                addLogMessage('Raw data matrix successfully prepared and available for visualization.', 'complete');
-            }
-        }
-
-        // --- TEMPORARY CODE START (Cache Generation Logging) ---
-        // Log the final features object ONLY when processing finishes
-        // This logic might run even if only a subset was processed.
-        // Consider refining the condition if cache generation should only happen
-        // when *all* default songs are processed *in the same batch*.
-        const onlyDefaultSongs = songs.every(s => s.source === 'default');
-        if (onlyDefaultSongs && songs.length === defaultSongs.length) {
-            // NOTE: This log condition checks if the *current* song list *only* contains default songs,
-            //       not necessarily that *all* were processed *in this specific batch*.
-            console.log("=== COPY FEATURE DATA BELOW ===");
-            console.log(JSON.stringify(songFeatures, null, 2)); // Log as pretty-printed JSON string
-            console.log("=== COPY FEATURE DATA ABOVE ===");
-            addLogMessage('Default song features logged to console for cache generation (may include previously cached data).', 'info');
-        }
-        // --- TEMPORARY CODE END ---
-
-        // --- NEW: Determine and set available feature keys --- 
-        let commonKeysSet = new Set<keyof Features>(); // <-- Use keyof Features here
-        let firstSongFeaturesChecked = false;
-        
-        activeSongIds.forEach(id => {
-            const features = songFeatures[id];
-            if (features && featureStatus[id] === 'complete') { // Only consider completed features
-                const currentKeys = Object.keys(features) as (keyof Features)[]; // Use keyof Features here too
-                if (!firstSongFeaturesChecked) {
-                    commonKeysSet = new Set(currentKeys);
-                    firstSongFeaturesChecked = true;
-                } else {
-                    // Intersect with existing common keys
-                    commonKeysSet.forEach(key => {
-                        if (!currentKeys.includes(key)) {
-                            commonKeysSet.delete(key);
-                        }
-                    });
-                }
-            }
-        });
-        
-        if (!firstSongFeaturesChecked) { // Handle case where no active songs completed
-             setAvailableFeatureKeys(null);
-             addLogMessage('No completed features found for active songs to determine available keys.', 'warn');
-        } else {
-             const finalKeysArray = Array.from(commonKeysSet);
-             setAvailableFeatureKeys(finalKeysArray);
-             addLogMessage(`Available feature keys updated: [${finalKeysArray.join(', ')}]`, 'info');
-        }
-        // --------------------------------------------------
+    // Check if all target songs have reached a final state ('complete' or 'error')
+    let allTargetsProcessed = true;
+    for (const songId of initialTargetSongIdsRef.current) {
+      const status = featureStatus[songId];
+      if (status !== 'complete' && status !== 'error') {
+        allTargetsProcessed = false;
+        break;
+      }
     }
-  // UPDATE: Removed defaultSongs from deps, kept handleResetKmeans
-  }, [isProcessing, processingSongIds, featureStatus, extractionStartTimeRef, 
-      setIsProcessing, addLogMessage, setUnprocessedData, setProcessedData, 
-      setReducedDataPoints, setReductionDimensions, activeSongIds, songFeatures, songs, 
-      handleResetKmeans, setAvailableFeatureKeys]); // Added handleResetKmeans
+
+    // If not all targets are processed, do nothing yet
+    if (!allTargetsProcessed) {
+      // addLogMessage('[Completion Check] Not all targets processed yet.', 'info');
+      return;
+    }
+
+    // --- All target songs have completed or errored ---
+    addLogMessage('[Completion Check] All target songs have completed or errored.', 'complete');
+
+    // Calculate duration only if the worker was actually used (start time was set)
+    const startTime = extractionStartTimeRef.current;
+    let durationMessage = 'Feature acquisition complete.';
+    if (startTime) {
+      const endTime = performance.now();
+      const durationMs = endTime - startTime;
+      durationMessage = `Total worker feature extraction time for the batch: ${(durationMs / 1000).toFixed(2)} seconds.`;
+      extractionStartTimeRef.current = null; // Reset timer only if it was used
+    }
+    addLogMessage(durationMessage, 'complete');
+
+    // --- Logic moved from old effect block ---
+    setIsProcessing(false); // Ensure processing flag is off
+    setProcessingSongIds(new Set()); // Clear the worker processing batch IDs
+
+    // Recalculate active features based on the FINAL state after cache/extraction
+    const finalActiveFeatures: { id: string; features: Features }[] = [];
+    initialTargetSongIdsRef.current.forEach(id => {
+      // Check if the song is still active AND features are complete
+      if (activeSongIds.has(id)) { 
+        const features = songFeatures[id];
+        const status = featureStatus[id];
+        if (features && status === 'complete') {
+          finalActiveFeatures.push({ id, features });
+        }
+      }
+    });
+
+    // Automatically generate raw data matrix if possible
+    if (finalActiveFeatures.length > 0) {
+        addLogMessage('Automatically preparing raw data matrix after feature acquisition...', 'info');
+        const matrixResult = prepareMatrix(finalActiveFeatures, addLogMessage);
+        if (matrixResult) {
+            setUnprocessedData(matrixResult);
+            addLogMessage('Raw data matrix successfully prepared.', 'complete');
+            // Set the latest stage AFTER preparing the matrix
+            setLatestSuccessfulStage('features'); 
+            addLogMessage('Feature acquisition complete. Updating latest stage to: features', 'info');
+        } else {
+             addLogMessage('Failed to prepare raw data matrix automatically.', 'warn');
+             // Set stage to null if matrix prep failed but features were theoretically done
+             setLatestSuccessfulStage(null);
+        }
+    } else {
+        // If no features completed successfully for active songs, reset stage
+        setUnprocessedData(null); // Clear any old matrix
+        setLatestSuccessfulStage(null);
+        addLogMessage('No features completed successfully for active songs.', 'warn');
+    }
+
+    // --- Determine and set available feature keys ---
+    let commonKeysSet = new Set<keyof Features>();
+    let firstSongFeaturesChecked = false;
+    finalActiveFeatures.forEach(({ features }) => { // Use finalActiveFeatures
+      const currentKeys = Object.keys(features) as (keyof Features)[];
+      if (!firstSongFeaturesChecked) {
+        commonKeysSet = new Set(currentKeys);
+        firstSongFeaturesChecked = true;
+      } else {
+        commonKeysSet.forEach(key => {
+          if (!currentKeys.includes(key)) {
+            commonKeysSet.delete(key);
+          }
+        });
+      }
+    });
+
+    if (!firstSongFeaturesChecked) {
+      setAvailableFeatureKeys(null);
+      addLogMessage('No completed features found for active songs to determine available keys.', 'warn');
+    } else {
+      const finalKeysArray = Array.from(commonKeysSet);
+      setAvailableFeatureKeys(finalKeysArray);
+      addLogMessage(`Available feature keys updated: [${finalKeysArray.join(', ')}]`, 'info');
+    }
+    
+    // --- TEMPORARY CODE START (Cache Generation Logging) ---
+    // Keep this logic as is, potentially refining the condition later if needed.
+    const onlyDefaultSongs = songs.every(s => s.source === 'default');
+    if (onlyDefaultSongs && songs.length === defaultSongs.length) {
+        console.log("=== COPY FEATURE DATA BELOW ===");
+        console.log(JSON.stringify(songFeatures, null, 2)); 
+        console.log("=== COPY FEATURE DATA ABOVE ===");
+        addLogMessage('Default song features logged (may include cache data).', 'info');
+    }
+    // --- TEMPORARY CODE END ---
+
+    // --- Clear the initial target set ---
+    addLogMessage('[Completion Check] Clearing target song ID reference.', 'info');
+    initialTargetSongIdsRef.current = new Set(); 
+
+  // Dependencies: Listen for changes in featureStatus to re-evaluate completion.
+  // Also include states read inside (activeSongIds, songFeatures) and setters used.
+  // handleResetKmeans is NOT called here anymore, it's called *before* extraction starts.
+  }, [
+      featureStatus, activeSongIds, songFeatures, songs, // State read
+      addLogMessage, setAvailableFeatureKeys, setIsProcessing, setProcessingSongIds, 
+      setUnprocessedData, setLatestSuccessfulStage // Setters/Callbacks
+      // Removed: isProcessing, processingSongIds, extractionStartTimeRef (refs don't trigger effects)
+      // Removed: handleResetKmeans (called earlier now)
+  ]);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -1035,231 +1077,228 @@ export default function DashboardPage() {
     }
   }, [songs, addLogMessage]); // Dependencies: songs for duplicate check, addLogMessage
 
-  // Function to trigger feature extraction for *active* songs
+  // --- MODIFIED: Function to trigger feature extraction for *active* songs ---
   const handleExtractFeatures = useCallback(async (selectedFeatures: Set<string>) => {
-    // --- NEW: Reset available keys at the start --- 
-    setAvailableFeatureKeys(null);
-    // ----------------------------------------------
-    
-    // --- START: Cache Check Logic ---
-    const onlyDefaultSongs = songs.every(s => s.source === 'default');
-    const allSongsActive = activeSongIds.size === songs.length;
-    const isDefaultScenario = songs.length === defaultSongs.length && onlyDefaultSongs && allSongsActive;
+    addLogMessage(`[Extract Start] Requesting features [${[...selectedFeatures].join(', ')}] for ${activeSongIds.size} active songs...`, 'info');
+    // Store the target IDs for completion check
+    // Clone the set to avoid issues if activeSongIds changes during async operations
+    const currentActiveIds = new Set(activeSongIds); 
+    initialTargetSongIdsRef.current = currentActiveIds; 
 
-    if (isDefaultScenario) {
-      addLogMessage('Checking for cached features (default song scenario)...', 'info');
-      try {
-        const response = await fetch('/default_features.json');
-        if (!response.ok) {
-          throw new Error(`Failed to fetch cache file: ${response.statusText}`);
-        }
-        const cacheData = await response.json();
-
-        if (!cacheData || !cacheData.cachedFeatureKeys || !cacheData.songData) {
-           addLogMessage('Cache file format invalid. Proceeding with worker.', 'warn');
-        } else {
-          const cachedKeysSet = new Set(cacheData.cachedFeatureKeys);
-          // NOTE: Here we need to map the selected feature IDs (like 'mfcc')
-          //       to the actual keys used in the Features interface and cache (like 'mfccMeans', 'mfccStdDevs').
-          //       This mapping logic depends on how features are selected and stored.
-          //       FOR NOW: Assume a direct mapping or that selectedFeatures uses the final keys.
-          //       *** This comparison might need refinement based on actual feature selection IDs ***
-          const selectedKeysSet = selectedFeatures; // Assuming selectedFeatures contains the final keys for now
-
-          if (setsAreEqual(selectedKeysSet, cachedKeysSet)) {
-            addLogMessage('Selected features match cache. Loading pre-computed features...', 'complete');
-
-            // Validate that all required song IDs are in the cache
-            let allDefaultSongsInCache = true;
-            for (const song of defaultSongs) {
-              if (!(song.id in cacheData.songData)) {
-                allDefaultSongsInCache = false;
-                addLogMessage(`Cache missing data for default song: ${song.name}. Proceeding with worker.`, 'warn');
-                break;
-              }
-            }
-
-            if (allDefaultSongsInCache) {
-              // Apply cached data
-              setSongFeatures(cacheData.songData);
-              const completeStatus = defaultSongs.reduce((acc, song) => {
-                  acc[song.id] = 'complete';
-                  return acc;
-              }, {} as Record<string, FeatureStatus>);
-              setFeatureStatus(completeStatus);
-
-               // Clear any previous reduction/clustering results if reloading features
-              setReducedDataPoints({});
-              setKmeansAssignments({});
-              setKmeansCentroids([]);
-              setKmeansIteration(0);
-              setReductionDimensions(0); // Reset dimensions indicator
-
-              addLogMessage('Successfully loaded features from cache.', 'complete');
-              setIsProcessing(false); // Ensure processing flag is off
-              setUnprocessedData(null); // Clear new state
-              setProcessedData(null);   // Clear new state
-
-              // --- MODIFIED: Set available keys from cache data --- 
-              const firstSongId = defaultSongs[0]?.id;
-              const firstSongFeaturesFromCache = firstSongId ? cacheData.songData[firstSongId] : null;
-              if (firstSongFeaturesFromCache) {
-                  const cachedKeys = Object.keys(firstSongFeaturesFromCache);
-                  setAvailableFeatureKeys(cachedKeys);
-                  addLogMessage(`Available feature keys from cache: [${cachedKeys.join(', ')}]`, 'info');
-              } else {
-                  setAvailableFeatureKeys(null); // Reset if cache is invalid
-                  addLogMessage('Could not determine feature keys from cache data.', 'warn');
-              }
-              // ------------------------------------------------------
-
-              // Set stages after loading from cache
-              setLatestSuccessfulStage('features');
-              setVisualizationDisplayStage('features');
-              addLogMessage('Successfully loaded features from cache. Setting latest and display stage to: features', 'info');
-              setIsProcessing(false);
-              return; // Exit early
-            }
-          } else {
-            addLogMessage('Cache skipped: Selected features do not match cached features.', 'info');
-            // Log differences for debugging
-            console.log('Selected Features:', selectedKeysSet);
-            console.log('Cached Features:', cachedKeysSet);
-          }
-        }
-      } catch (error: unknown) { // <-- Explicitly type error as unknown
-        // Type check before accessing message
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        addLogMessage(`Failed to load or process feature cache: ${errorMessage}. Proceeding with worker.`, 'warn');
-      }
-    }
-    // --- END: Cache Check Logic ---
-
-    // If using cache, clear downstream state
-    if (/* cache was successfully loaded */ false) { // Replace false with actual cache success condition
-        // ... existing cache loading logic ...
-        setUnprocessedData(null); // Clear new state
-        setProcessedData(null);   // Clear new state
-        setReducedDataPoints({});
-        setKmeansAssignments({});
-        setKmeansCentroids([]);
-        setKmeansIteration(0);
-        setReductionDimensions(0);
-        addLogMessage('Downstream results cleared after loading features from cache.', 'info');
+    // --- Preliminary Checks ---
+    if (!essentiaWorkerReady || !workerRef.current) {
+        addLogMessage('Worker not ready. Extraction aborted.', 'warn');
+        initialTargetSongIdsRef.current = new Set(); // Clear targets if aborted early
         return;
     }
-
-    // --- Original Worker Logic (Fallback) ---
-    if (!essentiaWorkerReady || isProcessing || !workerRef.current) {
-        addLogMessage('Worker not ready or already processing. Extraction aborted.', 'warn');
-        // REMOVED: setCurrentSelectedMIRFeatures(selectedFeatures);
-
-        // Clear downstream state if extraction is aborted early
-        setUnprocessedData(null);
-        setProcessedData(null);
-        setReducedDataPoints({});
-        setKmeansAssignments({});
-        setKmeansCentroids([]);
-        setKmeansIteration(0);
-        setReductionDimensions(0);
-        handleResetKmeans();
-        setAvailableFeatureKeys(null); // Also reset here
-        addLogMessage('Downstream processing results cleared before new feature extraction attempt (aborted). ', 'info');
-        return;
+    // Use a ref to check if processing is already active to prevent race conditions
+    // but don't rely on isProcessing state directly here due to potential staleness in callback
+    // For simplicity, let's assume the check at the beginning is sufficient for now, 
+    // but a ref-based check would be more robust: `if (isProcessingRef.current) { ... }`
+    if (isProcessing) { 
+        addLogMessage('Another feature acquisition process is already running.', 'warn');
+        // Don't clear targets here, let the current process finish
+        return; 
     }
     if (selectedFeatures.size === 0) {
-        addLogMessage('No features selected for extraction.', 'warn');
+        addLogMessage('[Extract Abort] No features selected.', 'warn');
+        initialTargetSongIdsRef.current = new Set(); // Clear targets if aborted early
+        return;
+    }
+    if (currentActiveIds.size === 0) { // Use the cloned set
+        addLogMessage('[Extract Abort] No active songs selected.', 'warn');
+        initialTargetSongIdsRef.current = new Set(); // Clear targets if aborted early
         return;
     }
 
-    addLogMessage(`Starting worker extraction for features [${[...selectedFeatures].join(', ')}] on ${activeSongIds.size} active songs...`, 'info');
-    extractionStartTimeRef.current = performance.now(); // Record start time
-    setIsProcessing(true);
-
-    const songsToProcess = songs.filter(song => activeSongIds.has(song.id));
-    
-    // --- Store the IDs of the songs being processed in this batch ---
-    setProcessingSongIds(new Set(songsToProcess.map(s => s.id))); 
-    // ---
-
-    if (songsToProcess.length === 0) {
-        addLogMessage('No active songs selected to process.', 'info');
-        setIsProcessing(false);
-        return;
-    }
-
-    const statusUpdates = songsToProcess.reduce((acc, song) => {
-        acc[song.id] = 'processing';
-        return acc;
-    }, {} as Record<string, FeatureStatus>);
-    setFeatureStatus(prev => ({ ...prev, ...statusUpdates }));
-
-    const featureUpdates = songsToProcess.reduce((acc, song) => {
-        acc[song.id] = null;
-        return acc;
-    }, {} as Record<string, Features | null>);
-     setSongFeatures(prev => ({ ...prev, ...featureUpdates }));
-     setReducedDataPoints(prev => {
-         const clearedState = { ...prev };
-         songsToProcess.forEach(song => delete clearedState[song.id]);
-         return clearedState;
-     });
-     setKmeansAssignments(prev => {
-        const clearedState = { ...prev };
-        songsToProcess.forEach(song => delete clearedState[song.id]);
-        return clearedState;
-     });
-     setKmeansCentroids([]);
-     setKmeansIteration(0);
-     setReductionDimensions(0);
-
-    // --- Clear downstream state when starting NEW feature extraction ---
+    // --- Clear Downstream State BEFORE Cache/Extraction ---
+    addLogMessage('[Extract Prep] Clearing previous processed data and downstream results...', 'info'); // Fixed backtick
+    setAvailableFeatureKeys(null); // Reset keys before determining new set
     setUnprocessedData(null);
     setProcessedData(null);
-    setReducedDataPoints(prev => {
-         const clearedState = { ...prev };
-         songsToProcess.forEach(song => delete clearedState[song.id]);
-         return clearedState;
-     });
-     setKmeansAssignments(prev => {
-        const clearedState = { ...prev };
-        songsToProcess.forEach(song => delete clearedState[song.id]);
-        return clearedState;
-     });
-     setKmeansCentroids([]);
-     setKmeansIteration(0);
-     setReductionDimensions(0);
-    addLogMessage('Downstream processing results cleared before new feature extraction.', 'info');
-    // ------------------------------------------------------------------
+    setReducedDataPoints({});
+    handleResetKmeans(); // Reset K-Means state and worker
+    setReductionDimensions(0);
+    // Clear status and features only for the songs we are about to process
+    const initialStatusUpdates = Array.from(currentActiveIds).reduce((acc, songId) => {
+        acc[songId] = 'idle'; // Reset status to idle initially
+        return acc;
+    }, {} as Record<string, FeatureStatus>);
+     const initialFeatureUpdates = Array.from(currentActiveIds).reduce((acc, songId) => {
+        acc[songId] = null; // Clear features
+        return acc;
+    }, {} as Record<string, Features | null>);
+    setFeatureStatus(prev => ({ ...prev, ...initialStatusUpdates }));
+    setSongFeatures(prev => ({ ...prev, ...initialFeatureUpdates }));
+    // -------------------------------------------------------
 
-    for (const song of songsToProcess) {
-        addLogMessage(`Requesting features for ${song.name}...`, 'info');
-        const audioBuffer = await getDecodedAudio(song);
+    // --- Step 1 & 2: Attempt to Load and Validate Cache ---
+    let loadedCacheData: any = null; // Use 'any' for now, refine later if needed
+    let isCacheValidAndApplicable = false;
+    let cachedKeysSet: Set<string> | null = null;
 
-        if (audioBuffer && workerRef.current) {
-            const audioData = audioBuffer.getChannelData(0);
-            const audioVector = Array.from(audioData);
-
-             workerRef.current.postMessage({
-                type: 'extractFeatures',
-                payload: {
-                    songId: song.id,
-                    audioVector: audioVector,
-                    sampleRate: audioBuffer.sampleRate,
-                    featuresToExtract: [...selectedFeatures]
-                }
-            });
+    addLogMessage('[Cache Check] Attempting to load feature cache /default_features.json...', 'info'); // Fixed backtick
+    try {
+      const response = await fetch('/default_features.json');
+      addLogMessage(`[Cache Check] Fetch response status: ${response.status}`, 'info');
+      if (!response.ok) {
+        // Gracefully handle not found - it's not an error, just cache miss
+        if (response.status === 404) { 
+          addLogMessage('[Cache Check] Cache file not found (404).', 'info'); // Fixed backtick
         } else {
-             addLogMessage(`Skipping ${song.name} due to decoding error or missing worker.`, 'warn');
-             if (!audioBuffer && featureStatus[song.id] !== 'error') {
-                setFeatureStatus(prev => ({ ...prev, [song.id]: 'error' }));
-             }
+          throw new Error(`Cache fetch failed: ${response.statusText}`);
+        }
+      } else {
+        loadedCacheData = await response.json();
+        // Basic format validation
+        if (!loadedCacheData || !loadedCacheData.cachedFeatureKeys || !loadedCacheData.songData) {
+          addLogMessage('[Cache Check] Cache file format invalid.', 'warn'); // Fixed backtick
+          loadedCacheData = null; // Treat invalid format as cache miss
+        } else {
+          cachedKeysSet = new Set(loadedCacheData.cachedFeatureKeys);
+          // Compare selected features with cached features
+          const selectedKeysSet = selectedFeatures; 
+          if (setsAreEqual(selectedKeysSet, cachedKeysSet)) {
+            isCacheValidAndApplicable = true;
+            addLogMessage('[Cache Check] Cache loaded, format valid, and features match.', 'complete'); // Fixed backtick
+          } else {
+            addLogMessage('[Cache Check] Cache skipped: Selected features do not match cached features.', 'info'); // Fixed backtick
+            console.log('Selected Features:', selectedKeysSet);
+            console.log('Cached Features:', cachedKeysSet);
+            loadedCacheData = null; // Treat feature mismatch as cache miss
+          }
+        }
+      }
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      addLogMessage(`[Cache Check] Failed to load or parse cache: ${errorMessage}.`, 'warn');
+      loadedCacheData = null; // Ensure cache data is null on error
+    }
+    // ----------------------------------------------------
+
+    // --- Step 3 & 4: Categorize Songs and Apply Cache ---
+    addLogMessage('[Cache Apply] Categorizing active songs for cache usage...', 'info'); // Fixed backtick
+    const songIdsToExtract = new Set<string>();
+    const cachedFeaturesToAdd: Record<string, Features> = {};
+    const statusUpdatesFromCache: Record<string, FeatureStatus> = {};
+    let cacheAppliedCount = 0;
+
+    // Get the full map of song ID -> song object for efficiency
+    const songMap = new Map(songs.map(s => [s.id, s])); 
+
+    for (const songId of currentActiveIds) { // Use the cloned set
+        const song = songMap.get(songId);
+        if (!song) continue; // Should not happen if activeSongIds is derived from songs
+
+        let useCache = false;
+        if ( isCacheValidAndApplicable && // Cache was loaded, valid, and features match
+             song.source === 'default' &&
+             loadedCacheData.songData[songId] ) // This specific default song exists in cache
+        {
+             useCache = true;
+        }
+
+        if (useCache) {
+            cachedFeaturesToAdd[songId] = loadedCacheData.songData[songId];
+            statusUpdatesFromCache[songId] = 'complete';
+            cacheAppliedCount++;
+        } else {
+            songIdsToExtract.add(songId);
         }
     }
-  }, [songs, getDecodedAudio, essentiaWorkerReady, isProcessing, activeSongIds, 
-      addLogMessage, featureStatus, setSongFeatures, setFeatureStatus, 
-      setReducedDataPoints, setKmeansAssignments, setKmeansCentroids, 
-      setKmeansIteration, setReductionDimensions, handleResetKmeans, setAvailableFeatureKeys]); 
+
+    // Apply cached data immediately if any found
+    if (cacheAppliedCount > 0) {
+        addLogMessage(`[Cache Apply] Applying cached features for ${cacheAppliedCount} song(s)...`, 'complete');
+        setSongFeatures(prev => ({ ...prev, ...cachedFeaturesToAdd }));
+        setFeatureStatus(prev => ({ ...prev, ...statusUpdatesFromCache }));
+    }
+    if (songIdsToExtract.size > 0) {
+      addLogMessage(`[Cache Apply] ${songIdsToExtract.size} active song(s) identified for worker extraction.`, 'info');
+    } else {
+      addLogMessage('[Cache Apply] No songs require worker extraction (all cached or inactive).', 'info'); // Fixed backtick
+    }
+    // ----------------------------------------------------
+
+    // --- Step 5, 7, 8: Conditional Worker Trigger ---
+    if (songIdsToExtract.size > 0) {
+        addLogMessage(`[Worker Start] Initializing worker process for ${songIdsToExtract.size} songs...`, 'info');
+        extractionStartTimeRef.current = performance.now(); // Record start time FOR WORKER BATCH
+        setIsProcessing(true); // Set processing flag only if worker is needed
+
+        const songsToProcess = songs.filter(song => songIdsToExtract.has(song.id));
+        setProcessingSongIds(new Set(songsToProcess.map(s => s.id))); // Track only those sent to worker
+
+        // Update status to 'processing' only for songs being sent to the worker
+        const workerStatusUpdates = songsToProcess.reduce((acc, song) => {
+            acc[song.id] = 'processing';
+            return acc;
+        }, {} as Record<string, FeatureStatus>);
+        // Update state using a callback to ensure we don't overwrite cache statuses set earlier
+        setFeatureStatus(prev => ({ ...prev, ...workerStatusUpdates }));
+
+        // --- Loop and send to worker ---
+        for (const song of songsToProcess) {
+            addLogMessage(`[Worker Send] Requesting features for ${song.name}...`, 'info');
+            // Use getDecodedAudio which handles its own errors and sets status to 'error' on failure
+            const audioBuffer = await getDecodedAudio(song); 
+
+            if (audioBuffer && workerRef.current) {
+                try { // Add try/catch around potentially large data prep or postMessage
+                   const audioData = audioBuffer.getChannelData(0);
+                   // Optimization: Consider transferring ArrayBuffer if possible, depends on worker setup
+                   // For now, create a copy using Array.from
+                   const audioVector = Array.from(audioData); 
+
+                   workerRef.current.postMessage({
+                      type: 'extractFeatures',
+                      payload: {
+                          songId: song.id,
+                          audioVector: audioVector, // Send the copy
+                          sampleRate: audioBuffer.sampleRate,
+                          featuresToExtract: [...selectedFeatures] // Send selected features
+                      }
+                  });
+                } catch (postMessageError: unknown) { // Catch potential errors during data prep or sending
+                   const errorMsg = postMessageError instanceof Error ? postMessageError.message : String(postMessageError);
+                   addLogMessage(`Error preparing or sending data to worker for ${song.name}: ${errorMsg}`, 'error');
+                   // Ensure status is error if postMessage fails
+                   setFeatureStatus(prev => ({ ...prev, [song.id]: 'error' })); 
+                }
+            } else if (workerRef.current) { // Only log skip message if worker exists but buffer failed
+                addLogMessage(`Skipping worker request for ${song.name} (decode error). Status set to 'error' by getDecodedAudio.`, 'warn');
+            }
+             // If worker doesn't exist, the initial check should have caught it.
+        }
+        // --- End Worker Loop ---
+
+    } else {
+        // --- Handle Case: All features loaded from cache, no worker needed ---
+        addLogMessage('[Worker Skip] All required features loaded from cache. No worker extraction needed.', 'complete'); // Fixed backtick
+        setIsProcessing(false); // Ensure processing is false
+        setProcessingSongIds(new Set()); // Ensure this is empty
+        extractionStartTimeRef.current = null; // Ensure timer is null
+
+        // The useEffect hook will now detect that all songs in initialTargetSongIdsRef.current
+        // have status 'complete' and will trigger the finalization steps.
+        addLogMessage('[Worker Skip] Relying on useEffect to finalize processing steps.', 'info');
+    }
+    // --- End Conditional Worker Trigger ---
+
+  }, [
+      // Dependencies: States read
+      songs, activeSongIds, essentiaWorkerReady, isProcessing, featureStatus, songFeatures,
+      // Dependencies: Callbacks/Setters used
+      addLogMessage, setAvailableFeatureKeys, setUnprocessedData, setProcessedData, 
+      setReducedDataPoints, handleResetKmeans, setReductionDimensions, 
+      setFeatureStatus, setSongFeatures, setIsProcessing, setProcessingSongIds,
+      // Dependencies: Refs used
+      workerRef, 
+      // Dependencies: Helper functions
+      getDecodedAudio 
+      // Note: initialTargetSongIdsRef, extractionStartTimeRef are refs, changing them doesn't trigger re-callback
+  ]);
+  // --- End MODIFIED handleExtractFeatures ---
 
   // --- NEW Handler to Trigger Data Processing ---
   const handleStartDataProcessing = useCallback((method: ProcessingMethod, range?: [number, number]) => {
@@ -1598,6 +1637,23 @@ export default function DashboardPage() {
     setExplainedFeatureId(null); // Clear the ID when closing
   }, []);
 
+  // --- NEW: Algorithm Explanation Dialog Handlers ---
+  const handleShowAlgoExplanation = useCallback((algorithmId: string) => {
+    if (algorithmExplanations && algorithmExplanations[algorithmId]) {
+      addLogMessage(`Showing explanation for algorithm: ${algorithmId}`, 'info');
+      setExplainedAlgorithmId(algorithmId);
+      setIsAlgoExplanationOpen(true);
+    } else {
+      addLogMessage(`Explanation not available for algorithm: ${algorithmId}`, 'warn');
+    }
+  }, [algorithmExplanations, addLogMessage]); // Dependencies
+
+  const handleCloseAlgoExplanation = useCallback(() => {
+    setIsAlgoExplanationOpen(false);
+    setExplainedAlgorithmId(null);
+  }, []);
+  // ------------------------------------------------
+
   // --- Handler for Toggling the About Dialog ---
   const handleToggleAboutDialog = () => {
     setIsAboutDialogOpen(prev => !prev);
@@ -1736,6 +1792,9 @@ export default function DashboardPage() {
             onNextStep={handleNextKmeansStep}
             // Pass isClustering to potentially disable init button while clustering is active
             isClusteringActive={isClustering}
+            // --- NEW: Pass algo explanation handler ---
+            onShowAlgoExplanation={handleShowAlgoExplanation} 
+            // -----------------------------------------
           />
 
           {/* Log Panel (Middle Column, Bottom Row) */}
@@ -1780,6 +1839,16 @@ export default function DashboardPage() {
           featureName={explainedFeatureId ? explanations[explainedFeatureId]?.name : ''}
           explanation={explainedFeatureId ? explanations[explainedFeatureId]?.explanation : ''}
           onClose={handleCloseExplanation}
+        />
+      )}
+
+      {/* NEW: Algorithm Explanation Dialog (Conditionally Rendered) */}
+      {algorithmExplanations && (
+        <ExplanationDialog
+          isOpen={isAlgoExplanationOpen}
+          title={explainedAlgorithmId ? algorithmExplanations[explainedAlgorithmId]?.name : ''}
+          explanation={explainedAlgorithmId ? algorithmExplanations[explainedAlgorithmId]?.explanation : ''}
+          onClose={handleCloseAlgoExplanation}
         />
       )}
 

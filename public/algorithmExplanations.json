@@ -1,0 +1,26 @@
+{
+  "standardize": {
+    "name": "Standardization (Z-score)",
+    "explanation": "Scales each feature so that it has a mean of 0 and a standard deviation of 1. It centers the data around zero and accounts for the spread (variance). Formula: (value - mean) / stddev. This is useful when features have vastly different units or ranges, preventing features with larger values from dominating distance-based algorithms (like K-Means or PCA)."
+  },
+  "normalize": {
+    "name": "Normalization (Min-Max Scaling)",
+    "explanation": "Scales each feature to a specific range, typically [0, 1] or [-1, 1]. Formula: (value - min) / (max - min) for [0, 1] range. This ensures all features have the same scale without distorting differences in the ranges of values. It's sensitive to outliers. One-hot encoded columns are skipped during this process."
+  },
+  "pca": {
+    "name": "Principal Component Analysis (PCA)",
+    "explanation": "A linear dimensionality reduction technique that transforms the data into a new coordinate system such that the greatest variance by some scalar projection of the data lies on the first coordinate (called the first principal component), the second greatest variance on the second coordinate, and so on. It identifies orthogonal axes of maximum variance in the data. Useful for noise reduction and finding linear patterns."
+  },
+  "tsne": {
+    "name": "t-Distributed Stochastic Neighbor Embedding (t-SNE)",
+    "explanation": "A non-linear dimensionality reduction technique primarily used for visualizing high-dimensional data in low-dimensional space (typically 2D or 3D). It models similarities between high-dimensional points as conditional probabilities and minimizes the divergence between these probabilities and the probabilities of low-dimensional counterparts. Excellent for revealing local structure and clusters, but computationally intensive and results can vary between runs."
+  },
+  "umap": {
+    "name": "Uniform Manifold Approximation and Projection (UMAP)",
+    "explanation": "A non-linear dimensionality reduction technique similar to t-SNE but often faster and potentially better at preserving the global structure of the data. It's based on manifold learning techniques and topological data analysis. It seeks to model the manifold on which the data is assumed to lie and builds a low-dimensional representation that preserves the essential topological structure. Good balance between local and global structure preservation."
+  },
+  "kmeans": {
+    "name": "K-Means Clustering",
+    "explanation": "An iterative algorithm that partitions a dataset into 'k' distinct, non-overlapping clusters. It aims to minimize the within-cluster variance (sum of squared distances between points and their assigned cluster centroid). Steps: 1. Initialize 'k' centroids randomly. 2. Assign each data point to the nearest centroid. 3. Recalculate the centroid position as the mean of all points assigned to it. 4. Repeat steps 2-3 until centroids no longer move significantly or a maximum number of iterations is reached. Sensitive to initial centroid placement and assumes spherical clusters."
+  }
+} 
