@@ -28,7 +28,7 @@ const FeatureExplanationDialog: React.FC<FeatureExplanationDialogProps> = ({
     >
       {/* Dialog Box */}
       <div
-        className="bg-gray-800 p-6 rounded-lg shadow-xl max-w-md w-full border border-indigo-500 relative"
+        className="bg-gray-800 p-6 shadow-xl max-w-md w-full border border-indigo-500 relative"
         data-augmented-ui="tl-clip tr-clip br-clip bl-clip border"
         style={{ '--aug-border-color': 'indigo' } as React.CSSProperties}
         onClick={handleDialogClick} // Prevent close on dialog click
@@ -57,7 +57,7 @@ const FeatureExplanationDialog: React.FC<FeatureExplanationDialogProps> = ({
         {/* Optional Close Button at Bottom */}
         <button
           onClick={onClose}
-          className="mt-6 w-full p-2 text-center rounded font-semibold text-sm bg-indigo-700 hover:bg-indigo-600 text-indigo-100"
+          className="mt-6 w-full p-2 text-center font-semibold text-sm bg-indigo-700 hover:bg-indigo-600 text-indigo-100"
           data-augmented-ui="tl-clip br-clip border"
           style={{ '--aug-border-color': 'indigo' } as React.CSSProperties}
         >

@@ -241,7 +241,7 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
                                 {featureStatus[song.id] === 'complete' && (
                                     <button
                                         onClick={() => onShowDetails(song.id)}
-                                        className="text-blue-400 hover:text-blue-300 text-xs px-1 py-0 rounded bg-gray-700 hover:bg-gray-600 border border-blue-900/50"
+                                        className="text-blue-400 hover:text-blue-300 text-xs px-1 py-0 bg-gray-700 hover:bg-gray-600 border border-blue-900/50"
                                         title="Show Details"
                                         // disabled={isProcessing} // Decide if viewing details should be blocked by global processing
                                     >
@@ -261,7 +261,7 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
                         {/* Add group-hover visibility and adjust positioning/styling */}
                         <button
                             onClick={() => onRemoveSong(song.id)}
-                            className="absolute right-1 top-1/2 -translate-y-1/2 invisible group-hover:visible text-red-600 hover:text-red-400 text-xs px-1 py-0.5 rounded bg-gray-700 hover:bg-gray-600 flex-shrink-0 border border-red-900/50 z-10" // Added positioning, visibility, z-index
+                            className="absolute right-1 top-1/2 -translate-y-1/2 invisible group-hover:visible text-red-600 hover:text-red-400 text-xs px-1 py-0.5 bg-gray-700 hover:bg-gray-600 flex-shrink-0 border border-red-900/50 z-10" // Added positioning, visibility, z-index
                             disabled={isProcessing} // Disable remove while processing
                             title="Remove Song" // Generic title
                         >
@@ -280,7 +280,7 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
             <button
                 onClick={onSelectAll}
                 disabled={isProcessing}
-                className="px-4 py-1 text-xs bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded"
+                className="px-4 py-1 text-xs bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Select all songs"
                 data-augmented-ui="tl-clip br-clip"
             >
@@ -289,7 +289,7 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
             <button
                 onClick={onClearAll}
                 disabled={isProcessing || activeSongIds.size === 0}
-                className="px-4 py-1 text-xs bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded"
+                className="px-4 py-1 text-xs bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Deselect all songs"
                 data-augmented-ui="tl-clip br-clip"
             >
@@ -306,7 +306,7 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
       {/* Upload Button */}
       <button
         onClick={onUploadClick}
-        className="w-full p-2 mt-auto text-center rounded font-semibold text-sm bg-cyan-700 hover:bg-cyan-600 text-cyan-100 flex-shrink-0"
+        className="w-full p-2 mt-auto text-center font-semibold text-sm bg-cyan-700 hover:bg-cyan-600 text-cyan-100 flex-shrink-0"
         data-augmented-ui="tl-clip br-clip border"
         style={{ '--aug-border-color': 'cyan' } as React.CSSProperties}
         disabled={isProcessing} // Disable upload during processing?

@@ -49,7 +49,7 @@ const AboutDialog: React.FC<AboutDialogProps> = ({ isOpen, onClose }) => {
     >
       {/* Outer container for border and background */}
       <div
-        className="bg-gray-900 text-gray-100 p-6 rounded-lg shadow-xl max-w-3xl w-full relative border border-pink-500"
+        className="bg-gray-900 text-gray-100 p-6 shadow-xl max-w-3xl w-full relative border border-pink-500"
         data-augmented-ui="tl-clip-x tr-round br-clip bl-round border"
         style={{ '--aug-border-color': 'hotpink' } as React.CSSProperties}
         onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside the dialog

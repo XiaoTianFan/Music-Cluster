@@ -41,7 +41,7 @@ const availableMirFeatures = [
   { id: 'dynamicComplexity', name: 'Dynamic Complexity' },
   // { id: 'onsetRate', name: 'Onset Rate' }, // Removed Onset Rate
   { id: 'rms', name: 'RMS' },
-  { id: 'tuningFrequency', name: 'Tuning Frequency (Slow)' },
+  { id: 'tuningFrequency', name: 'Tuning Frequency' },
   // { id: 'spectral_centroid', name: 'Spectral Centroid' },
   // { id: 'spectral_flux', name: 'Spectral Flux' },
 ];
@@ -152,7 +152,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
             data-augmented-ui="tl-clip br-clip border"
             style={{ '--aug-border-color': '#555' } as React.CSSProperties} >
           <h3 className="text-md font-semibold mb-2 text-green-300">MIR Features</h3>
-          <div className="space-y-1 flex-grow">
+          <div className="flex flex-wrap gap-x-4 gap-y-1 flex-grow">
             {availableMirFeatures.map(feature => (
               <div key={feature.id} className="flex items-center justify-between group text-xs">
                 <label htmlFor={`feature-${feature.id}`} className="flex items-center cursor-pointer">
@@ -168,7 +168,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
                 </label>
                 <button 
                   onClick={() => onShowExplanation(feature.id)}
-                  className="ml-2 px-1 py-0.5 text-xs rounded bg-gray-700 hover:bg-gray-600 text-blue-300 hover:text-blue-200 border border-blue-900/50 invisible group-hover:visible disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="ml-2 px-1 py-0.5 text-xs bg-gray-700 hover:bg-gray-600 text-blue-300 hover:text-blue-200 border border-blue-900/50 invisible group-hover:visible disabled:opacity-50 disabled:cursor-not-allowed"
                   title={`Explain ${feature.name}`}
                   disabled={isProcessing}
                 >
@@ -182,7 +182,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
              <button
                 onClick={() => onExtractFeatures(selectedMirFeatures)}
                 disabled={!essentiaWorkerReady || isProcessing || activeSongCount === 0 || selectedMirFeatures.size === 0}
-                className={`w-full p-1 text-center rounded font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed ${(essentiaWorkerReady && !isProcessing && activeSongCount > 0 && selectedMirFeatures.size > 0) ? 'bg-green-600 hover:bg-green-500 text-white' : 'bg-gray-600 text-gray-400'}`}
+                className={`w-full p-1 text-center font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed ${(essentiaWorkerReady && !isProcessing && activeSongCount > 0 && selectedMirFeatures.size > 0) ? 'bg-green-600 hover:bg-green-500 text-white' : 'bg-gray-600 text-gray-400'}`}
                 data-augmented-ui="tl-clip br-clip border"
                 style={{ '--aug-border-color': (essentiaWorkerReady && !isProcessing && activeSongCount > 0 && selectedMirFeatures.size > 0) ? 'lime' : '#555' } as React.CSSProperties}
                 title={
@@ -208,7 +208,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
                 <span className="text-xs block mb-1 text-gray-400">Method:</span>
                 <div className="flex gap-2 flex-wrap">
                     {['standardize', 'normalize'].map(method => (
-                        <label key={method} className="text-xs px-1 py-1 rounded cursor-pointer border border-transparent hover:border-green-500/50 data-[checked=true]:bg-green-800/50 data-[checked=true]:border-green-600" data-checked={selectedProcessingMethod === method}>
+                        <label key={method} className="text-xs px-1 py-1 cursor-pointer border border-transparent hover:border-green-500/50 data-[checked=true]:bg-green-800/50 data-[checked=true]:border-green-600" data-checked={selectedProcessingMethod === method}>
                             <input 
                                 type="radio" 
                                 name="processingMethod" 
@@ -230,7 +230,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
                    <span className="text-xs block mb-1 text-gray-400">Normalization Range:</span>
                     <div className="flex gap-3 flex-wrap">
                         {['[0,1]', '[-1,1]'].map(range => (
-                            <label key={range} className="text-xs px-2 py-1 rounded cursor-pointer border border-transparent hover:border-green-500/50 data-[checked=true]:bg-green-800/50 data-[checked=true]:border-green-600" data-checked={selectedNormalizationRange === range}>
+                            <label key={range} className="text-xs px-2 py-1 cursor-pointer border border-transparent hover:border-green-500/50 data-[checked=true]:bg-green-800/50 data-[checked=true]:border-green-600" data-checked={selectedNormalizationRange === range}>
                                 <input 
                                     type="radio" 
                                     name="normalizationRange" 
@@ -251,7 +251,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
              <button 
                  onClick={handleStartProcessing} // Wire up the new handler
                  disabled={!canProcessData} 
-                 className={`w-full p-1 mt-1 text-center rounded font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed ${canProcessData ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-600 text-gray-400'}`}
+                 className={`w-full p-1 mt-1 text-center font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed ${canProcessData ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-600 text-gray-400'}`}
                  data-augmented-ui="tl-clip br-clip border"
                  style={{ '--aug-border-color': canProcessData ? 'deepskyblue' : '#555' } as React.CSSProperties}
                  title={
@@ -279,7 +279,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
                <span className="text-xs block mb-1 text-gray-400">Algorithm:</span>
                <div className="flex gap-2 flex-wrap">
                   {availableDimReducers.map(reducer => (
-                      <label key={reducer.id} className="text-xs px-2 py-1 rounded cursor-pointer border border-transparent hover:border-green-500/50 data-[checked=true]:bg-green-800/50 data-[checked=true]:border-green-600" data-checked={selectedDimReducer === reducer.id}>
+                      <label key={reducer.id} className="text-xs px-2 py-1 cursor-pointer border border-transparent hover:border-green-500/50 data-[checked=true]:bg-green-800/50 data-[checked=true]:border-green-600" data-checked={selectedDimReducer === reducer.id}>
                           <input 
                               type="radio" 
                               name="dimReducer" 
@@ -298,7 +298,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
             <div>
                <span className="text-xs block mb-1 text-gray-400">Target Dimensions:</span>
                 <div className="flex gap-2">
-                   <label className="text-xs px-1 py-1 rounded cursor-pointer border border-transparent hover:border-green-500/50 data-[checked=true]:bg-green-800/50 data-[checked=true]:border-green-600" data-checked={targetDimensions === 2}>
+                   <label className="text-xs px-1 py-1 cursor-pointer border border-transparent hover:border-green-500/50 data-[checked=true]:bg-green-800/50 data-[checked=true]:border-green-600" data-checked={targetDimensions === 2}>
                       <input 
                           type="radio" 
                           name="targetDimensions" 
@@ -310,7 +310,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
                       />
                       2D
                   </label>
-                   <label className="text-xs px-1 py-1 rounded cursor-pointer border border-transparent hover:border-green-500/50 data-[checked=true]:bg-green-800/50 data-[checked=true]:border-green-600" data-checked={targetDimensions === 3}>
+                   <label className="text-xs px-1 py-1 cursor-pointer border border-transparent hover:border-green-500/50 data-[checked=true]:bg-green-800/50 data-[checked=true]:border-green-600" data-checked={targetDimensions === 3}>
                       <input 
                           type="radio" 
                           name="targetDimensions" 
@@ -329,7 +329,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
            <button 
                 onClick={handleProceedReduction} // Wire up the handler
                 disabled={!canReduceDimensions} // Use the calculated enabled state
-                className={`w-full p-1 text-center rounded font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed ${canReduceDimensions ? 'bg-cyan-600 hover:bg-cyan-500 text-white' : 'bg-gray-600 text-gray-400'}`}
+                className={`w-full p-1 text-center font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed ${canReduceDimensions ? 'bg-cyan-600 hover:bg-cyan-500 text-white' : 'bg-gray-600 text-gray-400'}`}
                 data-augmented-ui="tl-clip br-clip border"
                 style={{ '--aug-border-color': canReduceDimensions ? 'cyan' : '#555' } as React.CSSProperties}
                 title={
@@ -356,17 +356,16 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
              <input
                id="num-clusters"
                type="number"
-               min="1"
                value={numClusters}
                onChange={handleNumClustersChange}
-               className="p-1 bg-gray-800 border border-gray-600 rounded text-xs w-16 flex-grow"
+               className="p-1 bg-gray-800 border border-gray-600 text-xs w-16 flex-grow"
                disabled={!hasReducedDataForActiveSongs || isProcessing || isReducing || isProcessingData}
              />
            </div>
            <button 
                onClick={() => onRunClustering(numClusters)} 
                disabled={!canInitializeCluster}
-               className={`w-full p-1 text-center rounded font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed ${canInitializeCluster ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-gray-600 text-gray-400'}`}
+               className={`w-full p-1 text-center  font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed ${canInitializeCluster ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-gray-600 text-gray-400'}`}
                data-augmented-ui="tl-clip br-clip border"
                style={{ '--aug-border-color': canInitializeCluster ? 'yellow' : '#555' } as React.CSSProperties}
                title={
@@ -389,7 +388,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
             <button
                 onClick={onNextStep}
                 disabled={!canRunNextStep}
-                className={`w-full p-1 mt-2 text-center rounded font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed ${canRunNextStep ? 'bg-purple-600 hover:bg-purple-500 text-white' : 'bg-gray-600 text-gray-400'}`}
+                className={`w-full p-1 mt-2 text-center font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed ${canRunNextStep ? 'bg-purple-600 hover:bg-purple-500 text-white' : 'bg-gray-600 text-gray-400'}`}
                 data-augmented-ui="tl-clip br-clip border"
                 style={{ '--aug-border-color': canRunNextStep ? 'mediumorchid' : '#555' } as React.CSSProperties}
                 title={

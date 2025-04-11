@@ -25,7 +25,7 @@ const SongDetailsDialog: React.FC<SongDetailsDialogProps> = ({ song, features, o
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-50 p-4">
       <div 
-        className="bg-gray-800 p-6 rounded-lg shadow-xl max-w-lg w-full border border-teal-500 relative max-h-[80vh] flex flex-col"
+        className="bg-gray-800 p-6 shadow-xl max-w-lg w-full border border-teal-500 relative max-h-[80vh] flex flex-col"
         data-augmented-ui="tl-clip tr-clip br-clip bl-clip border"
         style={{ '--aug-border-color': 'teal' } as React.CSSProperties}
       >
@@ -66,7 +66,7 @@ const SongDetailsDialog: React.FC<SongDetailsDialogProps> = ({ song, features, o
          <div className="mt-4 pt-3 border-t border-gray-700 flex justify-end flex-shrink-0">
              <button 
                 onClick={onClose} 
-                className="px-4 py-2 bg-teal-700 hover:bg-teal-600 text-teal-100 rounded text-sm font-semibold"
+                className="px-4 py-2 bg-teal-700 hover:bg-teal-600 text-teal-100 text-sm font-semibold"
                 data-augmented-ui="tl-clip br-clip border"
                 style={{ '--aug-border-color': 'teal' } as React.CSSProperties}
              >

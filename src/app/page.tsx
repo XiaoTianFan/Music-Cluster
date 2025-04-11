@@ -1640,13 +1640,13 @@ export default function DashboardPage() {
             </span>
             {/* Overall Counts (remain useful) */}
             <span className="ml-2">
-              ({songs.filter(s => featureStatus[s.id] === 'complete').length} / {songs.length} songs processed)
+              ({songs.filter(s => featureStatus[s.id] === 'complete').length} / {activeSongIds.size} songs processed)
             </span>
             {!essentiaWorkerReady && <span className="text-red-500 ml-2">Worker Error!</span>}
 
             {/* Progress Bar - Conditionally rendered */}
             {isProcessing && processingSongIds.size > 0 && (
-               <div className="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden mt-1">
+               <div className="w-full h-1.5 bg-gray-700 -full overflow-hidden mt-1">
                 <div
                   className="h-full bg-cyan-500 transition-width duration-150 ease-linear"
                   style={{ width: `${progressPercent}%` }}

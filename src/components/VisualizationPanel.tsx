@@ -886,7 +886,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
                       id="data-stage-select"
                       value={selectedDataStage}
                       onChange={handleStageChange}
-                      className="bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500"
+                      className="bg-gray-800 border border-gray-600 px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500"
                   >
                       <option value="raw" disabled={!canSelectRaw}>Raw Features</option>
                       <option value="processed" disabled={!canSelectProcessed}>Processed Data</option>
@@ -901,12 +901,12 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
                   <button 
                     onClick={() => handleDimensionChange(2)}
                     disabled={selectedDimensions === 2}
-                    className={`px-2 py-0.5 rounded ${selectedDimensions === 2 ? 'bg-pink-700 text-white cursor-default' : 'bg-gray-600 hover:bg-gray-500 text-gray-300'} disabled:opacity-50 disabled:cursor-not-allowed`}
+                    className={`px-2 py-0.5 ${selectedDimensions === 2 ? 'bg-pink-700 text-white cursor-default' : 'bg-gray-600 hover:bg-gray-500 text-gray-300'} disabled:opacity-50 disabled:cursor-not-allowed`}
                     >2D</button>
                   <button 
                     onClick={() => handleDimensionChange(3)}
                     disabled={selectedDimensions === 3}
-                    className={`px-2 py-0.5 rounded ${selectedDimensions === 3 ? 'bg-pink-700 text-white cursor-default' : 'bg-gray-600 hover:bg-gray-500 text-gray-300'} disabled:opacity-50 disabled:cursor-not-allowed`}
+                    className={`px-2 py-0.5 ${selectedDimensions === 3 ? 'bg-pink-700 text-white cursor-default' : 'bg-gray-600 hover:bg-gray-500 text-gray-300'} disabled:opacity-50 disabled:cursor-not-allowed`}
                   >3D</button>
               </div>
 
@@ -917,7 +917,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
                       id="color-by-select"
                       value={selectedColorBy ?? ''}
                       onChange={handleColorByChange}
-                      className="bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500 min-w-[100px]"
+                      className="bg-gray-800 border border-gray-600 px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500 min-w-[100px]"
                       disabled={selectedDataStage === 'clustering' ? !canSelectClustering : (!canSelectRaw && !canSelectProcessed)}
                   >
                       <option value="" disabled>Select...</option>
@@ -940,7 +940,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
                       id="show-legend-toggle"
                       checked={showLegend}
                       onChange={handleToggleLegend}
-                      className="form-checkbox h-3 w-3 text-pink-500 bg-gray-800 border-gray-600 rounded focus:ring-pink-500/50"
+                      className="form-checkbox h-3 w-3 text-pink-500 bg-gray-800 border-gray-600 focus:ring-pink-500/50"
                   />
                   <label htmlFor="show-legend-toggle" className="text-gray-400 select-none">Legend</label>
               </div>
@@ -955,7 +955,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
                       id="axis-x-select"
                       value={selectedAxisX ?? ''}
                       onChange={(e) => handleAxisChange('X', e.target.value || null)}
-                      className="bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500 min-w-[100px]"
+                      className="bg-gray-800 border border-gray-600 px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500 min-w-[100px]"
                       disabled={(selectedDataStage === 'raw' && !canSelectRaw) || 
                                 (selectedDataStage === 'processed' && !canSelectProcessed) || 
                                 (selectedDataStage === 'clustering' && !canSelectClustering)}
@@ -974,7 +974,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
                       id="scale-x-select"
                       value={selectedScaleX}
                       onChange={(e) => handleScaleChange('X', e.target.value as AxisScale)}
-                      className="bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500"
+                      className="bg-gray-800 border border-gray-600 px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500"
                       disabled={!selectedAxisX}
                   >
                       <option value="linear">Linear</option>
@@ -989,7 +989,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
                       id="axis-y-select"
                       value={selectedAxisY ?? ''}
                       onChange={(e) => handleAxisChange('Y', e.target.value || null)}
-                      className="bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500 min-w-[100px]"
+                      className="bg-gray-800 border border-gray-600 px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500 min-w-[100px]"
                       disabled={(selectedDataStage === 'raw' && !canSelectRaw) || 
                                (selectedDataStage === 'processed' && !canSelectProcessed) || 
                                (selectedDataStage === 'clustering' && !canSelectClustering)}
@@ -1008,7 +1008,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
                       id="scale-y-select"
                       value={selectedScaleY}
                       onChange={(e) => handleScaleChange('Y', e.target.value as AxisScale)}
-                      className="bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500"
+                      className="bg-gray-800 border border-gray-600 px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500"
                       disabled={!selectedAxisY}
                   >
                       <option value="linear">Linear</option>
@@ -1024,7 +1024,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
                         id="axis-z-select"
                         value={selectedAxisZ ?? ''}
                         onChange={(e) => handleAxisChange('Z', e.target.value || null)}
-                        className="bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500 min-w-[100px]"
+                        className="bg-gray-800 border border-gray-600 px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500 min-w-[100px]"
                         disabled={(selectedDataStage === 'raw' && !canSelectRaw) || 
                                  (selectedDataStage === 'processed' && !canSelectProcessed) || 
                                  (selectedDataStage === 'clustering' && !canSelectClustering)}
@@ -1045,7 +1045,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
                         id="scale-z-select"
                         value={selectedScaleZ}
                         onChange={(e) => handleScaleChange('Z', e.target.value as AxisScale)}
-                        className="bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500"
+                        className="bg-gray-800 border border-gray-600 px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500"
                         disabled={!selectedAxisZ}
                     >
                         <option value="linear">Linear</option>
