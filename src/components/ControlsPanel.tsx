@@ -130,9 +130,6 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
   // Determine if the reduction button should be enabled
   const canReduceDimensions = hasProcessedData && !isProcessing && !isProcessingData;
 
-  // Determine if the clustering button should be enabled
-  const canCluster = !isProcessing && !isProcessingData && !isReducing && !isClustering && activeSongCount > 0 && hasReducedDataForActiveSongs && numClusters > 0;
-
   // --- NEW: Determine if K-Means can be *initialized* --- 
   const canInitializeCluster = !isProcessing && !isProcessingData && !isReducing && activeSongCount > 0 && hasReducedDataForActiveSongs && numClusters > 0;
 

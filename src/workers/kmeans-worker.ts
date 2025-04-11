@@ -1,4 +1,4 @@
-// songcluster/src/workers/kmeans-worker.ts
+// musiccluster/src/workers/kmeans-worker.ts
 // Remove tf-kmeans import, rely only on tfjs core
 // import * as KMeans from 'tf-kmeans'; 
 import * as tf from '@tensorflow/tfjs';
@@ -127,13 +127,6 @@ const updateCentroids = async (data: tf.Tensor2D, assignments: tf.Tensor1D, k: n
     tf.dispose(tensorsToDisposeLoop);
     // Also dispose the sliced views from oldCentroids if they were added to newCentroidsList
     // (stack should copy data, making this safe, but explicit disposal is cleaner)
-    newCentroidsList.forEach(t => {
-        // Check if it's a slice from oldCentroids (hard to tell definitively, 
-        // but disposing views doesn't harm the original if stack copies)
-        // Let's assume stack copies and dispose everything in newCentroidsList *except* the final stacked tensor
-        // This is complex, let's rely on tf.stack creating a new tensor and dispose the loop tensors.
-        // If memory issues arise, revisit disposal of sliced old centroids.
-    }); 
 
     // Return the final stacked tensor (caller will keep/dispose)
     return newCentroidsTensor as tf.Tensor2D;
@@ -218,8 +211,14 @@ self.onmessage = async (event: MessageEvent<WorkerRecvMessageData>) => {
                 }
                 try {
                     formattedReducedData = (reducedData as Array<{[key: string]: number}>).map(obj => Object.values(obj));
-                } catch (conversionError: any) {
-                    throw new Error(`Failed to convert received data format: ${conversionError.message}`);
+                } catch (conversionError: unknown) {
+                    let errorMessage = 'Unknown conversion error';
+                    if (conversionError instanceof Error) {
+                        errorMessage = conversionError.message;
+                    } else if (typeof conversionError === 'string') {
+                         errorMessage = conversionError;
+                    }
+                    throw new Error(`Failed to convert received data format: ${errorMessage}`);
                 }
                 console.log('[KMeans Worker] Conversion complete.');
             } else {
@@ -276,20 +275,26 @@ self.onmessage = async (event: MessageEvent<WorkerRecvMessageData>) => {
                 }
             });
 
-        } catch (error: any) {
-            console.error('[KMeans Worker] Error during initialization:', error);
-            // Dispose tensors individually after null checks (Corrected)
+        } catch (initError: unknown) {
+            console.error('[KMeans Worker] Error during initialization:', initError);
+            // Dispose any tensors created before the error
             if (localDatasetTensor && !localDatasetTensor.isDisposed) tf.dispose(localDatasetTensor);
             if (localInitialCentroidsTensor && !localInitialCentroidsTensor.isDisposed) tf.dispose(localInitialCentroidsTensor);
             if (localInitialAssignmentsTensor && !localInitialAssignmentsTensor.isDisposed) tf.dispose(localInitialAssignmentsTensor);
-            if (datasetTensor && !datasetTensor.isDisposed) tf.dispose(datasetTensor); // Dispose potentially kept tensor
-            if (currentCentroidsTensor && !currentCentroidsTensor.isDisposed) tf.dispose(currentCentroidsTensor); // Dispose potentially kept tensor
 
-            // Reset state variables
+            let errorMessage = 'Unknown initialization error';
+            if (initError instanceof Error) {
+                errorMessage = initError.message;
+            } else if (typeof initError === 'string') {
+                errorMessage = initError;
+            }
+
+            // Reset state variables just in case some were partially set
             datasetTensor = null;
             currentCentroidsTensor = null;
-            isTrainingInitialized = false; // Reset state
-            postMsg({ type: 'kmeansError', payload: { error: error.message || 'Unknown initialization error', whileDoing: 'init' } });
+            currentIteration = 0;
+            isTrainingInitialized = false;
+            postMsg({ type: 'kmeansError', payload: { error: errorMessage, whileDoing: 'init' } });
         } finally {
              // Dispose ONLY local tensors that weren't kept (if they exist and aren't disposed)
              if (localDatasetTensor && !localDatasetTensor.isDisposed && localDatasetTensor !== datasetTensor) tf.dispose(localDatasetTensor);
@@ -343,28 +348,21 @@ self.onmessage = async (event: MessageEvent<WorkerRecvMessageData>) => {
                 }
             });
 
-        } catch (error: any) {
-            console.error(`[KMeans Worker] Error during step ${currentIteration}:`, error);
-            // Don't reset isTrainingInitialized here, allow potential retry? Or should we reset?
-            // Let's reset for now to avoid inconsistent state.
-            // Dispose tensors individually after null checks (Corrected)
-            if (datasetTensor && !datasetTensor.isDisposed) tf.dispose(datasetTensor);
-            if (currentCentroidsTensor && !currentCentroidsTensor.isDisposed) tf.dispose(currentCentroidsTensor);
-            if (assignmentsTensor && !assignmentsTensor.isDisposed) tf.dispose(assignmentsTensor);
+        } catch (stepError: unknown) {
+            console.error('[KMeans Worker] Error during K-Means step:', stepError);
+            // Dispose any newly created tensors if they exist and aren't disposed
             if (nextCentroidsTensor && !nextCentroidsTensor.isDisposed) tf.dispose(nextCentroidsTensor);
-
-            // Reset state variables
-            datasetTensor = null;
-            currentCentroidsTensor = null;
-            isTrainingInitialized = false;
-            postMsg({ type: 'kmeansError', payload: { error: error.message || `Unknown error during step ${currentIteration}`, whileDoing: 'step' } });
-        } finally {
-            // Dispose intermediate tensors for this step (assignmentsTensor and nextCentroidsTensor *if not kept*)
             if (assignmentsTensor && !assignmentsTensor.isDisposed) tf.dispose(assignmentsTensor);
-            if (nextCentroidsTensor && !nextCentroidsTensor.isDisposed && nextCentroidsTensor !== currentCentroidsTensor) {
-                 tf.dispose(nextCentroidsTensor);
+
+            let errorMessage = 'Unknown error during step';
+            if (stepError instanceof Error) {
+                errorMessage = stepError.message;
+            } else if (typeof stepError === 'string') {
+                 errorMessage = stepError;
             }
-            console.log(`[KMeans Worker] TensorFlow memory after step ${currentIteration}: ${JSON.stringify(tf.memory())}`);
+
+            postMsg({ type: 'kmeansError', payload: { error: errorMessage, whileDoing: 'step' } });
+            // Do not automatically reset, let the main thread decide
         }
         return;
     }

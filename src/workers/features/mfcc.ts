@@ -10,9 +10,17 @@ export const stdDev = (arr: number[], arrMean: number): number => {
   return Math.sqrt(variance);
 };
 
+// --- Define a minimal type for the Essentia instance based on usage ---
+interface EssentiaInstance {
+  FrameGenerator: (audioData: Float32Array, frameSize: number, hopSize: number) => any; // Replace 'any' if a more specific type for frames is known
+  Spectrum: (frame: any) => { spectrum: any }; // Replace 'any' if more specific types are known
+  MFCC: (spectrum: any) => { mfcc: any }; // Replace 'any' if more specific types are known
+  vectorToArray: (vector: any) => number[]; // Replace 'any' if a more specific type for Essentia vectors is known
+}
+
 // MFCC extraction from audio data
 export async function extractMFCC(
-  essentia: any,
+  essentia: EssentiaInstance, // Use the defined interface
   audioData: Float32Array,
   sampleRate: number,
   songId: string

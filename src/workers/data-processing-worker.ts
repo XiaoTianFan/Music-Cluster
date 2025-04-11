@@ -130,9 +130,25 @@ const normalize = (vectors: number[][], isOHEColumn: boolean[], range: Normaliza
     return processedVectors;
 };
 
+// --- Define specific message types ---
+
+type WorkerRecvMessageData =
+    | { type: 'processData', payload: ProcessDataPayload }
+    | { type: 'init', payload?: unknown }; // Init might not have a payload
+
+type WorkerSendMessageData =
+    | { type: 'processingComplete', payload: { processedVectors: number[][], songIds: string[] } }
+    | { type: 'processingError', payload: { error: string } }
+    | { type: 'dataProcessingWorkerReady', payload: boolean };
+
+// Helper to post messages with type safety (Optional but good practice)
+const postMsg = (message: WorkerSendMessageData) => {
+    self.postMessage(message);
+};
 
 // Worker message handler
-self.onmessage = (event: MessageEvent<{ type: string; payload: any }>) => {
+// Use the specific message type union
+self.onmessage = (event: MessageEvent<WorkerRecvMessageData>) => {
     const { type, payload } = event.data;
     console.log(`[Data Processing Worker] Received message: ${type}`);
 
@@ -180,16 +196,22 @@ self.onmessage = (event: MessageEvent<{ type: string; payload: any }>) => {
                 // --- End Log ---
 
                 // Send processed data back to the main thread
-                self.postMessage({
+                postMsg({
                     type: 'processingComplete',
                     payload: { processedVectors, songIds }
                 });
 
-            } catch (error: any) {
+            } catch (error: unknown) {
                  console.error("[Data Processing Worker] Error processing data:", error);
-                self.postMessage({
+                 let errorMessage = 'Unknown processing error';
+                 if (error instanceof Error) {
+                     errorMessage = error.message;
+                 } else if (typeof error === 'string') {
+                     errorMessage = error;
+                 }
+                postMsg({
                     type: 'processingError',
-                    payload: { error: error.message || 'Unknown processing error' }
+                    payload: { error: errorMessage }
                 });
             }
             break;
@@ -197,7 +219,7 @@ self.onmessage = (event: MessageEvent<{ type: string; payload: any }>) => {
         case 'init': // Placeholder for potential future initialization
             console.log("[Data Processing Worker] Initialized.");
             // Optionally post back readiness
-             self.postMessage({ type: 'dataProcessingWorkerReady', payload: true });
+             postMsg({ type: 'dataProcessingWorkerReady', payload: true });
             break;
 
         default:

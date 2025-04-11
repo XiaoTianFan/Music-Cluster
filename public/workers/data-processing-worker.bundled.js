@@ -116,7 +116,12 @@ const normalize = (vectors, isOHEColumn, range = [0, 1]) => {
     console.log("[Data Processing Worker] Normalization complete (OHE skipped).");
     return processedVectors;
 };
+// Helper to post messages with type safety (Optional but good practice)
+const postMsg = (message) => {
+    self.postMessage(message);
+};
 // Worker message handler
+// Use the specific message type union
 self.onmessage = (event) => {
     var _a, _b, _c;
     const { type, payload } = event.data;
@@ -159,23 +164,30 @@ self.onmessage = (event) => {
                 console.table(processedVectors);
                 // --- End Log ---
                 // Send processed data back to the main thread
-                self.postMessage({
+                postMsg({
                     type: 'processingComplete',
                     payload: { processedVectors, songIds }
                 });
             }
             catch (error) {
                 console.error("[Data Processing Worker] Error processing data:", error);
-                self.postMessage({
+                let errorMessage = 'Unknown processing error';
+                if (error instanceof Error) {
+                    errorMessage = error.message;
+                }
+                else if (typeof error === 'string') {
+                    errorMessage = error;
+                }
+                postMsg({
                     type: 'processingError',
-                    payload: { error: error.message || 'Unknown processing error' }
+                    payload: { error: errorMessage }
                 });
             }
             break;
         case 'init': // Placeholder for potential future initialization
             console.log("[Data Processing Worker] Initialized.");
             // Optionally post back readiness
-            self.postMessage({ type: 'dataProcessingWorkerReady', payload: true });
+            postMsg({ type: 'dataProcessingWorkerReady', payload: true });
             break;
         default:
             console.warn(`[Data Processing Worker] Unknown message type received: ${type}`);

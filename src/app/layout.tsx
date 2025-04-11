@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SongCluster Online",
+  title: "MusicCluster Online",
   description: "Online demo for MIR using essentia.js, dimensionality reduction using Druid.js, and k-means clustering using tf-kmeans (TensorFlow.js).",
 };
 

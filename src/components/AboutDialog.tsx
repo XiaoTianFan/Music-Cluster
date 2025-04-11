@@ -65,7 +65,7 @@ const AboutDialog: React.FC<AboutDialogProps> = ({ isOpen, onClose }) => {
         
         {/* Inner container for scrolling content */}
         <div className="max-h-[calc(80vh-48px)] overflow-y-auto pr-2 hide-scrollbar"> {/* Adjust max-height for padding, add padding-right for scrollbar */}
-          <h2 className="text-2xl font-bold mb-4 text-pink-400">About SongCluster</h2>
+          <h2 className="text-2xl font-bold mb-4 text-pink-400">About MusicCluster</h2>
           <div className="prose prose-invert max-w-none prose-pink"> {/* Basic markdown styling */}
             {isLoading && <p>Loading...</p>}
             {error && <p className="text-red-500">{error}</p>}

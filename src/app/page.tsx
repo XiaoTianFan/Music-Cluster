@@ -343,7 +343,6 @@ export default function DashboardPage() {
   const [kmeansAssignments, setKmeansAssignments] = useState<KmeansAssignments>({});
   const [isClustering, setIsClustering] = useState<boolean>(false); // Is K-Means process active (initialized but not reset)?
   const [isKmeansInitialized, setIsKmeansInitialized] = useState<boolean>(false); // Has the worker confirmed initialization?
-  const [currentSelectedMIRFeatures, setCurrentSelectedMIRFeatures] = useState<Set<string>>(new Set()); // Store last used features
   type ProcessingStage = 'features' | 'processed' | 'reduced' | 'kmeans' | null;
   const [latestSuccessfulStage, setLatestSuccessfulStage] = useState<ProcessingStage>(null); // Track latest completed stage
 
@@ -479,12 +478,6 @@ export default function DashboardPage() {
             addLogMessage(`[Main] Received K-Means worker message: ${type}`); // Log messages
 
             switch (type) {
-                case 'kmeansIterationUpdate':
-                    // Define payload type explicitly for kmeansIterationUpdate
-                    const updatePayload = payload as { iteration: number; centroids: number[][]; songIds: string[]; assignments: number[] };
-                    // This case is no longer used with manual steps
-                    addLogMessage(`[Main] Received deprecated K-Means worker message: ${type}`, 'warn');
-                    break;
                 case 'kmeansComplete':
                     // This case is no longer used with manual steps
                     addLogMessage(`[Main] Received deprecated K-Means worker message: ${type}`, 'warn');
@@ -647,6 +640,42 @@ export default function DashboardPage() {
       });
   }, [addLogMessage]); // Run once on mount
 
+  // MOVE: Move handleResetKmeans definition here
+  const handleResetKmeans = useCallback((sendMessageToWorker = true) => {
+      addLogMessage('Resetting K-Means state on main thread...', 'info');
+      setIsClustering(false);
+      setIsKmeansInitialized(false);
+      setKmeansIteration(0);
+      setKmeansCentroids([]);
+      setKmeansAssignments({});
+
+      // Optionally send reset message to worker
+      if (sendMessageToWorker && kmeansWorkerRef.current) {
+          addLogMessage('Sending reset command to K-Means worker...', 'info');
+          kmeansWorkerRef.current.postMessage({ type: 'resetTraining' });
+      }
+      // When explicitly resetting K-Means, revert stage to highest valid previous stage
+      // Need to re-calculate these inside the callback or pass them as arguments
+      // For simplicity, we recalculate based on current state accessible here
+      const currentHasReduced = Array.from(activeSongIds).some(id => reducedDataPoints[id] != null);
+      const currentHasProcessed = processedData != null && processedData.vectors.length > 0;
+      const currentHasFeatures = Array.from(activeSongIds).some(id => featureStatus[id] === 'complete' && songFeatures[id] != null);
+      
+      if (currentHasReduced) {
+          setLatestSuccessfulStage('reduced');
+      } else if (currentHasProcessed) {
+          setLatestSuccessfulStage('processed');
+      } else if (currentHasFeatures) {
+          setLatestSuccessfulStage('features');
+      } else {
+          setLatestSuccessfulStage(null);
+      }
+  // UPDATE dependencies for recalculation
+  }, [kmeansWorkerRef, addLogMessage, setIsClustering, setIsKmeansInitialized, 
+      setKmeansIteration, setKmeansCentroids, setKmeansAssignments, 
+      activeSongIds, reducedDataPoints, processedData, featureStatus, songFeatures, 
+      setLatestSuccessfulStage]);
+
   // Check if all songs are processed (Feature Extraction Completion Check)
   useEffect(() => {
     if (!isProcessing) return; // Only run when MIR extraction is processing
@@ -678,9 +707,13 @@ export default function DashboardPage() {
         setUnprocessedData(null);
         setProcessedData(null);
         setReducedDataPoints({});
-        setKmeansAssignments({});
-        setKmeansCentroids([]);
-        setKmeansIteration(0);
+        // Keep KmeansAssignments here, only clear if reset is intended
+        // setKmeansAssignments({}); 
+        // setKmeansCentroids([]);
+        // setKmeansIteration(0);
+        // Instead of clearing K-Means state directly, call the reset function
+        handleResetKmeans(); // Reset K-Means state and worker
+        // Clear reduction dimensions indicator
         setReductionDimensions(0);
         addLogMessage('Downstream processing results cleared due to new feature extraction.', 'info');
         
@@ -732,10 +765,11 @@ export default function DashboardPage() {
         }
         // --- TEMPORARY CODE END ---
     }
+  // UPDATE: Removed defaultSongs from deps, kept handleResetKmeans
   }, [isProcessing, processingSongIds, featureStatus, extractionStartTimeRef, 
       setIsProcessing, addLogMessage, setUnprocessedData, setProcessedData, 
-      setReducedDataPoints, setKmeansAssignments, setKmeansCentroids, 
-      setKmeansIteration, setReductionDimensions, activeSongIds, songFeatures, songs, defaultSongs]);
+      setReducedDataPoints, setReductionDimensions, activeSongIds, songFeatures, songs, 
+      handleResetKmeans]); // Added handleResetKmeans
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -911,8 +945,10 @@ export default function DashboardPage() {
           const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
           addLogMessage(`Successfully decoded audio for ${song.name}.`, 'complete');
           return audioBuffer;
-      } catch (error: any) {
-          addLogMessage(`Error decoding audio for ${song.name}: ${error.message}`, 'error');
+      } catch (error: unknown) { // <-- Explicitly type error as unknown
+          // Type check before accessing message
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          addLogMessage(`Error decoding audio for ${song.name}: ${errorMessage}`, 'error');
           setFeatureStatus(prev => ({ ...prev, [song.id]: 'error' }));
           return null;
       }
@@ -1022,8 +1058,10 @@ export default function DashboardPage() {
             console.log('Cached Features:', cachedKeysSet);
           }
         }
-      } catch (error: any) {
-        addLogMessage(`Failed to load or process feature cache: ${error.message}. Proceeding with worker.`, 'warn');
+      } catch (error: unknown) { // <-- Explicitly type error as unknown
+        // Type check before accessing message
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        addLogMessage(`Failed to load or process feature cache: ${errorMessage}. Proceeding with worker.`, 'warn');
       }
     }
     // --- END: Cache Check Logic ---
@@ -1045,8 +1083,14 @@ export default function DashboardPage() {
     // --- Original Worker Logic (Fallback) ---
     if (!essentiaWorkerReady || isProcessing || !workerRef.current) {
         addLogMessage('Worker not ready or already processing. Extraction aborted.', 'warn');
-        // Explicitly set state *before* sending request
-        setCurrentSelectedMIRFeatures(selectedFeatures);
+        // REMOVED: setCurrentSelectedMIRFeatures(selectedFeatures);
+
+        // Get active songs for clearing downstream state correctly
+        const songsToProcess = songs.filter(song => activeSongIds.has(song.id));
+        if (songsToProcess.length === 0) {
+            addLogMessage('No active songs selected, nothing to clear.', 'info');
+            return;
+        }
 
         // Clear previous reduced points for active songs and subsequent clustering results
         setReducedDataPoints(prev => {
@@ -1159,7 +1203,10 @@ export default function DashboardPage() {
              }
         }
     }
-  }, [songs, getDecodedAudio, essentiaWorkerReady, isProcessing, activeSongIds, addLogMessage, featureStatus, setSongFeatures, setFeatureStatus, setReducedDataPoints, setKmeansAssignments, setKmeansCentroids, setKmeansIteration, setReductionDimensions]); // Added state setters to dependency array
+  }, [songs, getDecodedAudio, essentiaWorkerReady, isProcessing, activeSongIds, 
+      addLogMessage, featureStatus, setSongFeatures, setFeatureStatus, 
+      setReducedDataPoints, setKmeansAssignments, setKmeansCentroids, 
+      setKmeansIteration, setReductionDimensions, handleResetKmeans]); 
 
   // --- NEW Handler to Trigger Data Processing ---
   const handleStartDataProcessing = useCallback((method: ProcessingMethod, range?: [number, number]) => {
@@ -1246,7 +1293,7 @@ export default function DashboardPage() {
 ]);
 
   // --- MODIFIED Handler: Trigger dimensionality reduction ---
-  const handleReduceDimensions = useCallback((reductionMethod: ReductionMethod, dimensions: number, params?: any) => {
+  const handleReduceDimensions = useCallback((reductionMethod: ReductionMethod, dimensions: number, params?: Record<string, unknown>) => { // <-- Change any to Record<string, unknown>
      // --- Check Preconditions ---
      // MODIFIED: Removed isClustering check. Allow reduction even if K-Means is active.
      // Prevent only if worker not ready, other processes running, or processedData missing.
@@ -1430,32 +1477,6 @@ export default function DashboardPage() {
       });
   }, [activeSongIds, reducedDataPoints, reductionDimensions]);
 
-  // --- NEW: Handler to Reset K-Means State --- 
-  const handleResetKmeans = useCallback((sendMessageToWorker = true) => {
-      addLogMessage('Resetting K-Means state on main thread...', 'info');
-      setIsClustering(false);
-      setIsKmeansInitialized(false);
-      setKmeansIteration(0);
-      setKmeansCentroids([]);
-      setKmeansAssignments({});
-
-      // Optionally send reset message to worker
-      if (sendMessageToWorker && kmeansWorkerRef.current) {
-          addLogMessage('Sending reset command to K-Means worker...', 'info');
-          kmeansWorkerRef.current.postMessage({ type: 'resetTraining' });
-      }
-      // When explicitly resetting K-Means, revert stage to highest valid previous stage
-      if (hasReducedDataForActiveSongs) {
-          setLatestSuccessfulStage('reduced');
-      } else if (hasProcessedData) {
-          setLatestSuccessfulStage('processed');
-      } else if (hasFeaturesForActiveSongs) {
-          setLatestSuccessfulStage('features');
-      } else {
-          setLatestSuccessfulStage(null);
-      }
-  }, [kmeansWorkerRef, addLogMessage, hasReducedDataForActiveSongs, hasProcessedData, hasFeaturesForActiveSongs]); // Dependencies correct now
-
   // Filter logs for display in the panel
   const filteredLogMessages = useMemo(() => {
       return logMessages.filter(log => 
@@ -1537,7 +1558,7 @@ export default function DashboardPage() {
         data-augmented-ui="tl-clip tr-clip br-clip bl-clip border"
         style={{ '--aug-border-color': 'cyan', '--aug-border-bg': 'transparent' } as React.CSSProperties}
       >
-        <h1 className="px-4 text-xl font-bold text-cyan-400">SongCluster Dashboard</h1>
+        <h1 className="px-4 text-xl font-bold text-cyan-400">MusicCluster Dashboard</h1>
         <div className="flex items-center gap-4"> {/* Wrapper for status and button */}
           <div className="text-sm text-cyan-300">
             {/* Status Text */}

@@ -1,36 +1,77 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# MusicCluster: Unsupervised Audio Clustering Web Application
 
-## Getting Started
+This web application demonstrates and visualizes the process of unsupervised k-means clustering applied to audio files, running entirely in the user's browser. Users can upload their own audio, use provided samples, and interactively explore how audio features are extracted, processed, reduced in dimensionality, and finally clustered.
 
-First, run the development server:
+## ✨ Features
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+*   **Audio Input:** Upload your own audio files (`.wav`, `.mp3`, etc.) or use the built-in default song examples.
+*   **Music Information Retrieval (MIR):** Extracts various audio features using **Essentia.js** running in a Web Worker. Selectable features include MFCCs, energy, entropy, key, spectral characteristics, rhythm, and tonal features.
+*   **Data Processing:** Optionally scales numerical features (Standardization or Normalization) using a dedicated Web Worker, intelligently skipping one-hot encoded columns.
+*   **Dimensionality Reduction:** Reduces high-dimensional feature vectors to 2D or 3D using **DruidJS** (supporting PCA, t-SNE, UMAP) in a Web Worker.
+*   **K-Means Clustering:** Performs k-means clustering on the reduced data points using **TensorFlow.js** (replacing the initially planned `tf-kmeans`) in a Web Worker.
+*   **Step-by-Step Visualization:** Interactively observe the k-means algorithm's progress: centroid initialization, data point assignment, and centroid updates.
+*   **Interactive Scatter Plot:** Visualize the final clusters in a 2D/3D scatter plot (using **Plotly.js**), with points colored by cluster, tooltips showing song titles, zooming, and panning.
+*   **New Song Classification:** Upload a new song after training a model to see how it's classified within the existing clusters.
+*   **Unique UI/UX:** Features a vintage + cyberpunk aesthetic with neon and steam-ish elements, built with **Augmented UI**.
+
+## ⚙️ Technology Stack
+
+*   **Framework:** Next.js (App Router)
+*   **Language:** TypeScript
+*   **MIR:** Essentia.js (@v0.1.3)
+*   **Dimensionality Reduction:** DruidJS
+*   **Clustering:** TensorFlow.js (@tensorflow/tfjs)
+*   **Visualization:** Plotly.js, D3.js (potentially for step-by-step animations)
+*   **UI Styling:** Augmented UI, Tailwind CSS (or CSS Modules)
+*   **Concurrency:** Web Workers for computationally intensive tasks (Essentia, DruidJS, TensorFlow.js)
+*   **Deployment:** Vercel
+
+## 🚀 Getting Started
+
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/your-username/Music-Cluster.git
+    cd Music-Cluster
+    ```
+2.  **Install dependencies:**
+    ```bash
+    npm install
+    # or
+    yarn install
+    # or
+    pnpm install
+    ```
+3.  **Run the development server:**
+    ```bash
+    npm run dev
+    # or
+    yarn dev
+    # or
+    pnpm dev
+    ```
+4.  Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+## 📂 Project Structure (Simplified)
+
+```
+├── public/
+│   └── audio/         # Default audio samples
+├── src/
+│   ├── app/           # Next.js App Router pages (Dashboard, About)
+│   ├── components/    # React components (Controls, Visualizations, UI elements)
+│   ├── hooks/         # Custom React hooks
+│   ├── lib/           # Utility functions, library configurations
+│   ├── store/         # State management (e.g., Zustand)
+│   ├── styles/        # Global styles, Tailwind config
+│   ├── types/         # TypeScript type definitions
+│   └── workers/       # Web Worker scripts (Essentia, DruidJS, TF.js, Data Processing)
+├── eslint.config.mjs  # ESLint configuration
+├── next.config.mjs    # Next.js configuration
+├── package.json       # Project dependencies and scripts
+├── tsconfig.json      # TypeScript configuration
+└── README.md          # This file
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 📄 License
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. 
