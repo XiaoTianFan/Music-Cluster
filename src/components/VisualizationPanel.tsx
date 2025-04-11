@@ -33,6 +33,11 @@ interface VisualizationPanelProps {
   kmeansCentroids: number[][];
   kmeansIteration: number;
   latestSuccessfulStage: ProcessingStage; // Prop from parent
+  // --- NEW: Additional Props ---
+  visualizationDisplayStage: ProcessingStage; // The stage the user wants to visualize
+  onStageSelect: (stage: ProcessingStage) => void; // Callback for when user changes stage
+  // --- NEW: Add the missing prop type ---
+  availableFeatureKeys: string[] | null;
 }
 
 // Define types for internal state
@@ -45,6 +50,15 @@ type VisualizationStage = 'features' | 'unprocessed' | 'processed' | 'reduced' |
 
 // Type received from parent for the latest completed step
 type ProcessingStage = 'features' | 'processed' | 'reduced' | 'kmeans' | null;
+
+// --- NEW: Redefine canonical feature order from page.tsx --- 
+const canonicalFeatureOrder: (keyof Features)[] = [
+  'energy', 'entropy', 'loudness', 'rms', 'dynamicComplexity', 'keyStrength',
+  'tuningFrequency', 'tuningCents',
+  'mfccMeans', 'mfccStdDevs', // Array features
+  'key', 'keyScale' // String features for one-hot encoding
+];
+// -----------------------------------------------------------
 
 // Define a color scale for clusters - add more colors if needed
 const plotlyColors = [
@@ -170,6 +184,11 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
   kmeansCentroids,
   kmeansIteration,
   latestSuccessfulStage,
+  // NEW: Destructure additional props
+  visualizationDisplayStage,
+  onStageSelect,
+  // --- NEW: Add the missing prop type ---
+  availableFeatureKeys
 }) => {
 
   // --- Internal State for Visualization Controls ---
@@ -205,74 +224,113 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
   // --- Helper functions for mapping feature columns and names ---
   const featureColumnsMap = useMemo<{ numerical: FeatureColumn[], categorical: string[] }>(() => {
-    if (!unprocessedData) {
+    // --- MODIFIED: Use availableFeatureKeys and canonicalFeatureOrder --- 
+    if (!availableFeatureKeys || availableFeatureKeys.length === 0) {
+      // console.log('[featureColumnsMap] No available feature keys.');
       return { numerical: [], categorical: [] };
     }
+    // console.log('[featureColumnsMap] Available keys:', availableFeatureKeys);
 
-    // Initialize result objects
     const numerical: FeatureColumn[] = [];
     const categorical: string[] = [];
-    
-    // Track column index as we build the mapping
     let currentColIndex = 0;
-    
-    // Process features in canonical order
-    FEATURE_FIELD_ORDER.forEach(fieldInfo => {
-      const { key, prefix, isArray, isCategorical } = fieldInfo;
-      
-      if (isCategorical) {
-        // This is a categorical feature, add it to the categorical list
-        categorical.push(key);
-        
-        // Skip the corresponding OHE columns in the numerical matrix
-        // Need to determine how many columns this categorical feature uses
-        if (unprocessedData.isOHEColumn) {
-          for (let i = currentColIndex; i < unprocessedData.vectors[0]?.length; i++) {
-            if (unprocessedData.isOHEColumn[i]) {
-              currentColIndex++;
-            } else {
-              break; // Stop when we hit a non-OHE column
-            }
-          }
+
+    // Get a Set for quick lookups
+    const availableKeysSet = new Set(availableFeatureKeys);
+
+    // Create a reverse lookup map for FEATURE_FIELD_ORDER metadata
+    const fieldMetadataMap = new Map(FEATURE_FIELD_ORDER.map(f => [f.key, f]));
+
+    // Iterate through the canonical order, same as page.tsx
+    canonicalFeatureOrder.forEach(featureKey => {
+      // Only process if this feature was actually available/extracted
+      if (availableKeysSet.has(featureKey)) {
+        const metadata = fieldMetadataMap.get(featureKey);
+        if (!metadata) {
+          // console.warn(`[featureColumnsMap] Metadata not found for available key: ${featureKey}`);
+          return; // Skip if metadata is missing
         }
-      } else if (isArray) {
-        // This is an array feature (like mfccMeans with multiple coefficients)
-        // Need to determine array length by analyzing the first song's feature
-        let arrayLength = 0;
-        
-        // Find a song that has this feature
-        for (const songId of unprocessedData.songIds) {
-          const features = songFeatures[songId];
-          if (features && features[key as keyof Features] && Array.isArray(features[key as keyof Features])) {
-            // @ts-ignore - we verified it's an array above
-            arrayLength = features[key as keyof Features].length;
-            break;
+
+        const { prefix, isArray, isCategorical } = metadata;
+
+        if (isCategorical) {
+          // Add to categorical list
+          categorical.push(featureKey);
+          
+          // Determine number of OHE columns for this feature (requires looking at actual data)
+          let numOHEColumns = 0;
+          if (unprocessedData?.isOHEColumn) {
+            // This is tricky without the exact unique values used for encoding in page.tsx.
+            // A simpler, less robust approach: Count consecutive true flags in isOHEColumn
+            // starting from currentColIndex. This ASSUMES OHE columns are contiguous per feature.
+            // A better approach would be to pass the category-to-dimension mapping from page.tsx.
+            // For now, let's just estimate based on a known categorical feature.
+            // We need a more robust way to link the categorical key to its OHE columns.
+            // TEMPORARY ESTIMATE: Assume key uses 12, scale uses 2? This is bad.
+            // Let's find a song and check its features instead to get unique values.
+            const uniqueValues = new Set<string>();
+            Object.values(songFeatures || {}).forEach(features => {
+              if (features && features[featureKey] !== undefined && typeof features[featureKey] === 'string') {
+                 // @ts-ignore - We checked it's a string
+                 uniqueValues.add(features[featureKey]);
+              }
+            });
+            numOHEColumns = Math.max(1, uniqueValues.size); // Use size, at least 1 column
+            // console.log(`[featureColumnsMap] Estimated ${numOHEColumns} OHE columns for ${featureKey}`);
+          } else {
+             // console.warn(`[featureColumnsMap] Cannot determine OHE columns for ${featureKey} without unprocessedData.isOHEColumn`);
+             // Fallback if isOHEColumn info is missing (e.g., before data processing)
+             // This part of the logic might not be needed if we only use this map for 'raw'/'processed' stage plots
+             numOHEColumns = 1; // Default guess
           }
-        }
-        
-        // Now create a column entry for each array element
-        for (let i = 0; i < arrayLength; i++) {
+          
+          // Increment index by the number of OHE columns
+          currentColIndex += numOHEColumns;
+
+        } else if (isArray) {
+          // Determine array length from the first available song that has this feature
+          let arrayLength = 0;
+          for (const songId of Object.keys(songFeatures || {})) {
+              const features = songFeatures?.[songId];
+              // @ts-ignore - Accessing potentially non-existent key
+              const featureValue = features?.[featureKey];
+              if (featureValue && Array.isArray(featureValue)) {
+                  arrayLength = featureValue.length;
+                  break;
+              }
+          }
+          // console.log(`[featureColumnsMap] Determined array length ${arrayLength} for ${featureKey}`);
+
+          if (arrayLength > 0) {
+              for (let i = 0; i < arrayLength; i++) {
+                  numerical.push({
+                      name: `${prefix} ${i + 1}`,
+                      columnIndex: currentColIndex,
+                      featureKey: featureKey,
+                      arrayIndex: i
+                  });
+                  currentColIndex++;
+              }
+          } else {
+             // console.warn(`[featureColumnsMap] Could not determine array length for ${featureKey}`);
+          }
+
+        } else {
+          // Scalar numerical feature
           numerical.push({
-            name: `${prefix} ${i + 1}`, // e.g., "MFCC Mean 1", "MFCC Mean 2"
+            name: prefix,
             columnIndex: currentColIndex,
-            featureKey: key,
-            arrayIndex: i
+            featureKey: featureKey
           });
           currentColIndex++;
         }
-      } else {
-        // This is a regular numerical feature
-        numerical.push({
-          name: prefix,
-          columnIndex: currentColIndex,
-          featureKey: key
-        });
-        currentColIndex++;
       }
     });
     
+    // console.log('[featureColumnsMap] Result:', { numerical, categorical });
     return { numerical, categorical };
-  }, [unprocessedData, songFeatures]);
+  // --- MODIFIED: Add availableFeatureKeys to dependency array --- 
+  }, [availableFeatureKeys, unprocessedData, songFeatures]);
 
   // Get the category value map (mapping from OHE indices to original values)
   const categoryValueMap = useMemo<CategoryValueMap>(() => {
@@ -316,85 +374,75 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
   // --- Dynamic options for controls ---
   const getAvailableColorOptions = useMemo(() => {
-    // Start with cluster option
+    // --- RESTORED: Original implementation --- 
     let options = [{ value: 'cluster', label: 'Cluster Assignment' }];
-    
-    // Add categorical features from our mapping
     featureColumnsMap.categorical.forEach(category => {
       options.push({ 
         value: `feature:${category}`, 
         label: `Feature: ${category.charAt(0).toUpperCase() + category.slice(1)}` 
       });
     });
-    
     return options;
   }, [featureColumnsMap.categorical]);
 
   const getAvailableAxisFeatures = useMemo(() => {
+    // --- RESTORED: Original implementation --- 
     let options: { value: string, label: string }[] = [];
-    
-    // Check if stage is 'reduction' OR 'clustering'
     if (selectedDataStage === 'reduction' || selectedDataStage === 'clustering') { 
-      // For reduction/clustering stages, use dimensions from reduction
       options = [
         { value: 'dim1', label: 'Dimension 1' }, 
         { value: 'dim2', label: 'Dimension 2' }
       ];
-      if (reductionDimensions >= 3) { // Use reductionDimensions state
+      if (reductionDimensions >= 3) {
         options.push({ value: 'dim3', label: 'Dimension 3' });
       }
     } else { 
-      // For raw or processed stages, use numerical features
       options = featureColumnsMap.numerical.map(col => ({
         value: `col:${col.columnIndex}`,
         label: col.name
       }));
     }
-    
     return options;
   }, [selectedDataStage, reductionDimensions, featureColumnsMap.numerical]);
 
-  // Set default axis and color selections when stage changes
+  // Set default axis and color selections when stage changes OR features change
   useEffect(() => {
+    // --- RESTORED: Original implementation --- 
     // Default color selection
-    // In 'reduction' or 'clustering' stages, default to cluster coloring IF available, otherwise first feature
     if (selectedDataStage === 'clustering' && isClusteringDataAvailable) {
       setSelectedColorBy('cluster');
     } else if (selectedDataStage === 'reduction' || selectedDataStage === 'clustering') {
-      // Fallback for reduction/clustering if cluster data not ready or not applicable
       if (featureColumnsMap.categorical.length > 0) {
         setSelectedColorBy(`feature:${featureColumnsMap.categorical[0]}`);
       } else {
-        setSelectedColorBy(null); // No categories available
+        setSelectedColorBy(null);
       }
-    } else { // 'raw' or 'processed' stages
+    } else {
       if (featureColumnsMap.categorical.length > 0) {
         setSelectedColorBy(`feature:${featureColumnsMap.categorical[0]}`);
       } else {
-        setSelectedColorBy(null); // No categories available
+        setSelectedColorBy(null);
       }
     }
     
     // Default axis selections
-    // Use dimensions for 'reduction' and 'clustering' stages
     if (selectedDataStage === 'reduction' || selectedDataStage === 'clustering') {
       setSelectedAxisX('dim1');
       setSelectedAxisY('dim2');
       if (selectedDimensions === 3) {
         setSelectedAxisZ('dim3');
       } else {
-        setSelectedAxisZ(null); // Ensure Z is null in 2D mode
+        setSelectedAxisZ(null);
       }
-    } else if (featureColumnsMap.numerical.length > 0) { // Use features for 'raw'/'processed'
+    } else if (featureColumnsMap.numerical.length > 0) {
       const availableFeatures = featureColumnsMap.numerical;
       const firstFeatureIndex = availableFeatures.length > 0 ? `col:${availableFeatures[0].columnIndex}` : null;
       const secondFeatureIndex = availableFeatures.length > 1 ? `col:${availableFeatures[1].columnIndex}` : null;
       const thirdFeatureIndex = selectedDimensions === 3 && availableFeatures.length > 2 ? `col:${availableFeatures[2].columnIndex}` : null;
-      
       setSelectedAxisX(firstFeatureIndex);
       setSelectedAxisY(secondFeatureIndex);
-      setSelectedAxisZ(thirdFeatureIndex); // Set Z axis for 3D if possible
-    } else { // No numerical features for raw/processed
+      setSelectedAxisZ(thirdFeatureIndex);
+    } else {
        setSelectedAxisX(null);
        setSelectedAxisY(null);
        setSelectedAxisZ(null);
@@ -482,17 +530,17 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
   const plotDataAndLayout = useMemo(() => {
     try { 
-      // console.log('[Plot Memo] Recalculating plot data...'); 
+      console.log('[Plot Memo] Recalculating plot data...'); 
       let dataPoints: Record<string, number[]> = {};
       let songIds: string[] = [];
       let dataTitle = '';
 
-      // console.log(`[Plot Memo] Selected Stage: ${selectedDataStage}`); 
+      console.log(`[Plot Memo] Selected Stage: ${selectedDataStage}`); 
 
       switch (selectedDataStage) {
         case 'raw':
           if (!unprocessedData || unprocessedData.vectors.length === 0) {
-            // console.log('[Plot Memo] No raw data available.'); 
+            console.log('[Plot Memo] No raw data available.'); 
             return { plotData: [], plotLayout: basePlotLayout }; 
           }
           dataTitle = 'Raw Features';
@@ -504,7 +552,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
           break;
         case 'processed':
           if (!processedData || processedData.vectors.length === 0) {
-            // console.log('[Plot Memo] No processed data available.');
+            console.log('[Plot Memo] No processed data available.');
             return { plotData: [], plotLayout: basePlotLayout };
           }
           dataTitle = 'Processed Data';
@@ -516,7 +564,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
           break;
         case 'reduction':
           if (!isReducedDataAvailable) {
-            // console.log('[Plot Memo] No reduced data points available.'); 
+            console.log('[Plot Memo] No reduced data points available.'); 
             return { plotData: [], plotLayout: basePlotLayout }; 
           }
           dataTitle = 'Reduced Dimensions';
@@ -526,7 +574,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         case 'clustering':
         default:
           if (!isClusteringDataAvailable) {
-            // console.log('[Plot Memo] No clustering data available.'); 
+            console.log('[Plot Memo] No clustering data available.'); 
             return { plotData: [], plotLayout: basePlotLayout }; 
           }
           dataTitle = `K-Means Clustering - Iteration ${kmeansIteration}`;
@@ -537,7 +585,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
       
       const filteredSongIds = songIds.filter(id => activeSongIds.has(id));
       if (filteredSongIds.length === 0) {
-        // console.log('[Plot Memo] No active songs for current stage/filter.'); 
+        console.log('[Plot Memo] No active songs for current stage/filter.'); 
         return { plotData: [], plotLayout: basePlotLayout }; 
       }
       
@@ -563,8 +611,8 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
       yAxisTitle = getAxisTitle(selectedAxisY, 'Dimension');
       zAxisTitle = getAxisTitle(selectedAxisZ, 'Dimension');
 
-      // console.log(`[Plot Memo] Axis Indices: X=${xAxisIndex}, Y=${yAxisIndex}, Z=${zAxisIndex}`); 
-      // console.log(`[Plot Memo] Axis Titles: X='${xAxisTitle}', Y='${yAxisTitle}', Z='${zAxisTitle}'`); 
+      console.log(`[Plot Memo] Axis Indices: X=${xAxisIndex}, Y=${yAxisIndex}, Z=${zAxisIndex}`); 
+      console.log(`[Plot Memo] Axis Titles: X='${xAxisTitle}', Y='${yAxisTitle}', Z='${zAxisTitle}'`); 
       
       const traceType = selectedDimensions === 3 ? 'scatter3d' : 'scatter';
       
@@ -596,9 +644,9 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         }
       });
       
-      // console.log(`[Plot Memo] Generated ${intermediatePoints.length} intermediate points.`);
+      console.log(`[Plot Memo] Generated ${intermediatePoints.length} intermediate points.`);
       if (intermediatePoints.length === 0) {
-        // console.log('[Plot Memo] No valid points generated after axis mapping.');
+        console.log('[Plot Memo] No valid points generated after axis mapping.');
         return { plotData: [], plotLayout: basePlotLayout }; 
       }
       
@@ -606,7 +654,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
       const colorByCluster = selectedColorBy === 'cluster' && selectedDataStage === 'clustering';
       const colorByCategorical = selectedColorBy?.startsWith('feature:');
       const categoryKey = colorByCategorical ? selectedColorBy!.substring(8) : null;
-      // console.log(`[Plot Memo] Color Strategy: ${selectedColorBy ?? 'Default'}`);
+      console.log(`[Plot Memo] Color Strategy: ${selectedColorBy ?? 'Default'}`);
 
       const groupedPoints: Record<string, typeof intermediatePoints> = {};
       const categoryToColor: Record<string, string> = {};
@@ -639,7 +687,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         }
         groupedPoints[groupName].push(point);
       });
-      // console.log(`[Plot Memo] Generated ${Object.keys(groupedPoints).length} groups/traces.`);
+      console.log(`[Plot Memo] Generated ${Object.keys(groupedPoints).length} groups/traces.`);
 
       // Generate Traces from Groups
       const plotData: Partial<Plotly.PlotData>[] = [];
@@ -706,13 +754,13 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         delete plotLayout.scene;
       }
       
-      // console.log('[Plot Memo] Final Plot Data Length:', plotData.length); 
-      // console.log('[Plot Memo] Final Plot Layout Title:', plotLayout.title);
-      // console.log('[Plot Memo] Final Plot Layout BgColor:', plotLayout.paper_bgcolor, plotLayout.plot_bgcolor);
+      console.log('[Plot Memo] Final Plot Data Length:', plotData.length); 
+      console.log('[Plot Memo] Final Plot Layout Title:', plotLayout.title);
+      console.log('[Plot Memo] Final Plot Layout BgColor:', plotLayout.paper_bgcolor, plotLayout.plot_bgcolor);
       
       return { plotData, plotLayout };
     } catch (error) { 
-      // console.error('[Plot Memo] Error calculating plot data:', error); 
+      console.error('[Plot Memo] Error calculating plot data:', error); 
       return { plotData: [], plotLayout: { ...basePlotLayout, showlegend: showLegend } }; 
     }
   }, [
@@ -727,8 +775,30 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
   // --- Control Handlers (Basic Structure) ---
   const handleStageChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    setSelectedDataStage(event.target.value as DataStage);
-    // TODO: Reset axis/color selections based on the new stage in Phase 3
+    const newDataStage = event.target.value as DataStage;
+    setSelectedDataStage(newDataStage);
+    
+    // NEW: Map DataStage to ProcessingStage and call onStageSelect
+    let processingStage: ProcessingStage = null;
+    switch (newDataStage) {
+      case 'raw':
+        processingStage = 'features';
+        break;
+      case 'processed':
+        processingStage = 'processed';
+        break;
+      case 'reduction':
+        processingStage = 'reduced';
+        break;
+      case 'clustering':
+        processingStage = 'kmeans';
+        break;
+    }
+    
+    // Call parent's callback function to update the user-selected stage
+    if (processingStage) {
+      onStageSelect(processingStage);
+    }
   };
 
   const handleDimensionChange = (dim: DimensionSelection) => {
@@ -756,7 +826,31 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
     if (axis === 'Y') setSelectedScaleY(value);
     if (axis === 'Z') setSelectedScaleZ(value);
   };
-  // --------------------------------------------
+
+  // NEW: Effect to sync visualizationDisplayStage with local state
+  useEffect(() => {
+    if (visualizationDisplayStage) {
+      let newDataStage: DataStage;
+      switch (visualizationDisplayStage) {
+        case 'features':
+          newDataStage = 'raw';
+          break;
+        case 'processed':
+          newDataStage = 'processed';
+          break;
+        case 'reduced':
+          newDataStage = 'reduction';
+          break;
+        case 'kmeans':
+          newDataStage = 'clustering';
+          break;
+        default:
+          // Keep current state if visualizationDisplayStage is null
+          return;
+      }
+      setSelectedDataStage(newDataStage);
+    }
+  }, [visualizationDisplayStage]);
 
   return (
     <div

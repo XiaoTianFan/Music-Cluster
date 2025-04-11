@@ -63,31 +63,31 @@ export type FeatureStatus = 'idle' | 'processing' | 'complete' | 'error';
 
 // List of default songs based on the directory listing
 const defaultSongs: Song[] = [
-  { id: '/audio/Excerpt_Tchaikovsky - Nutcracker March_Piano Solo.mp3', name: 'Excerpt_Tchaikovsky - Nutcracker March_Piano Solo.mp3', url: '/audio/Excerpt_Tchaikovsky - Nutcracker March_Piano Solo.mp3', source: 'default' },
-  { id: '/audio/Excerpt_Yes - Roundabout.mp3', name: 'Excerpt_Yes - Roundabout.mp3', url: '/audio/Excerpt_Yes - Roundabout.mp3', source: 'default' },
-  { id: '/audio/Excerpt_Grover Washington, Jr.-Bill Withers - Just the Two of Us.mp3', name: 'Excerpt_Grover Washington, Jr.-Bill Withers - Just the Two of Us.mp3', url: '/audio/Excerpt_Grover Washington, Jr.-Bill Withers - Just the Two of Us.mp3', source: 'default' },
-  { id: '/audio/Excerpt_Eric Clapton - Autumn Leaves.mp3', name: 'Excerpt_Eric Clapton - Autumn Leaves.mp3', url: '/audio/Excerpt_Eric Clapton - Autumn Leaves.mp3', source: 'default' },
-  { id: '/audio/Excerpt_Frank Sinatra - Fly Me To The Moon.mp3', name: 'Excerpt_Frank Sinatra - Fly Me To The Moon.mp3', url: '/audio/Excerpt_Frank Sinatra - Fly Me To The Moon.mp3', source: 'default' },
-  { id: '/audio/Excerpt_Genesis - Firth of Fifth.mp3', name: 'Excerpt_Genesis - Firth of Fifth.mp3', url: '/audio/Excerpt_Genesis - Firth of Fifth.mp3', source: 'default' },
-  { id: '/audio/Excerpt_Mariya Takeuchi - Plastic Love.mp3', name: 'Excerpt_Mariya Takeuchi - Plastic Love.mp3', url: '/audio/Excerpt_Mariya Takeuchi - Plastic Love.mp3', source: 'default' },
-  { id: '/audio/Excerpt_Michael Jackson - Billie Jean.mp3', name: 'Excerpt_Michael Jackson - Billie Jean.mp3', url: '/audio/Excerpt_Michael Jackson - Billie Jean.mp3', source: 'default' },
-  { id: '/audio/Excerpt_Queen - Bohemian Rhapsody.mp3', name: 'Excerpt_Queen - Bohemian Rhapsody.mp3', url: '/audio/Excerpt_Queen - Bohemian Rhapsody.mp3', source: 'default' },
-  { id: '/audio/Excerpt_Rachmaninov - Symphony No. 2 Op. 27 III. Adagio Adagio.mp3', name: 'Excerpt_Rachmaninov - Symphony No. 2 Op. 27 III. Adagio Adagio.mp3', url: '/audio/Excerpt_Rachmaninov - Symphony No. 2 Op. 27 III. Adagio Adagio.mp3', source: 'default' },
-  { id: '/audio/Excerpt_The Beatles - Abbey Road_Come Together.mp3', name: 'Excerpt_The Beatles - Abbey Road_Come Together.mp3', url: '/audio/Excerpt_The Beatles - Abbey Road_Come Together.mp3', source: 'default' },
-  { id: '/audio/Excerpt_Yasuha - Flyday Chinatown.mp3', name: 'Excerpt_Yasuha - Flyday Chinatown.mp3', url: '/audio/Excerpt_Yasuha - Flyday Chinatown.mp3', source: 'default' },
-  { id: '/audio/Excerpt_B.B. King - The Thrill Is Gone.mp3', name: 'Excerpt_B.B. King - The Thrill Is Gone.mp3', url: '/audio/Excerpt_B.B. King - The Thrill Is Gone.mp3', source: 'default' },
-  { id: '/audio/Excerpt_Dvorak - Symphony No. 9 (From the New World)_Movement 4.mp3', name: 'Excerpt_Dvorak - Symphony No. 9 (From the New World)_Movement 4.mp3', url: '/audio/Excerpt_Dvorak - Symphony No. 9 (From the New World)_Movement 4.mp3', source: 'default' },
-  { id: '/audio/Excerpt_King Crimson - The Court of the Crimson King.mp3', name: 'Excerpt_King Crimson - The Court of the Crimson King.mp3', url: '/audio/Excerpt_King Crimson - The Court of the Crimson King.mp3', source: 'default' },
-  { id: '/audio/Excerpt_Richard Wagner - Ride of the Valkyries.mp3', name: 'Excerpt_Richard Wagner - Ride of the Valkyries.mp3', url: '/audio/Excerpt_Richard Wagner - Ride of the Valkyries.mp3', source: 'default' },
-  { id: '/audio/Excerpt_Chopin - Nocturne op.9 No.2.mp3', name: 'Excerpt_Chopin - Nocturne op.9 No.2.mp3', url: '/audio/Excerpt_Chopin - Nocturne op.9 No.2.mp3', source: 'default' },
-  { id: '/audio/Excerpt_Debussy - Clair De Lune.mp3', name: 'Excerpt_Debussy - Clair De Lune.mp3', url: '/audio/Excerpt_Debussy - Clair De Lune.mp3', source: 'default' },
-  { id: '/audio/Excerpt_Michael Jaskson - Beat It.mp3', name: 'Excerpt_Michael Jaskson - Beat It.mp3', url: '/audio/Excerpt_Michael Jaskson - Beat It.mp3', source: 'default' },
-  { id: '/audio/Excerpt_Miki Matsubara - Stay With Me.mp3', name: 'Excerpt_Miki Matsubara - Stay With Me.mp3', url: '/audio/Excerpt_Miki Matsubara - Stay With Me.mp3', source: 'default' },
-  { id: '/audio/Excerpt_Schubert - Piano Sonata_D845.mp3', name: 'Excerpt_Schubert - Piano Sonata_D845.mp3', url: '/audio/Excerpt_Schubert - Piano Sonata_D845.mp3', source: 'default' },
-  { id: '/audio/Excerpt_Schubert-Liszt - Erlkoenig.mp3', name: 'Excerpt_Schubert-Liszt - Erlkoenig.mp3', url: '/audio/Excerpt_Schubert-Liszt - Erlkoenig.mp3', source: 'default' },
-  { id: '/audio/Excerpt_Stan Getz - The Girl From Ipanema.mp3', name: 'Excerpt_Stan Getz - The Girl From Ipanema.mp3', url: '/audio/Excerpt_Stan Getz - The Girl From Ipanema.mp3', source: 'default' },
-  { id: '/audio/Excerpt_Tatsuro Yamashita - Christmas Eve.mp3', name: 'Excerpt_Tatsuro Yamashita - Christmas Eve.mp3', url: '/audio/Excerpt_Tatsuro Yamashita - Christmas Eve.mp3', source: 'default' },
-  { id: '/audio/Excerpt_Oscar Peterson - Tea For Two.mp3', name: 'Excerpt_Oscar Peterson - Tea For Two.mp3', url: '/audio/Excerpt_Oscar Peterson - Tea For Two.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Tchaikovsky - Nutcracker March_Piano Solo.mp3', name: 'Tchaikovsky - Nutcracker March_Piano Solo (Excerpt)', url: '/audio/Excerpt_Tchaikovsky - Nutcracker March_Piano Solo.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Yes - Roundabout.mp3', name: 'Yes - Roundabout (Excerpt)', url: '/audio/Excerpt_Yes - Roundabout.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Grover Washington, Jr.-Bill Withers - Just the Two of Us.mp3', name: 'Grover Washington, Jr.-Bill Withers - Just the Two of Us (Excerpt)', url: '/audio/Excerpt_Grover Washington, Jr.-Bill Withers - Just the Two of Us.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Eric Clapton - Autumn Leaves.mp3', name: 'Eric Clapton - Autumn Leaves (Excerpt)', url: '/audio/Excerpt_Eric Clapton - Autumn Leaves.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Frank Sinatra - Fly Me To The Moon.mp3', name: 'Frank Sinatra - Fly Me To The Moon (Excerpt)', url: '/audio/Excerpt_Frank Sinatra - Fly Me To The Moon.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Genesis - Firth of Fifth.mp3', name: 'Genesis - Firth of Fifth (Excerpt)', url: '/audio/Excerpt_Genesis - Firth of Fifth.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Mariya Takeuchi - Plastic Love.mp3', name: 'Mariya Takeuchi - Plastic Love (Excerpt)', url: '/audio/Excerpt_Mariya Takeuchi - Plastic Love.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Michael Jackson - Billie Jean.mp3', name: 'Michael Jackson - Billie Jean (Excerpt)', url: '/audio/Excerpt_Michael Jackson - Billie Jean.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Queen - Bohemian Rhapsody.mp3', name: 'Queen - Bohemian Rhapsody (Excerpt)', url: '/audio/Excerpt_Queen - Bohemian Rhapsody.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Rachmaninov - Symphony No. 2 Op. 27 III. Adagio Adagio.mp3', name: 'Rachmaninov - Symphony No. 2 Op. 27 III. Adagio Adagio (Excerpt)', url: '/audio/Excerpt_Rachmaninov - Symphony No. 2 Op. 27 III. Adagio Adagio.mp3', source: 'default' },
+  { id: '/audio/Excerpt_The Beatles - Abbey Road_Come Together.mp3', name: 'The Beatles - Abbey Road_Come Together (Excerpt)', url: '/audio/Excerpt_The Beatles - Abbey Road_Come Together.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Yasuha - Flyday Chinatown.mp3', name: 'Yasuha - Flyday Chinatown (Excerpt)', url: '/audio/Excerpt_Yasuha - Flyday Chinatown.mp3', source: 'default' },
+  { id: '/audio/Excerpt_B.B. King - The Thrill Is Gone.mp3', name: 'B.B. King - The Thrill Is Gone (Excerpt)', url: '/audio/Excerpt_B.B. King - The Thrill Is Gone.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Dvorak - Symphony No. 9 (From the New World)_Movement 4.mp3', name: 'Dvorak - Symphony No. 9 (From the New World)_Movement 4 (Excerpt)', url: '/audio/Excerpt_Dvorak - Symphony No. 9 (From the New World)_Movement 4.mp3', source: 'default' },
+  { id: '/audio/Excerpt_King Crimson - The Court of the Crimson King.mp3', name: 'King Crimson - The Court of the Crimson King (Excerpt)', url: '/audio/Excerpt_King Crimson - The Court of the Crimson King.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Richard Wagner - Ride of the Valkyries.mp3', name: 'Richard Wagner - Ride of the Valkyries (Excerpt)', url: '/audio/Excerpt_Richard Wagner - Ride of the Valkyries.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Chopin - Nocturne op.9 No.2.mp3', name: 'Chopin - Nocturne op.9 No.2 (Excerpt)', url: '/audio/Excerpt_Chopin - Nocturne op.9 No.2.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Debussy - Clair De Lune.mp3', name: 'Debussy - Clair De Lune (Excerpt)', url: '/audio/Excerpt_Debussy - Clair De Lune.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Michael Jaskson - Beat It.mp3', name: 'Michael Jaskson - Beat It (Excerpt)', url: '/audio/Excerpt_Michael Jaskson - Beat It.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Miki Matsubara - Stay With Me.mp3', name: 'Miki Matsubara - Stay With Me (Excerpt)', url: '/audio/Excerpt_Miki Matsubara - Stay With Me.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Schubert - Piano Sonata_D845.mp3', name: 'Schubert - Piano Sonata_D845 (Excerpt)', url: '/audio/Excerpt_Schubert - Piano Sonata_D845.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Schubert-Liszt - Erlkoenig.mp3', name: 'Schubert-Liszt - Erlkoenig (Excerpt)', url: '/audio/Excerpt_Schubert-Liszt - Erlkoenig.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Stan Getz - The Girl From Ipanema.mp3', name: 'Stan Getz - The Girl From Ipanema (Excerpt)', url: '/audio/Excerpt_Stan Getz - The Girl From Ipanema.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Tatsuro Yamashita - Christmas Eve.mp3', name: 'Tatsuro Yamashita - Christmas Eve (Excerpt)', url: '/audio/Excerpt_Tatsuro Yamashita - Christmas Eve.mp3', source: 'default' },
+  { id: '/audio/Excerpt_Oscar Peterson - Tea For Two.mp3', name: 'Oscar Peterson - Tea For Two (Excerpt)', url: '/audio/Excerpt_Oscar Peterson - Tea For Two.mp3', source: 'default' },
 ];
 
 // Type for K-Means assignments
@@ -123,6 +123,19 @@ const setsAreEqual = (setA: Set<unknown>, setB: Set<unknown>): boolean => {
 // Type for data processing method (add this if not already defined globally)
 type ProcessingMethod = 'none' | 'standardize' | 'normalize';
 
+// Define possible stages for visualization
+type ProcessingStage = 'features' | 'processed' | 'reduced' | 'kmeans' | null; // Add null option
+
+// Define canonical feature order (used for matrix construction)
+// Needs to be consistent between page.tsx and VisualizationPanel.tsx
+// Exporting might be better long-term, but redefining for now.
+const canonicalFeatureOrder: (keyof Features)[] = [
+  'energy', 'entropy', 'loudness', 'rms', 'dynamicComplexity', 'keyStrength',
+  'tuningFrequency', 'tuningCents',
+  'mfccMeans', 'mfccStdDevs', // Array features
+  'key', 'keyScale' // String features for one-hot encoding
+];
+
 // --- Helper: Prepare Matrix (Extracted Logic) ---
 const prepareMatrix = (
     activeFeatures: { id: string; features: Features }[], // Input: Features of active songs
@@ -134,14 +147,6 @@ const prepareMatrix = (
         logFn('No active songs with features available for matrix preparation.', 'warn');
         return null;
     }
-
-    // Define Canonical Feature Order (same as before)
-    const canonicalFeatureOrder: (keyof Features)[] = [
-        'energy', 'entropy', 'loudness', 'rms', 'dynamicComplexity', 'keyStrength',
-        'tuningFrequency', 'tuningCents',
-        'mfccMeans', 'mfccStdDevs', // Array features last before strings
-        'key', 'keyScale' // String features for one-hot encoding
-    ];
 
     // Determine Common Features (same logic as before)
     let commonFeatures = new Set<keyof Features>();
@@ -343,8 +348,11 @@ export default function DashboardPage() {
   const [kmeansAssignments, setKmeansAssignments] = useState<KmeansAssignments>({});
   const [isClustering, setIsClustering] = useState<boolean>(false); // Is K-Means process active (initialized but not reset)?
   const [isKmeansInitialized, setIsKmeansInitialized] = useState<boolean>(false); // Has the worker confirmed initialization?
-  type ProcessingStage = 'features' | 'processed' | 'reduced' | 'kmeans' | null;
   const [latestSuccessfulStage, setLatestSuccessfulStage] = useState<ProcessingStage>(null); // Track latest completed stage
+  // NEW: State for tracking which stage the user wants to visualize (can be manually selected)
+  const [visualizationDisplayStage, setVisualizationDisplayStage] = useState<ProcessingStage>(null);
+  // --- NEW: State for available feature keys --- 
+  const [availableFeatureKeys, setAvailableFeatureKeys] = useState<string[] | null>(null);
 
   // --- Log Helper Function ---
   const addLogMessage = useCallback((message: string, level: LogLevel = 'info') => {
@@ -764,12 +772,44 @@ export default function DashboardPage() {
             addLogMessage('Default song features logged to console for cache generation (may include previously cached data).', 'info');
         }
         // --- TEMPORARY CODE END ---
+
+        // --- NEW: Determine and set available feature keys --- 
+        let commonKeysSet = new Set<keyof Features>(); // <-- Use keyof Features here
+        let firstSongFeaturesChecked = false;
+        
+        activeSongIds.forEach(id => {
+            const features = songFeatures[id];
+            if (features && featureStatus[id] === 'complete') { // Only consider completed features
+                const currentKeys = Object.keys(features) as (keyof Features)[]; // Use keyof Features here too
+                if (!firstSongFeaturesChecked) {
+                    commonKeysSet = new Set(currentKeys);
+                    firstSongFeaturesChecked = true;
+                } else {
+                    // Intersect with existing common keys
+                    commonKeysSet.forEach(key => {
+                        if (!currentKeys.includes(key)) {
+                            commonKeysSet.delete(key);
+                        }
+                    });
+                }
+            }
+        });
+        
+        if (!firstSongFeaturesChecked) { // Handle case where no active songs completed
+             setAvailableFeatureKeys(null);
+             addLogMessage('No completed features found for active songs to determine available keys.', 'warn');
+        } else {
+             const finalKeysArray = Array.from(commonKeysSet);
+             setAvailableFeatureKeys(finalKeysArray);
+             addLogMessage(`Available feature keys updated: [${finalKeysArray.join(', ')}]`, 'info');
+        }
+        // --------------------------------------------------
     }
   // UPDATE: Removed defaultSongs from deps, kept handleResetKmeans
   }, [isProcessing, processingSongIds, featureStatus, extractionStartTimeRef, 
       setIsProcessing, addLogMessage, setUnprocessedData, setProcessedData, 
       setReducedDataPoints, setReductionDimensions, activeSongIds, songFeatures, songs, 
-      handleResetKmeans]); // Added handleResetKmeans
+      handleResetKmeans, setAvailableFeatureKeys]); // Added handleResetKmeans
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -888,6 +928,12 @@ export default function DashboardPage() {
     } else if (songToRemove) {
         addLogMessage(`Removed default song: ${songName}.`, 'complete');
     }
+
+    // --- NEW: Reset available keys as the common set might change --- 
+    setAvailableFeatureKeys(null);
+    addLogMessage('Reset available feature keys due to song removal.', 'info');
+    // Note: A more sophisticated approach would re-calculate common features here.
+    // -----------------------------------------------------------------
   };
 
   // Handler to toggle a song's active state
@@ -991,6 +1037,10 @@ export default function DashboardPage() {
 
   // Function to trigger feature extraction for *active* songs
   const handleExtractFeatures = useCallback(async (selectedFeatures: Set<string>) => {
+    // --- NEW: Reset available keys at the start --- 
+    setAvailableFeatureKeys(null);
+    // ----------------------------------------------
+    
     // --- START: Cache Check Logic ---
     const onlyDefaultSongs = songs.every(s => s.source === 'default');
     const allSongsActive = activeSongIds.size === songs.length;
@@ -1049,7 +1099,26 @@ export default function DashboardPage() {
               setIsProcessing(false); // Ensure processing flag is off
               setUnprocessedData(null); // Clear new state
               setProcessedData(null);   // Clear new state
-              return; // Exit the function early
+
+              // --- MODIFIED: Set available keys from cache data --- 
+              const firstSongId = defaultSongs[0]?.id;
+              const firstSongFeaturesFromCache = firstSongId ? cacheData.songData[firstSongId] : null;
+              if (firstSongFeaturesFromCache) {
+                  const cachedKeys = Object.keys(firstSongFeaturesFromCache);
+                  setAvailableFeatureKeys(cachedKeys);
+                  addLogMessage(`Available feature keys from cache: [${cachedKeys.join(', ')}]`, 'info');
+              } else {
+                  setAvailableFeatureKeys(null); // Reset if cache is invalid
+                  addLogMessage('Could not determine feature keys from cache data.', 'warn');
+              }
+              // ------------------------------------------------------
+
+              // Set stages after loading from cache
+              setLatestSuccessfulStage('features');
+              setVisualizationDisplayStage('features');
+              addLogMessage('Successfully loaded features from cache. Setting latest and display stage to: features', 'info');
+              setIsProcessing(false);
+              return; // Exit early
             }
           } else {
             addLogMessage('Cache skipped: Selected features do not match cached features.', 'info');
@@ -1085,33 +1154,17 @@ export default function DashboardPage() {
         addLogMessage('Worker not ready or already processing. Extraction aborted.', 'warn');
         // REMOVED: setCurrentSelectedMIRFeatures(selectedFeatures);
 
-        // Get active songs for clearing downstream state correctly
-        const songsToProcess = songs.filter(song => activeSongIds.has(song.id));
-        if (songsToProcess.length === 0) {
-            addLogMessage('No active songs selected, nothing to clear.', 'info');
-            return;
-        }
-
-        // Clear previous reduced points for active songs and subsequent clustering results
-        setReducedDataPoints(prev => {
-             const clearedState = { ...prev };
-             songsToProcess.forEach(song => delete clearedState[song.id]);
-             return clearedState;
-         });
-        setKmeansAssignments(prev => {
-           const clearedState = { ...prev };
-           songsToProcess.forEach(song => delete clearedState[song.id]);
-           return clearedState;
-        });
+        // Clear downstream state if extraction is aborted early
+        setUnprocessedData(null);
+        setProcessedData(null);
+        setReducedDataPoints({});
+        setKmeansAssignments({});
         setKmeansCentroids([]);
         setKmeansIteration(0);
         setReductionDimensions(0);
-        // Also reset K-Means state here when *starting* new extraction
         handleResetKmeans();
-        
-        addLogMessage('Downstream processing results cleared before new feature extraction.', 'info');
-        // ------------------------------------------------------------------
-
+        setAvailableFeatureKeys(null); // Also reset here
+        addLogMessage('Downstream processing results cleared before new feature extraction attempt (aborted). ', 'info');
         return;
     }
     if (selectedFeatures.size === 0) {
@@ -1206,10 +1259,19 @@ export default function DashboardPage() {
   }, [songs, getDecodedAudio, essentiaWorkerReady, isProcessing, activeSongIds, 
       addLogMessage, featureStatus, setSongFeatures, setFeatureStatus, 
       setReducedDataPoints, setKmeansAssignments, setKmeansCentroids, 
-      setKmeansIteration, setReductionDimensions, handleResetKmeans]); 
+      setKmeansIteration, setReductionDimensions, handleResetKmeans, setAvailableFeatureKeys]); 
 
   // --- NEW Handler to Trigger Data Processing ---
   const handleStartDataProcessing = useCallback((method: ProcessingMethod, range?: [number, number]) => {
+    // --- REMOVED: Incorrect reset of available keys --- 
+    // If we re-process, the available features might change based on active songs 
+    // It might be safer to nullify this here, although it should be recalculated 
+    // during the prepareMatrix step conceptually. Let's keep it null for now. 
+    // setAvailableFeatureKeys(null); // REMOVED: This was causing the issue!
+    // Note: availableFeatureKeys is NOT reset here because the feature keys and their
+    // order remain the same for both unprocessed and processed data.
+    // VisualizationPanel uses availableFeatureKeys to interpret the structure of both matrices.
+    
     // Checks for worker readiness and other active processes
     if (!dataProcessingWorkerRef.current || isProcessing || isReducing) {
         addLogMessage('Cannot start data processing: Worker not ready or MIR/Reduction process is active.', 'warn');
@@ -1250,19 +1312,18 @@ export default function DashboardPage() {
     const matrixResult = prepareMatrix(activeFeatures, addLogMessage);
 
     if (matrixResult) {
-        // Store unprocessed data (including OHE info) & clear downstream
-        setUnprocessedData(matrixResult); // Now includes isOHEColumn
+        // Store unprocessed data & clear downstream
+        setUnprocessedData(matrixResult);
         setProcessedData(null);
         setReducedDataPoints({});
-        setKmeansAssignments({});
-        setKmeansCentroids([]);
-        setKmeansIteration(0);
+        handleResetKmeans();
         setReductionDimensions(0);
-        addLogMessage('Stored unprocessed matrix with OHE info. Cleared downstream results...', 'info');
+        // REMOVED: Incorrect reset here as well
+        // setAvailableFeatureKeys(null); // REMOVED: This was incorrect
+        addLogMessage('Stored unprocessed matrix. Cleared downstream results. Sending to worker...', 'info');
 
-        // Set processing flag and send to worker (including OHE info)
+        // Set processing flag and send to worker
         setIsProcessingData(true);
-        addLogMessage(`Sending ${matrixResult.vectors.length} vectors to Data Processing worker (Method: ${method})...`, 'info');
         dataProcessingWorkerRef.current.postMessage({
             type: 'processData',
             payload: {
@@ -1289,7 +1350,8 @@ export default function DashboardPage() {
     // State setters used:
     setUnprocessedData, setProcessedData, setReducedDataPoints, 
     setKmeansAssignments, setKmeansCentroids, setKmeansIteration, 
-    setReductionDimensions, setIsProcessingData
+    setReductionDimensions, setIsProcessingData,
+    setAvailableFeatureKeys // Add new setter dependency
 ]);
 
   // --- MODIFIED Handler: Trigger dimensionality reduction ---
@@ -1355,7 +1417,8 @@ export default function DashboardPage() {
  }, [
      processedData, isProcessing, isProcessingData, isReducing, 
      addLogMessage, druidWorkerRef,
-     setIsReducing, setReducedDataPoints, setKmeansAssignments, setKmeansCentroids, setKmeansIteration
+     setIsReducing, setReducedDataPoints, setKmeansAssignments, setKmeansCentroids, setKmeansIteration,
+     setAvailableFeatureKeys // Add new setter dependency
  ]);
 
   // --- Clustering Handler (handleRunClustering) ---
@@ -1434,7 +1497,8 @@ export default function DashboardPage() {
   }, [
       isProcessing, isProcessingData, isReducing, activeSongIds, reducedDataPoints, 
       reductionDimensions, addLogMessage, kmeansWorkerRef,
-      setIsClustering, setKmeansIteration, setKmeansCentroids, setKmeansAssignments
+      setIsClustering, setKmeansIteration, setKmeansCentroids, setKmeansAssignments,
+      setAvailableFeatureKeys // Add new setter dependency
   ]);
 
   // --- NEW: Handler to Trigger Next K-Means Step --- 
@@ -1539,6 +1603,12 @@ export default function DashboardPage() {
     setIsAboutDialogOpen(prev => !prev);
   };
 
+  // NEW: Handler for user selecting visualization stage
+  const handleVisualizationStageSelect = useCallback((stage: ProcessingStage) => {
+    addLogMessage(`User selected visualization stage: ${stage}`, 'info');
+    setVisualizationDisplayStage(stage); // Only update the user's selected stage
+  }, [addLogMessage]);
+
   return (
     <main className="flex flex-col min-h-screen p-4 bg-gray-900 text-gray-100 font-[family-name:var(--font-geist-mono)] hide-scrollbar">
        {/* Hidden File Input */}
@@ -1638,6 +1708,9 @@ export default function DashboardPage() {
           kmeansCentroids={kmeansCentroids}
           kmeansIteration={kmeansIteration}
           latestSuccessfulStage={latestSuccessfulStage}
+          visualizationDisplayStage={visualizationDisplayStage} // NEW: Pass user's selected stage
+          onStageSelect={handleVisualizationStageSelect} // NEW: Pass handler for stage selection
+          availableFeatureKeys={availableFeatureKeys} // <-- Pass new prop
         />
 
          {/* Controls Panel (Right Column, Full Height, Max Width)*/}
