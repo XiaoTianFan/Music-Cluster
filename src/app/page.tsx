@@ -1744,13 +1744,22 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Footer Placeholder */}
+      {/* Footer Placeholder - UPDATED */}
       <footer
-        className="w-full h-10 mt-4 p-2 text-center text-xs text-gray-500 border-t border-gray-700"
+        className="w-full h-10 mt-4 p-2 text-center text-xs text-gray-500 border-t border-gray-700 flex items-center justify-center gap-4"
          data-augmented-ui="tl-clip tr-clip border"
          style={{ '--aug-border-color': '#444', '--aug-border-bg': 'transparent' } as React.CSSProperties}
       >
-        Status messages or other info can go here.
+        <span>Copyright (c) 2025 Xiaotian Fan, As33</span>
+        <span>|</span>
+        <a 
+          href="https://github.com/XiaoTianFan/Music-Cluster" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="hover:text-gray-400 transition-colors"
+        >
+          GitHub Repository
+        </a>
       </footer>
 
       {/* Song Details Dialog (Conditionally Rendered) */}
