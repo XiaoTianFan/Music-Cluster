@@ -140,7 +140,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
 
   return (
     <div
-      className={`p-4 border border-green-500 flex flex-col h-[85vh] ${className || ''}`}
+      className={`p-4 border border-green-500 flex overflow-y-scroll hide-scrollbar flex-col h-[85vh] ${className || ''}`}
       data-augmented-ui="tl-round tr-clip br-clip-x bl-clip border"
       style={{ '--aug-border-color': 'lime' } as React.CSSProperties}
     >
@@ -154,20 +154,18 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
             data-augmented-ui="tl-clip br-clip border"
             style={{ '--aug-border-color': '#555' } as React.CSSProperties} >
           <h3 className="text-md font-semibold mb-2 text-green-300">MIR Features</h3>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 flex-grow">
+          <div className="flex flex-wrap gap-x-3 gap-y-2 flex-grow">
             {availableMirFeatures.map(feature => (
               <div key={feature.id} className="relative group flex items-center justify-between text-xs">
-                <label htmlFor={`feature-${feature.id}`} className="flex items-center cursor-pointer">
-                  <input 
-                    type="checkbox"
-                    id={`feature-${feature.id}`}
-                    checked={selectedMirFeatures.has(feature.id)}
-                    onChange={() => handleMirFeatureToggle(feature.id)}
-                    className="mr-2 accent-green-500 cursor-pointer"
+                 <button 
+                    onClick={() => handleMirFeatureToggle(feature.id)}
+                    className={`text-xs pr-2 pl-2 py-1 cursor-pointer border border-transparent hover:border-green-500/50 data-[checked=true]:bg-green-800/50 data-[checked=true]:border-green-600 disabled:opacity-50 disabled:cursor-not-allowed`}
+                    data-checked={selectedMirFeatures.has(feature.id)}
                     disabled={isProcessing}
-                  />
-                  {feature.name}
-                </label>
+                    title={feature.name}
+                 >
+                   {feature.name}
+                 </button>
                 <button 
                   onClick={() => onShowExplanation(feature.id)}
                   className="absolute right-0 top-1/2 -translate-y-1/2 px-1 py-0.5 text-xs bg-gray-700 hover:bg-gray-600 text-blue-300 hover:text-blue-200 border border-blue-900/50 invisible group-hover:visible disabled:opacity-50 disabled:cursor-not-allowed z-10"
@@ -219,7 +217,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
                                     checked={selectedProcessingMethod === method}
                                     onChange={(e) => setSelectedProcessingMethod(e.target.value as ProcessingMethod)}
                                     className="hidden"
-                                    disabled={isProcessing || !hasFeaturesForActiveSongs}
+                                    disabled={isProcessing}
                                 />
                                 {method === 'standardize' ? 'Standardize (Z-score)' : 'Normalize (Min-Max)'}
                             </label>
@@ -248,7 +246,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
                                     checked={selectedNormalizationRange === range}
                                     onChange={(e) => setSelectedNormalizationRange(e.target.value as '[0,1]' | '[-1,1]')}
                                     className="hidden"
-                                    disabled={isProcessing || !hasFeaturesForActiveSongs}
+                                    disabled={isProcessing}
                                 />
                                 {range}
                             </label>
@@ -289,7 +287,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
                <div className="flex gap-2 flex-wrap">
                   {availableDimReducers.map(reducer => (
                       <div key={reducer.id} className="relative group flex items-center">
-                          <label className="text-xs pl-1 py-1 cursor-pointer border border-transparent hover:border-green-500/50 data-[checked=true]:bg-green-800/50 data-[checked=true]:border-green-600" data-checked={selectedDimReducer === reducer.id}>
+                          <label className="text-xs pl-1 pr-1 py-1 cursor-pointer border border-transparent hover:border-green-500/50 data-[checked=true]:bg-green-800/50 data-[checked=true]:border-green-600" data-checked={selectedDimReducer === reducer.id}>
                               <input 
                                   type="radio" 
                                   name="dimReducer" 

@@ -1,4 +1,5 @@
 import React, { useState, DragEvent } from 'react';
+import { PlayIcon, PauseIcon, TrashIcon, InformationCircleIcon } from '@heroicons/react/24/solid';
 
 // Re-import types from page.tsx or define locally/globally
 interface Song {
@@ -27,6 +28,11 @@ interface SongListPanelProps {
   onSelectAll: () => void; // Added prop
   onClearAll: () => void;  // Added prop
   onShowDetails: (songId: string) => void; // Prop to trigger showing details
+  // --- NEW: Audio Player Props ---
+  onPlayRequest: (songId: string) => void;
+  currentlyPlayingSongId: string | null;
+  isPlaying: boolean;
+  // ----------------------------
   className?: string; // Allow passing className for layout adjustments
 }
 
@@ -86,6 +92,11 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
   onSelectAll, // Destructure added prop
   onClearAll,  // Destructure added prop
   onShowDetails, // Destructure added prop
+  // --- NEW: Destructure Audio Props ---
+  onPlayRequest,
+  currentlyPlayingSongId,
+  isPlaying,
+  // ----------------------------------
   className 
 }) => {
   // State for drag-over visual feedback
@@ -215,62 +226,75 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
                     const baseColor = plotlyColors[clusterIndex % plotlyColors.length];
                     backgroundColor = hexToRgba(baseColor, 0.3); // 30% opacity
                 }
+                // Determine if this song is the one currently playing
+                const isCurrentlyPlaying = currentlyPlayingSongId === song.id && isPlaying;
+                const status = featureStatus[song.id]; // Get status for convenience
                 // -------------------------------------
                 return (
                     <li 
                         key={song.id} 
                         className="group flex justify-between items-center max-h-[5vh] text-xs p-2 pr-2 hover:bg-gray-800/50 border-b border-gray-700/50 relative" 
-                        style={{ backgroundColor }} // <-- APPLY STYLE
+                        style={{ backgroundColor }} 
                     >
-                        <div className="flex items-center min-w-0 min-h-0 max-h-[5vh]">
+                        {/* Content Container (In Flow - Checkbox and Text only) */}
+                        <div className="flex items-center min-w-0 w-full"> 
                             <input 
                                 type="checkbox" 
                                 checked={activeSongIds.has(song.id)}
                                 onChange={() => onToggleSongActive(song.id)}
-                                disabled={isProcessing} // Disable toggle while processing maybe?
+                                disabled={isProcessing} 
                                 className="mr-2 flex-shrink-0 accent-cyan-500 cursor-pointer disabled:cursor-not-allowed"
                                 title={activeSongIds.has(song.id) ? "Exclude from processing" : "Include in processing"}
                             />
-                            {/* Song Name - Takes up available space and truncates */}
-                            <span title={song.name} className="truncate flex-grow mr-2">
+                            {/* Text now takes all available space in the flow */}
+                            <span title={song.name} className="truncate flex-grow">
                                 {song.name}
                             </span>
-                            {/* Container for details button and status */}
-                            <span className="flex-shrink-0 flex items-center gap-1 max-h-[5vh]"> 
-                                {/* Details Button (conditional) */}
-                                {featureStatus[song.id] === 'complete' && (
-                                    <button
-                                        onClick={() => onShowDetails(song.id)}
-                                        className="text-blue-400 hover:text-blue-300 text-xs px-1 py-0 bg-gray-700 hover:bg-gray-600 border border-blue-900/50"
-                                        title="Show Details"
-                                        // disabled={isProcessing} // Decide if viewing details should be blocked by global processing
-                                    >
-                                        Show
-                                    </button>
-                                )}
-                                
-                                {/* Status Indicator */}
-                                <span> {/* Wrap status in span for alignment */}
-                                    {featureStatus[song.id] === 'processing' && <span className="text-yellow-400">(Proc...)</span>}
-                                    {featureStatus[song.id] === 'complete' && <span className="text-green-400">(Done)</span>}
-                                    {featureStatus[song.id] === 'error' && <span className="text-red-500">(Error)</span>}
-                                </span>
-                            </span>
                         </div>
-                        {/* Remove song.source === 'user' condition */}
-                        {/* Add group-hover visibility and adjust positioning/styling */}
-                        <button
-                            onClick={() => onRemoveSong(song.id)}
-                            className="absolute right-1 top-1/2 -translate-y-1/2 invisible group-hover:visible text-red-600 hover:text-red-400 text-xs px-1 py-0.5 bg-gray-700 hover:bg-gray-600 flex-shrink-0 border border-red-900/50 z-10" // Added positioning, visibility, z-index
-                            disabled={isProcessing} // Disable remove while processing
-                            title="Remove Song" // Generic title
-                        >
-                            X
-                        </button>
+                        
+                        {/* --- Button Container (Absolute Position, Hover Visible, Higher Z-Index) --- */} 
+                        <span 
+                            className="absolute top-1/2 right-2 -translate-y-1/2 z-10 
+                                       flex items-center gap-1 
+                                       opacity-0 group-hover:opacity-100 transition-opacity duration-150 
+                                       bg-gray-800/80 rounded px-1 py-0.5" // Background on the container
+                        > 
+                            {/* Details Button */}
+                            {status === 'complete' && (
+                                <button 
+                                    onClick={() => onShowDetails(song.id)}
+                                    title="Show Features"
+                                    className="text-blue-400 hover:text-blue-300 disabled:opacity-50 p-0.5" 
+                                    disabled={isProcessing}
+                                >
+                                    <InformationCircleIcon className="h-4 w-4" />
+                                </button>
+                            )}
+                            {/* Play Button */} 
+                            <button 
+                                onClick={() => onPlayRequest(song.id)}
+                                title={isCurrentlyPlaying ? "Pause" : "Play"}
+                                className={`p-0.5 
+                                          ${isCurrentlyPlaying ? 'text-green-400 hover:text-green-300' : 'text-cyan-400 hover:text-cyan-300'}
+                                          ${isProcessing ? 'cursor-not-allowed opacity-50' : ''} `}
+                                disabled={isProcessing}
+                            >
+                                {isCurrentlyPlaying ? <PauseIcon className="h-4 w-4" /> : <PlayIcon className="h-4 w-4" />}
+                            </button>
+                            {/* Remove Button */}
+                            <button 
+                                onClick={() => onRemoveSong(song.id)}
+                                title="Remove Song"
+                                className="text-red-500 hover:text-red-400 disabled:opacity-50 p-0.5"
+                                disabled={isProcessing}
+                            >
+                                <TrashIcon className="h-4 w-4" />
+                            </button>
+                        </span> 
                     </li>
                 );
             })}
-        </ul>
+         </ul>
       </div>
 
       {/* Selection Controls Area (Pagination removed) */}

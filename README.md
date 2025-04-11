@@ -8,21 +8,21 @@ This web application demonstrates and visualizes the process of unsupervised k-m
 *   **Music Information Retrieval (MIR):** Extracts various audio features using **Essentia.js** running in a Web Worker. Selectable features include MFCCs, energy, entropy, key, spectral characteristics, rhythm, and tonal features.
 *   **Data Processing:** Optionally scales numerical features (Standardization or Normalization) using a dedicated Web Worker, intelligently skipping one-hot encoded columns.
 *   **Dimensionality Reduction:** Reduces high-dimensional feature vectors to 2D or 3D using **DruidJS** (supporting PCA, t-SNE, UMAP) in a Web Worker.
-*   **K-Means Clustering:** Performs k-means clustering on the reduced data points using **TensorFlow.js** (replacing the initially planned `tf-kmeans`) in a Web Worker.
+*   **K-Means Clustering:** Performs k-means clustering on the reduced data points using **TensorFlow.js** in a Web Worker.
 *   **Step-by-Step Visualization:** Interactively observe the k-means algorithm's progress: centroid initialization, data point assignment, and centroid updates.
 *   **Interactive Scatter Plot:** Visualize the final clusters in a 2D/3D scatter plot (using **Plotly.js**), with points colored by cluster, tooltips showing song titles, zooming, and panning.
-*   **New Song Classification:** Upload a new song after training a model to see how it's classified within the existing clusters.
+*   **New Song Classification (To be implemented):** Upload a new song after training a model to see how it's classified within the existing clusters.
 *   **Unique UI/UX:** Features a vintage + cyberpunk aesthetic with neon and steam-ish elements, built with **Augmented UI**.
 
 ## ⚙️ Technology Stack
 
-*   **Framework:** Next.js (App Router)
+*   **Framework:** Next.js/React
 *   **Language:** TypeScript
 *   **MIR:** Essentia.js (@v0.1.3)
 *   **Dimensionality Reduction:** DruidJS
 *   **Clustering:** TensorFlow.js (@tensorflow/tfjs)
-*   **Visualization:** Plotly.js, D3.js (potentially for step-by-step animations)
-*   **UI Styling:** Augmented UI, Tailwind CSS (or CSS Modules)
+*   **Visualization:** Plotly.js
+*   **UI Styling:** Augmented UI, Tailwind CSS
 *   **Concurrency:** Web Workers for computationally intensive tasks (Essentia, DruidJS, TensorFlow.js)
 *   **Deployment:** Vercel
 
@@ -51,20 +51,18 @@ This web application demonstrates and visualizes the process of unsupervised k-m
     ```
 4.  Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-## 📂 Project Structure (Simplified)
+## 📂 Project Structure
 
 ```
 ├── public/
-│   └── audio/         # Default audio samples
-├── src/
-│   ├── app/           # Next.js App Router pages (Dashboard, About)
-│   ├── components/    # React components (Controls, Visualizations, UI elements)
-│   ├── hooks/         # Custom React hooks
+│   ├── audio/         # Default audio samples
 │   ├── lib/           # Utility functions, library configurations
-│   ├── store/         # State management (e.g., Zustand)
-│   ├── styles/        # Global styles, Tailwind config
+│   └── workers/       # Build .js workers
+├── src/
+│   ├── app/           # Next.js App Router pages (Dashboard)
+│   ├── components/    # React components (Controls, Visualizations, UI elements)
 │   ├── types/         # TypeScript type definitions
-│   └── workers/       # Web Worker scripts (Essentia, DruidJS, TF.js, Data Processing)
+│   └── workers/       # Web Worker scripts in .ts (Essentia, DruidJS, TF.js, Data Processing)
 ├── eslint.config.mjs  # ESLint configuration
 ├── next.config.mjs    # Next.js configuration
 ├── package.json       # Project dependencies and scripts

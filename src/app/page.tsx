@@ -11,6 +11,7 @@ import SongDetailsDialog from '../components/SongDetailsDialog'; // Import the n
 import FeatureExplanationDialog from '../components/FeatureExplanationDialog'; // Import the explanation dialog
 import AboutDialog from '../components/AboutDialog'; // Import the About dialog
 import ExplanationDialog from '../components/ExplanationDialog'; // <-- Import the new generic dialog
+import AudioPlayer from '../components/AudioPlayer'; // <-- NEW: Import AudioPlayer
 // Remove the static import of VisualizationPanel
 // import VisualizationPanel from '../components/VisualizationPanel';
 
@@ -360,6 +361,11 @@ export default function DashboardPage() {
   const [visualizationDisplayStage, setVisualizationDisplayStage] = useState<ProcessingStage>(null);
   // --- NEW: State for available feature keys --- 
   const [availableFeatureKeys, setAvailableFeatureKeys] = useState<string[] | null>(null);
+
+  // --- NEW: Audio Player State ---
+  const [currentlyPlayingSongId, setCurrentlyPlayingSongId] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  // -----------------------------
 
   // --- NEW: Ref to store target IDs for completion check ---
   const initialTargetSongIdsRef = useRef<Set<string>>(new Set());
@@ -1077,6 +1083,35 @@ export default function DashboardPage() {
     }
   }, [songs, addLogMessage]); // Dependencies: songs for duplicate check, addLogMessage
 
+  // --- NEW: Audio Player Callbacks ---
+  const handlePlayRequest = useCallback((songId: string) => {
+    addLogMessage(`Play requested for song: ${getSongNameById(songId)}`, 'info');
+    setCurrentlyPlayingSongId(songId);
+    setIsPlaying(true);
+  }, [addLogMessage, getSongNameById]); // Add getSongNameById dependency
+
+  const handleTogglePlayPause = useCallback(() => {
+    if (currentlyPlayingSongId) {
+      setIsPlaying(prev => {
+        const newState = !prev;
+        addLogMessage(newState ? `Playing song: ${getSongNameById(currentlyPlayingSongId)}` : `Paused song: ${getSongNameById(currentlyPlayingSongId)}`, 'info');
+        return newState;
+      });
+    } else {
+       addLogMessage('Toggle play/pause requested but no song selected.', 'info');
+    }
+  }, [addLogMessage, currentlyPlayingSongId, getSongNameById]); // Add dependencies
+
+  const handleSongEnd = useCallback(() => {
+    if (currentlyPlayingSongId) {
+       addLogMessage(`Song finished: ${getSongNameById(currentlyPlayingSongId)}`, 'complete');
+       setIsPlaying(false);
+       // Optionally clear the song or move to next:
+       // setCurrentlyPlayingSongId(null);
+    }
+  }, [addLogMessage, currentlyPlayingSongId, getSongNameById]); // Add dependencies
+  // --- End Audio Player Callbacks ---
+
   // --- MODIFIED: Function to trigger feature extraction for *active* songs ---
   const handleExtractFeatures = useCallback(async (selectedFeatures: Set<string>) => {
     addLogMessage(`[Extract Start] Requesting features [${[...selectedFeatures].join(', ')}] for ${activeSongIds.size} active songs...`, 'info');
@@ -1665,6 +1700,12 @@ export default function DashboardPage() {
     setVisualizationDisplayStage(stage); // Only update the user's selected stage
   }, [addLogMessage]);
 
+  // --- NEW: Memoize currently playing song object ---
+  const currentlyPlayingSong = useMemo(() => {
+      return songs.find(s => s.id === currentlyPlayingSongId) ?? null;
+  }, [currentlyPlayingSongId, songs]);
+  // -----------------------------------------------
+
   return (
     <main className="flex flex-col min-h-screen p-4 bg-gray-900 text-gray-100 font-[family-name:var(--font-geist-mono)] hide-scrollbar">
        {/* Hidden File Input */}
@@ -1684,8 +1725,17 @@ export default function DashboardPage() {
         data-augmented-ui="tl-clip tr-clip br-clip bl-clip border"
         style={{ '--aug-border-color': 'cyan', '--aug-border-bg': 'transparent' } as React.CSSProperties}
       >
-        <h1 className="px-4 text-xl font-bold text-cyan-400">MusicCluster Dashboard</h1>
-        <div className="flex items-center gap-4"> {/* Wrapper for status and button */}
+        <h1 className="px-4 text-xl font-bold text-cyan-400 flex-shrink-0">MusicCluster Dashboard</h1>
+        {/* --- NEW: Add Audio Player in the middle --- */}
+        <AudioPlayer 
+          song={currentlyPlayingSong} 
+          isPlaying={isPlaying} 
+          onTogglePlayPause={handleTogglePlayPause} 
+          onSongEnd={handleSongEnd}
+          className="flex-grow flex justify-center items-center min-w-0 max-w-[40vw] px-4" // Added min-w-0 and padding
+        />
+        {/* -------------------------------------------- */}
+        <div className="flex items-center gap-4 flex-shrink-0"> {/* Wrapper for status and button, add flex-shrink-0 */}
           <div className="text-sm text-cyan-300">
             {/* Status Text */}
             <span>
@@ -1747,6 +1797,11 @@ export default function DashboardPage() {
             onClearAll={handleClearAll}
             onShowDetails={handleShowDetails}
             kmeansAssignments={kmeansAssignments} // <-- ADD THIS PROP
+            // --- NEW: Pass Audio Props ---
+            onPlayRequest={handlePlayRequest}
+            currentlyPlayingSongId={currentlyPlayingSongId}
+            isPlaying={isPlaying}
+            // ---------------------------
           />
 
           {/* Visualization Panel (Middle Column, Top Row) */}
@@ -1821,6 +1876,22 @@ export default function DashboardPage() {
         >
           GitHub Repository
         </a>
+        {/* --- NEW: About Link in Footer --- */}
+        <span>|</span>
+        <span
+          onClick={handleToggleAboutDialog}
+          className="hover:text-gray-400 transition-colors cursor-pointer"
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              handleToggleAboutDialog();
+            }
+          }}
+        >
+          About
+        </span>
+        {/* --------------------------------- */}
       </footer>
 
       {/* Song Details Dialog (Conditionally Rendered) */}
