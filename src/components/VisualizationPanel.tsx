@@ -32,12 +32,19 @@ interface VisualizationPanelProps {
   kmeansAssignments: KmeansAssignments; // Uses the KmeansAssignments type defined (or to be defined) in page.tsx
   kmeansCentroids: number[][];
   kmeansIteration: number;
+  latestSuccessfulStage: ProcessingStage; // Prop from parent
 }
 
 // Define types for internal state
 type DataStage = 'raw' | 'processed' | 'reduction' | 'clustering';
 type DimensionSelection = 2 | 3;
 type AxisScale = 'linear' | 'log';
+
+// Define possible stages for visualization
+type VisualizationStage = 'features' | 'unprocessed' | 'processed' | 'reduced' | 'clusters';
+
+// Type received from parent for the latest completed step
+type ProcessingStage = 'features' | 'processed' | 'reduced' | 'kmeans' | null;
 
 // Define a color scale for clusters - add more colors if needed
 const plotlyColors = [
@@ -161,7 +168,8 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
   reductionDimensions,
   kmeansAssignments,
   kmeansCentroids,
-  kmeansIteration 
+  kmeansIteration,
+  latestSuccessfulStage,
 }) => {
 
   // --- Internal State for Visualization Controls ---
@@ -178,6 +186,9 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
   const [selectedScaleY, setSelectedScaleY] = useState<AxisScale>('linear');
   const [selectedScaleZ, setSelectedScaleZ] = useState<AxisScale>('linear');
   const [showLegend, setShowLegend] = useState<boolean>(false); // State for legend visibility
+  const [currentStage, setCurrentStage] = useState<VisualizationStage>('clusters'); // Default view
+  const [isFeatureTableVisible, setIsFeatureTableVisible] = useState(false);
+  const [featureTableData, setFeatureTableData] = useState<Array<Record<string, any>> | null>(null);
   // -------------------------------------------------
 
   const songMap = useMemo(() => new Map(songs.map(s => [s.id, s])), [songs]);
@@ -390,6 +401,38 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
        setSelectedAxisZ(null);
     }
   }, [selectedDataStage, featureColumnsMap.categorical, featureColumnsMap.numerical, selectedDimensions, isClusteringDataAvailable]);
+
+  // --- Auto-Switch Logic --- 
+  useEffect(() => {
+    console.log(`[VizPanel] useEffect triggered. latestSuccessfulStage: ${latestSuccessfulStage}, currentStage: ${currentStage}`);
+
+    // Map parent stage to panel stage
+    let targetStage: VisualizationStage | null = null;
+    if (latestSuccessfulStage === 'features') targetStage = 'features';
+    else if (latestSuccessfulStage === 'processed') targetStage = 'processed'; // Assuming panel has a 'processed' view
+    else if (latestSuccessfulStage === 'reduced') targetStage = 'reduced';
+    else if (latestSuccessfulStage === 'kmeans') targetStage = 'clusters';
+
+    if (targetStage && targetStage !== currentStage) {
+        // Check if data for the target stage exists before switching
+        let dataExists = false;
+        if (targetStage === 'features' && Object.keys(songFeatures).length > 0) dataExists = true;
+        // Add check for 'unprocessed' stage if VisualizationPanel supports it
+        // if (targetStage === 'unprocessed' && unprocessedData?.vectors.length > 0) dataExists = true; 
+        else if (targetStage === 'processed' && processedData && processedData.vectors && processedData.vectors.length > 0) dataExists = true;
+        else if (targetStage === 'reduced' && Object.keys(reducedDataPoints).length > 0) dataExists = true;
+        else if (targetStage === 'clusters' && Object.keys(reducedDataPoints).length > 0) dataExists = true; // Clusters view depends on reduced points
+
+        if (dataExists) {
+            console.log(`[VizPanel] Auto-switching view from ${currentStage} to ${targetStage}`);
+            setCurrentStage(targetStage);
+        } else {
+            console.log(`[VizPanel] Auto-switch to ${targetStage} skipped: Data not available.`);
+        }
+    } else {
+        console.log(`[VizPanel] Auto-switch condition not met (target: ${targetStage}, current: ${currentStage})`);
+    }
+  }, [latestSuccessfulStage, songFeatures, processedData, reducedDataPoints, currentStage]); // Dependencies
 
   // Helper function to create detailed hover information
   const createDetailedHoverText = (songId: string, songName: string, stage: DataStage): string => {

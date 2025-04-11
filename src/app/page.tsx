@@ -341,7 +341,11 @@ export default function DashboardPage() {
   const [kmeansIteration, setKmeansIteration] = useState<number>(0);
   const [kmeansCentroids, setKmeansCentroids] = useState<number[][]>([]);
   const [kmeansAssignments, setKmeansAssignments] = useState<KmeansAssignments>({});
-  const [isClustering, setIsClustering] = useState<boolean>(false); // K-Means clustering
+  const [isClustering, setIsClustering] = useState<boolean>(false); // Is K-Means process active (initialized but not reset)?
+  const [isKmeansInitialized, setIsKmeansInitialized] = useState<boolean>(false); // Has the worker confirmed initialization?
+  const [currentSelectedMIRFeatures, setCurrentSelectedMIRFeatures] = useState<Set<string>>(new Set()); // Store last used features
+  type ProcessingStage = 'features' | 'processed' | 'reduced' | 'kmeans' | null;
+  const [latestSuccessfulStage, setLatestSuccessfulStage] = useState<ProcessingStage>(null); // Track latest completed stage
 
   // --- Log Helper Function ---
   const addLogMessage = useCallback((message: string, level: LogLevel = 'info') => {
@@ -439,7 +443,14 @@ export default function DashboardPage() {
                          setReductionDimensions(0); // Reset if no data
                      }
                      addLogMessage(`Dimensionality reduction complete. ${payload.songIds.length} points updated.`, 'complete');
-                     break;
+                      // --- NEW: Reset K-Means as re-reduction invalidates it ---
+                      handleResetKmeans();
+                      // --- NEW: Update Latest Stage ---
+                      setLatestSuccessfulStage('reduced');
+                      addLogMessage('Reduction complete. Updating latest stage to: reduced', 'info');
+                      // ----------------------------------
+                      // -------------------------------------------------------
+                      break;
                 case 'reductionError':
                      setIsReducing(false);
                      addLogMessage(`Druid Worker Error: ${payload.error}`, 'error');
@@ -471,27 +482,53 @@ export default function DashboardPage() {
                 case 'kmeansIterationUpdate':
                     // Define payload type explicitly for kmeansIterationUpdate
                     const updatePayload = payload as { iteration: number; centroids: number[][]; songIds: string[]; assignments: number[] };
-                    setKmeansIteration(updatePayload.iteration);
-                    setKmeansCentroids(updatePayload.centroids);
-                    const newAssignments: KmeansAssignments = {};
-                    updatePayload.songIds.forEach((id: string, index: number) => {
-                        newAssignments[id] = updatePayload.assignments[index];
-                    });
-                    setKmeansAssignments(prev => ({ ...prev, ...newAssignments })); // Update state correctly
-                    addLogMessage(`K-Means iteration ${updatePayload.iteration} update received.`, 'complete');
+                    // This case is no longer used with manual steps
+                    addLogMessage(`[Main] Received deprecated K-Means worker message: ${type}`, 'warn');
                     break;
                 case 'kmeansComplete':
-                    setIsClustering(false);
-                    setKmeansCentroids(payload.finalCentroids);
-                    const finalAssignments: KmeansAssignments = {};
-                    payload.songIds.forEach((id: string, index: number) => {
-                        finalAssignments[id] = payload.finalAssignments[index];
+                    // This case is no longer used with manual steps
+                    addLogMessage(`[Main] Received deprecated K-Means worker message: ${type}`, 'warn');
+                    setIsClustering(false); // Still need to turn off flag if old worker somehow sends this
+                    break;
+                case 'initializationComplete':
+                    const initPayload = payload as { iteration: number; initialCentroids: number[][]; initialAssignments: number[]; songIds: string[] };
+                    setKmeansIteration(initPayload.iteration); // Should be 0
+                    setKmeansCentroids(initPayload.initialCentroids);
+                    const initAssignments: KmeansAssignments = {};
+                    initPayload.songIds.forEach((id, index) => {
+                        initAssignments[id] = initPayload.initialAssignments[index];
                     });
-                    setKmeansAssignments(finalAssignments);
-                    addLogMessage('K-Means clustering complete.', 'complete');
+                    setKmeansAssignments(initAssignments);
+                    setIsKmeansInitialized(true); // Mark as ready for next step
+                    addLogMessage('K-Means worker initialized successfully. Ready for first step.', 'complete');
+                    // --- NEW: Update Latest Stage ---
+                    setLatestSuccessfulStage('kmeans');
+                    addLogMessage('K-Means initialized. Updating latest stage to: kmeans', 'info');
+                    // ----------------------------------
+                    break;
+                case 'stepComplete':
+                    const stepPayload = payload as { iteration: number; centroids: number[][]; assignments: number[]; songIds: string[] };
+                    setKmeansIteration(stepPayload.iteration);
+                    setKmeansCentroids(stepPayload.centroids);
+                    const stepAssignments: KmeansAssignments = {};
+                    stepPayload.songIds.forEach((id, index) => {
+                        stepAssignments[id] = stepPayload.assignments[index];
+                    });
+                    setKmeansAssignments(stepAssignments);
+                    // Keep isKmeansInitialized as true
+                    addLogMessage(`K-Means step ${stepPayload.iteration} complete.`, 'complete');
+                    // --- NEW: Update Latest Stage ---
+                    setLatestSuccessfulStage('kmeans');
+                    addLogMessage(`K-Means step ${stepPayload.iteration} complete. Updating latest stage to: kmeans`, 'info');
+                    // ----------------------------------
+                    break;
+                case 'resetComplete':
+                    addLogMessage('K-Means worker state reset confirmed.', 'info');
+                    // State reset should happen on the main thread side when reset is requested
                     break;
                 case 'kmeansError':
                     setIsClustering(false);
+                    setIsKmeansInitialized(false); // Reset initialized flag on error
                     addLogMessage(`K-Means Worker Error: ${payload.error}`, 'error');
                     setKmeansAssignments({});
                     setKmeansCentroids([]);
@@ -524,9 +561,15 @@ export default function DashboardPage() {
                 case 'processingComplete':
                     // --- Update state on processing complete --- 
                     setProcessedData({ vectors: payload.processedVectors, songIds: payload.songIds });
-                    setIsProcessingData(false);
                     addLogMessage(`Data processing complete. Stored ${payload.processedVectors?.length} processed vectors.`, 'complete');
-                    // -------------------------------------------
+                    // --- NEW: Reset K-Means as reprocessing invalidates it ---
+                    handleResetKmeans(); 
+                    // ----------------------------------------------------------
+                    // --- NEW: Update Latest Stage ---
+                    setLatestSuccessfulStage('processed');
+                    addLogMessage('Data processing complete. Updating latest stage to: processed', 'info');
+                    // ----------------------------------
+                    setIsProcessingData(false);
                     break;
                 case 'processingError':
                     // --- Update state on processing error --- 
@@ -640,6 +683,15 @@ export default function DashboardPage() {
         setKmeansIteration(0);
         setReductionDimensions(0);
         addLogMessage('Downstream processing results cleared due to new feature extraction.', 'info');
+        
+        // If features were successfully extracted for any active song, update stage
+        const featuresComplete = Array.from(activeSongIds).some(id => featureStatus[id] === 'complete');
+        if(featuresComplete) {
+            setLatestSuccessfulStage('features');
+            addLogMessage('Feature extraction complete. Updating latest stage to: features', 'info');
+        } else {
+            setLatestSuccessfulStage(null); // Reset if no features completed
+        }
         
         // --- IMPROVEMENT: Automatically generate raw data matrix after extraction completes ---
         // Get features for active songs that now have complete features
@@ -993,6 +1045,29 @@ export default function DashboardPage() {
     // --- Original Worker Logic (Fallback) ---
     if (!essentiaWorkerReady || isProcessing || !workerRef.current) {
         addLogMessage('Worker not ready or already processing. Extraction aborted.', 'warn');
+        // Explicitly set state *before* sending request
+        setCurrentSelectedMIRFeatures(selectedFeatures);
+
+        // Clear previous reduced points for active songs and subsequent clustering results
+        setReducedDataPoints(prev => {
+             const clearedState = { ...prev };
+             songsToProcess.forEach(song => delete clearedState[song.id]);
+             return clearedState;
+         });
+        setKmeansAssignments(prev => {
+           const clearedState = { ...prev };
+           songsToProcess.forEach(song => delete clearedState[song.id]);
+           return clearedState;
+        });
+        setKmeansCentroids([]);
+        setKmeansIteration(0);
+        setReductionDimensions(0);
+        // Also reset K-Means state here when *starting* new extraction
+        handleResetKmeans();
+        
+        addLogMessage('Downstream processing results cleared before new feature extraction.', 'info');
+        // ------------------------------------------------------------------
+
         return;
     }
     if (selectedFeatures.size === 0) {
@@ -1089,9 +1164,13 @@ export default function DashboardPage() {
   // --- NEW Handler to Trigger Data Processing ---
   const handleStartDataProcessing = useCallback((method: ProcessingMethod, range?: [number, number]) => {
     // Checks for worker readiness and other active processes
-    if (!dataProcessingWorkerRef.current || isProcessingData || isProcessing || isReducing || isClustering) {
-        addLogMessage('Cannot start data processing: Worker not ready or another process is active.', 'warn');
+    if (!dataProcessingWorkerRef.current || isProcessing || isReducing) {
+        addLogMessage('Cannot start data processing: Worker not ready or MIR/Reduction process is active.', 'warn');
         return;
+    }
+    // Add a log if already processing, but allow queueing
+    if (isProcessingData) {
+        addLogMessage('Data processing already in progress. New request will queue or overwrite.', 'info');
     }
 
     addLogMessage(`Preparing data for processing method: ${method}...`, 'info');
@@ -1157,7 +1236,7 @@ export default function DashboardPage() {
 }, [
     // Direct state dependencies read in the function:
     activeSongIds, songFeatures, featureStatus, 
-    isProcessingData, isProcessing, isReducing, isClustering,
+    isProcessingData, isProcessing, isReducing,
     // Callbacks/Refs used:
     addLogMessage, dataProcessingWorkerRef,
     // State setters used:
@@ -1168,81 +1247,76 @@ export default function DashboardPage() {
 
   // --- MODIFIED Handler: Trigger dimensionality reduction ---
   const handleReduceDimensions = useCallback((reductionMethod: ReductionMethod, dimensions: number, params?: any) => {
-    // --- Check Preconditions ---
-    if (!druidWorkerRef.current) {
-        addLogMessage('Druid worker not ready. Reduction aborted.', 'warn');
-        return;
-    }
-    if (isReducing) {
-        addLogMessage('Dimensionality reduction already in progress.', 'warn');
-        return;
-    }
-    if (isProcessing || isProcessingData || isClustering) {
-        addLogMessage('Cannot reduce dimensions while another process is active.', 'warn');
-        return;
-    }
-    if (!processedData || processedData.vectors.length === 0) {
-        addLogMessage('No processed data available. Please run the Data Processing step first.', 'warn');
-        return;
-    }
+     // --- Check Preconditions ---
+     // MODIFIED: Removed isClustering check. Allow reduction even if K-Means is active.
+     // Prevent only if worker not ready, other processes running, or processedData missing.
+     if (!druidWorkerRef.current || isProcessing || isProcessingData) {
+         addLogMessage('Cannot reduce dimensions: Worker not ready or MIR/Data Processing is active.', 'warn');
+         return;
+     }
+     // Add log if already reducing
+     if (isReducing) {
+         addLogMessage('Dimensionality reduction already in progress. New request will queue or overwrite.', 'info');
+     }
+     // Check for processed data *after* checking other processes
+     if (!processedData || processedData.vectors.length === 0) {
+         addLogMessage('No processed data available. Please run the Data Processing step first.', 'warn');
+         return;
+     }
 
-    const { vectors: vectorsToReduce, songIds: idsForReduction } = processedData;
+     const { vectors: vectorsToReduce, songIds: idsForReduction } = processedData;
 
-    // Basic check: Need more samples than dimensions
-    if (vectorsToReduce.length <= dimensions) {
-        addLogMessage(`Insufficient data points (${vectorsToReduce.length}) for ${dimensions} dimensions. Need more points than dimensions.`, 'warn');
-        return;
-    }
-    
-    // Check if target dimensions exceed source dimensions
-    if (vectorsToReduce.length > 0 && dimensions >= vectorsToReduce[0].length) {
-        addLogMessage(`Target dimensions (${dimensions}) must be less than source dimensions (${vectorsToReduce[0].length}). Aborting reduction.`, 'warn');
-        return;
-    }
-    // --- Preconditions Met ---
+     // Basic check: Need more samples than dimensions
+     if (vectorsToReduce.length <= dimensions) {
+         addLogMessage(`Insufficient data points (${vectorsToReduce.length}) for ${dimensions} dimensions. Need more points than dimensions.`, 'warn');
+         return;
+     }
+     
+     // Check if target dimensions exceed source dimensions
+     if (vectorsToReduce.length > 0 && dimensions >= vectorsToReduce[0].length) {
+         addLogMessage(`Target dimensions (${dimensions}) must be less than source dimensions (${vectorsToReduce[0].length}). Aborting reduction.`, 'warn');
+         return;
+     }
+     // --- Preconditions Met ---
 
-    addLogMessage(`Starting dimensionality reduction with method: ${reductionMethod}, dimensions: ${dimensions}`, 'info');
-    setIsReducing(true);
-    // Clear previous reduced points for active songs and subsequent clustering results
-    setReducedDataPoints(prev => {
-        const clearedState = { ...prev };
-        idsForReduction.forEach(id => delete clearedState[id]); // Clear only the points we are about to reduce
-        return clearedState;
-    });
-    setKmeansAssignments({});
-    setKmeansCentroids([]);
-    setKmeansIteration(0);
-    // Keep reductionDimensions state as it is, it will be updated on completion
+     addLogMessage(`Starting dimensionality reduction with method: ${reductionMethod}, dimensions: ${dimensions}`, 'info');
+     setIsReducing(true);
+     // Clear previous reduced points for active songs and subsequent clustering results
+     setReducedDataPoints(prev => {
+         const clearedState = { ...prev };
+         idsForReduction.forEach(id => delete clearedState[id]); // Clear only the points we are about to reduce
+         return clearedState;
+     });
+     setKmeansAssignments({});
+     setKmeansCentroids([]);
+     setKmeansIteration(0);
+     // Keep reductionDimensions state as it is, it will be updated on completion
 
-    // Post message to worker using the processedData
-    addLogMessage(`Sending ${vectorsToReduce.length} processed vectors to Druid worker for reduction...`, 'info');
-    druidWorkerRef.current.postMessage({
-        type: 'reduceDimensions',
-        payload: {
-            featureVectors: vectorsToReduce,
-            songIds: idsForReduction,
-            method: reductionMethod,
-            dimensions: dimensions,
-            ...(params && { ...params }) // Include optional params
-        }
-    });
+     // Post message to worker using the processedData
+     addLogMessage(`Sending ${vectorsToReduce.length} processed vectors to Druid worker for reduction...`, 'info');
+     druidWorkerRef.current.postMessage({
+         type: 'reduceDimensions',
+         payload: {
+             featureVectors: vectorsToReduce,
+             songIds: idsForReduction,
+             method: reductionMethod,
+             dimensions: dimensions,
+             ...(params && { ...params }) // Include optional params
+         }
+     });
 
-}, [
-    processedData, isProcessing, isProcessingData, isReducing, isClustering, 
-    addLogMessage, druidWorkerRef,
-    setIsReducing, setReducedDataPoints, setKmeansAssignments, setKmeansCentroids, setKmeansIteration
-]);
+ }, [
+     processedData, isProcessing, isProcessingData, isReducing, 
+     addLogMessage, druidWorkerRef,
+     setIsReducing, setReducedDataPoints, setKmeansAssignments, setKmeansCentroids, setKmeansIteration
+ ]);
 
   // --- Clustering Handler (handleRunClustering) ---
   const handleRunClustering = useCallback((k: number) => {
       // Check readiness and other processes
-      if (!kmeansWorkerRef.current) {
-          addLogMessage('Cannot start clustering: K-Means worker not ready.', 'warn');
+      if (!kmeansWorkerRef.current || isProcessing || isProcessingData || isReducing) {
+          addLogMessage('Cannot start clustering: Another process is active or worker not ready.', 'warn');
           return;
-      }
-      if (isClustering || isProcessing || isProcessingData || isReducing) {
-           addLogMessage('Cannot start clustering: Another process is active.', 'warn');
-           return;
       }
 
       // Filter reducedDataPoints for active songs and check dimensions
@@ -1299,8 +1373,10 @@ export default function DashboardPage() {
       setKmeansAssignments({});
 
       // Post message to worker (with null check already done)
+      // Send Initialize message
+      addLogMessage(`[Main] Sending 'initializeTraining' to K-Means worker with k=${k}...`, 'info'); // <-- Added Log
       kmeansWorkerRef.current.postMessage({
-          type: 'startTraining',
+          type: 'initializeTraining', // <-- Fix: Send correct message type
           payload: {
               reducedData: dataForWorker,
               songIds: idsForWorker,
@@ -1309,16 +1385,37 @@ export default function DashboardPage() {
       });
 
   }, [
-      isClustering, isProcessing, isProcessingData, isReducing, activeSongIds, reducedDataPoints, 
+      isProcessing, isProcessingData, isReducing, activeSongIds, reducedDataPoints, 
       reductionDimensions, addLogMessage, kmeansWorkerRef,
       setIsClustering, setKmeansIteration, setKmeansCentroids, setKmeansAssignments
   ]);
 
-  // --- Derived State ---
+  // --- NEW: Handler to Trigger Next K-Means Step --- 
+  const handleNextKmeansStep = useCallback(() => {
+      // Check if initialized and worker exists
+      if (!isKmeansInitialized || !kmeansWorkerRef.current) {
+          addLogMessage('Cannot run next step: K-Means not initialized or worker unavailable.', 'warn');
+          return;
+      }
+      if (isProcessing || isProcessingData || isReducing) {
+          addLogMessage('Cannot run K-Means step while another process is active.', 'warn');
+          return;
+      }
+
+      addLogMessage(`Requesting K-Means step ${kmeansIteration + 1}...`, 'info');
+      kmeansWorkerRef.current.postMessage({ type: 'runNextStep' });
+
+  }, [
+      isKmeansInitialized, kmeansIteration, 
+      isProcessing, isProcessingData, isReducing, // Check other processes
+      addLogMessage, kmeansWorkerRef
+  ]);
+
+  // --- Derived State (Moved Before Handlers Using Them) ---
   const hasFeaturesForActiveSongs = useMemo(() => {
-      return Array.from(activeSongIds).some(id =>
-          featureStatus[id] === 'complete' && songFeatures[id] != null
-      );
+    return Array.from(activeSongIds).some(id =>
+        featureStatus[id] === 'complete' && songFeatures[id] != null
+    );
   }, [activeSongIds, featureStatus, songFeatures]);
 
   const hasProcessedData = useMemo(() => {
@@ -1332,6 +1429,32 @@ export default function DashboardPage() {
           return point != null && point.length > 0 && (targetDim === 0 || point.length === targetDim);
       });
   }, [activeSongIds, reducedDataPoints, reductionDimensions]);
+
+  // --- NEW: Handler to Reset K-Means State --- 
+  const handleResetKmeans = useCallback((sendMessageToWorker = true) => {
+      addLogMessage('Resetting K-Means state on main thread...', 'info');
+      setIsClustering(false);
+      setIsKmeansInitialized(false);
+      setKmeansIteration(0);
+      setKmeansCentroids([]);
+      setKmeansAssignments({});
+
+      // Optionally send reset message to worker
+      if (sendMessageToWorker && kmeansWorkerRef.current) {
+          addLogMessage('Sending reset command to K-Means worker...', 'info');
+          kmeansWorkerRef.current.postMessage({ type: 'resetTraining' });
+      }
+      // When explicitly resetting K-Means, revert stage to highest valid previous stage
+      if (hasReducedDataForActiveSongs) {
+          setLatestSuccessfulStage('reduced');
+      } else if (hasProcessedData) {
+          setLatestSuccessfulStage('processed');
+      } else if (hasFeaturesForActiveSongs) {
+          setLatestSuccessfulStage('features');
+      } else {
+          setLatestSuccessfulStage(null);
+      }
+  }, [kmeansWorkerRef, addLogMessage, hasReducedDataForActiveSongs, hasProcessedData, hasFeaturesForActiveSongs]); // Dependencies correct now
 
   // Filter logs for display in the panel
   const filteredLogMessages = useMemo(() => {
@@ -1466,7 +1589,8 @@ export default function DashboardPage() {
           songs={songs}
           featureStatus={featureStatus}
           activeSongIds={activeSongIds}
-          isProcessing={isProcessing || isReducing || isClustering}
+          // MODIFIED: Allow song interaction even if clustering is active (but not other processes)
+          isProcessing={isProcessing || isReducing || isProcessingData}
           onToggleSongActive={handleToggleSongActive}
           onRemoveSong={handleRemoveSong}
           onUploadClick={handleUploadClick}
@@ -1491,6 +1615,7 @@ export default function DashboardPage() {
           kmeansAssignments={kmeansAssignments}
           kmeansCentroids={kmeansCentroids}
           kmeansIteration={kmeansIteration}
+          latestSuccessfulStage={latestSuccessfulStage}
         />
 
          {/* Controls Panel (Right Column, Full Height, Max Width)*/}
@@ -1510,6 +1635,11 @@ export default function DashboardPage() {
           isProcessingData={isProcessingData}
           hasProcessedData={hasProcessedData}
           onProcessData={handleStartDataProcessing}
+          // K-Means Step Control Props
+          isKmeansInitialized={isKmeansInitialized}
+          onNextStep={handleNextKmeansStep}
+          // Pass isClustering to potentially disable init button while clustering is active
+          isClusteringActive={isClustering}
         />
 
         {/* Log Panel (Middle Column, Bottom Row) */}
