@@ -43,31 +43,70 @@ self.onmessage = async (event: MessageEvent<WorkerMessageData>) => {
     console.log('[KMeans Worker] Received message:', event.data.type);
     const { type, payload } = event.data;
 
+    // Log the entire received payload
+    console.log('[KMeans Worker] Full payload received:', JSON.stringify(payload));
+
     if (type === 'startTraining') {
-        const { reducedData, songIds, k, maxIter = 30 } = payload;
+        const { reducedData, songIds, k, maxIter = 30 } = payload as StartTrainingPayload; // Cast needed after logging
 
         // --- Input Validation ---
         if (!reducedData || reducedData.length === 0 || !reducedData[0] || reducedData[0].length === 0) {
-            self.postMessage({ type: 'kmeansError', payload: { error: 'Received empty or invalid reduced data.' } });
+            self.postMessage({ type: 'kmeansError', payload: { error: 'Received empty or invalid reduced data format (expected array of objects with numeric keys).' } });
             return;
         }
-        if (reducedData.length !== songIds.length) {
-            self.postMessage({ type: 'kmeansError', payload: { error: 'Mismatch between number of data points and song IDs.' } });
-            return;
-        }
-        if (reducedData.length < k) {
-            self.postMessage({ type: 'kmeansError', payload: { error: `Insufficient data points (${reducedData.length}) for k=${k} clusters.` } });
-            return;
-        }
-        if (k <= 0) {
-            self.postMessage({ type: 'kmeansError', payload: { error: `Invalid k value: ${k}. Must be > 0.` } });
+        // Add a check to ensure the elements are objects, not arrays already
+        if (Array.isArray(reducedData[0])) {
+             console.warn('[KMeans Worker] Received data appears to already be in array format. Proceeding, but check upstream source.');
+             // If it's already number[][], direct flattening might work, but the conversion below is safer
+        } else if (typeof reducedData[0] !== 'object' || reducedData[0] === null) {
+            self.postMessage({ type: 'kmeansError', payload: { error: 'Received data elements are not objects.' } });
             return;
         }
 
+        // --- Convert Array of Objects to number[][] ---
+        console.log('[KMeans Worker] Converting received array of objects to number[][]...');
+        let formattedReducedData: number[][];
+        try {
+            formattedReducedData = reducedData.map(obj => 
+                Object.values(obj) // Assumes keys '0', '1', ... are in correct order
+            );
+            // Optional: Add check for consistent inner array lengths here if needed
+        } catch (conversionError) {
+            console.error('[KMeans Worker] Error converting object array to number[][]:', conversionError);
+            self.postMessage({ type: 'kmeansError', payload: { error: 'Failed to convert received data format.' } });
+            return;
+        }
+        console.log('[KMeans Worker] Conversion complete. Data format now number[][].');
+        // ---------------------------------------------
+
         // --- Start K-Means Training ---
         try {
-            console.log(`[KMeans Worker] Starting training with k=${k}, maxIter=${maxIter}. Data points: ${reducedData.length}`);
-            const datasetTensor = tf.tensor2d(reducedData);
+            console.log(`[KMeans Worker] Starting training with k=${k}, maxIter=${maxIter}. Data points: ${formattedReducedData.length}`);
+            
+            // Use the *formatted* data for logging and shape calculation
+            console.log('[KMeans Worker] Formatted Data (first 5 rows):', JSON.stringify(formattedReducedData.slice(0, 5)));
+            console.log('[KMeans Worker] Typeof formattedReducedData:', typeof formattedReducedData);
+            console.log('[KMeans Worker] Is formattedReducedData an array? ', Array.isArray(formattedReducedData));
+            if (formattedReducedData.length > 0) {
+                console.log('[KMeans Worker] Is formattedReducedData[0] an array? ', Array.isArray(formattedReducedData[0]));
+                console.log('[KMeans Worker] Inferred shape:', `[${formattedReducedData.length}, ${formattedReducedData[0]?.length}]`);
+            }
+            
+            // Calculate shape explicitly using the *formatted* data
+            const numRows = formattedReducedData.length;
+            const numCols = formattedReducedData[0].length; // Now this should work correctly
+            const shape: [number, number] = [numRows, numCols];
+
+            // --- Explicitly flatten the *formatted* array --- 
+            const flatData = formattedReducedData.flat();
+
+            // Log the length of the flat array to verify it matches rows * cols
+            console.log(`[KMeans Worker] Data *after* flattening (first 10 elements):`, JSON.stringify(flatData.slice(0, 10)));
+            console.log(`[KMeans Worker] Length of flat data: ${flatData.length} (Expected: ${numRows} * ${numCols} = ${numRows * numCols})`);
+            
+            // Use the explicit shape and the *flattened* data in tensor2d
+            console.log('[KMeans Worker] Creating tensor with shape:', JSON.stringify(shape), 'and flattened data.');
+            const datasetTensor = tf.tensor2d(flatData, shape);
 
             const kmeans = new KMeans.default({
                 k: k,
@@ -85,6 +124,10 @@ self.onmessage = async (event: MessageEvent<WorkerMessageData>) => {
                     const centroidsArray = await centroids.array() as number[][];
                     const assignmentsArray = await assignments.array() as number[];
 
+                    // Log iteration details
+                    console.log(`[KMeans Worker] Iteration ${iter}: Centroids (first 2):`, JSON.stringify(centroidsArray.slice(0, 2)));
+                    console.log(`[KMeans Worker] Iteration ${iter}: Assignments (first 10):`, JSON.stringify(assignmentsArray.slice(0, 10)));
+                    
                     // Post update to main thread
                     self.postMessage({
                         type: 'kmeansIterationUpdate',
@@ -107,6 +150,9 @@ self.onmessage = async (event: MessageEvent<WorkerMessageData>) => {
             const finalAssignmentsArray = await finalAssignmentsTensor.array() as number[];
 
             console.log('[KMeans Worker] Training complete.');
+            console.log('[KMeans Worker] Final Centroids (first 2):', JSON.stringify(finalCentroidsArray.slice(0, 2)));
+            console.log('[KMeans Worker] Final Assignments (first 10):', JSON.stringify(finalAssignmentsArray.slice(0, 10)));
+
             self.postMessage({
                 type: 'kmeansComplete',
                 payload: {

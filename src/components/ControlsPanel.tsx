@@ -195,9 +195,9 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
             {/* Method Selection */} 
             <div className="mb-3">
                 <span className="text-xs block mb-1 text-gray-400">Method:</span>
-                <div className="flex gap-3 flex-wrap">
+                <div className="flex gap-2 flex-wrap">
                     {['standardize', 'normalize'].map(method => (
-                        <label key={method} className="text-xs px-2 py-1 rounded cursor-pointer border border-transparent hover:border-green-500/50 data-[checked=true]:bg-green-800/50 data-[checked=true]:border-green-600" data-checked={selectedProcessingMethod === method}>
+                        <label key={method} className="text-xs px-1 py-1 rounded cursor-pointer border border-transparent hover:border-green-500/50 data-[checked=true]:bg-green-800/50 data-[checked=true]:border-green-600" data-checked={selectedProcessingMethod === method}>
                             <input 
                                 type="radio" 
                                 name="processingMethod" 
