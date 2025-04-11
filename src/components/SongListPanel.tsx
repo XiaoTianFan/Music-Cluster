@@ -186,7 +186,7 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
 
   return (
     <div
-      className={`p-4 border border-blue-500 flex flex-col transition-colors duration-200 ${isDraggingOver ? 'bg-blue-900/30 border-blue-300' : ''} ${className || ''}`}
+      className={`p-4 border border-blue-500 flex flex-col h-[85vh] transition-colors duration-200 ${isDraggingOver ? 'bg-blue-900/30 border-blue-300' : ''} ${className || ''}`}
       data-augmented-ui="tl-clip tr-clip br-clip bl-clip border"
       style={{ '--aug-border-color': isDraggingOver ? 'dodgerblue' : 'deepskyblue' } as React.CSSProperties}
       // Attach drag/drop handlers
@@ -203,9 +203,9 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
         </div>
       )}
 
-      {/* Song List Area - Add hide-scrollbar class */}
-      <div className="flex-grow overflow-y-auto mb-2 hide-scrollbar relative z-0"> {/* Ensure list is below hint */}
-         <ul className="list-none p-0">
+      {/* Song List Area - Removed flex-grow */}
+      <div className="h-[70vh] min-h-0 overflow-y-scroll mb-2 hide-scrollbar relative z-0"> {/* Ensure list is below hint */}
+         <ul className="h-[70vh] list-none p-0 min-h-0">
             {/* Map over the SORTED 'songs' array */}
             {sortedSongs.map((song) => { 
                 // --- ADDED: Background color logic ---
@@ -219,10 +219,10 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
                 return (
                     <li 
                         key={song.id} 
-                        className="group flex justify-between items-center text-xs p-1 pr-2 hover:bg-gray-800/50 border-b border-gray-700/50 relative" 
+                        className="group flex justify-between items-center max-h-[5vh] text-xs p-2 pr-2 hover:bg-gray-800/50 border-b border-gray-700/50 relative" 
                         style={{ backgroundColor }} // <-- APPLY STYLE
                     >
-                        <div className="flex items-center flex-grow min-w-0 overflow-hidden">
+                        <div className="flex items-center min-w-0 min-h-0 max-h-[5vh]">
                             <input 
                                 type="checkbox" 
                                 checked={activeSongIds.has(song.id)}
@@ -236,7 +236,7 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
                                 {song.name}
                             </span>
                             {/* Container for details button and status */}
-                            <span className="flex-shrink-0 flex items-center gap-1"> 
+                            <span className="flex-shrink-0 flex items-center gap-1 max-h-[5vh]"> 
                                 {/* Details Button (conditional) */}
                                 {featureStatus[song.id] === 'complete' && (
                                     <button

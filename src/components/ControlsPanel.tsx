@@ -138,7 +138,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
 
   return (
     <div
-      className={`p-4 border border-green-500 flex flex-col ${className || ''}`}
+      className={`p-4 border border-green-500 flex flex-col h-[85vh] ${className || ''}`}
       data-augmented-ui="tl-round tr-clip br-clip-x bl-clip border"
       style={{ '--aug-border-color': 'lime' } as React.CSSProperties}
     >

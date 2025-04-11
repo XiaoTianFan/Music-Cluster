@@ -1673,75 +1673,77 @@ export default function DashboardPage() {
       </div>
 
       {/* New Grid Layout - Based on Wireframe */}
-      <div className="flex-grow grid grid-cols-[auto_1fr_auto] grid-rows-[3fr_1fr] min-h-full max-h-full gap-4"> {/* Use auto columns for sides, fr for middle */} 
-        {/* Song List Panel (Left Column, Full Height, Max Width) */}
-        <SongListPanel
-          className="col-span-1 row-span-2 max-w-xs max-h-full" // Added max-width
-          songs={songs}
-          featureStatus={featureStatus}
-          activeSongIds={activeSongIds}
-          // MODIFIED: Allow song interaction even if clustering is active (but not other processes)
-          isProcessing={isProcessing || isReducing || isProcessingData}
-          onToggleSongActive={handleToggleSongActive}
-          onRemoveSong={handleRemoveSong}
-          onUploadClick={handleUploadClick}
-          onAddSongs={handleAddSongs} // Pass the new handler
-          onSelectAll={handleSelectAll}
-          onClearAll={handleClearAll}
-          onShowDetails={handleShowDetails}
-          kmeansAssignments={kmeansAssignments} // <-- ADD THIS PROP
-        />
+      <div className='h-[85vh]'>
+        <div className="flex-grow grid grid-cols-[auto_1fr_auto] grid-rows-[3fr_1fr] min-h-full max-h-full gap-4"> {/* Use auto columns for sides, fr for middle */} 
+          {/* Song List Panel (Left Column, Full Height, Max Width) */}
+          <SongListPanel
+            className="col-span-1 row-span-2 max-w-xs max-h-full" // Added max-width
+            songs={songs}
+            featureStatus={featureStatus}
+            activeSongIds={activeSongIds}
+            // MODIFIED: Allow song interaction even if clustering is active (but not other processes)
+            isProcessing={isProcessing || isReducing || isProcessingData}
+            onToggleSongActive={handleToggleSongActive}
+            onRemoveSong={handleRemoveSong}
+            onUploadClick={handleUploadClick}
+            onAddSongs={handleAddSongs} // Pass the new handler
+            onSelectAll={handleSelectAll}
+            onClearAll={handleClearAll}
+            onShowDetails={handleShowDetails}
+            kmeansAssignments={kmeansAssignments} // <-- ADD THIS PROP
+          />
 
-        {/* Visualization Panel (Middle Column, Top Row) */}
-        <VisualizationPanel
-          className="col-span-1 row-span-1 max-h-full min-h-full" // Updated spans
-          activeSongIds={activeSongIds}
-          songs={songs}
-          // Pass raw features, unprocessed matrix, and processed matrix
-          songFeatures={songFeatures}
-          unprocessedData={unprocessedData}
-          processedData={processedData}
-          // Existing props for clustering results
-          reducedDataPoints={reducedDataPoints}
-          reductionDimensions={reductionDimensions}
-          kmeansAssignments={kmeansAssignments}
-          kmeansCentroids={kmeansCentroids}
-          kmeansIteration={kmeansIteration}
-          latestSuccessfulStage={latestSuccessfulStage}
-          visualizationDisplayStage={visualizationDisplayStage} // NEW: Pass user's selected stage
-          onStageSelect={handleVisualizationStageSelect} // NEW: Pass handler for stage selection
-          availableFeatureKeys={availableFeatureKeys} // <-- Pass new prop
-        />
+          {/* Visualization Panel (Middle Column, Top Row) */}
+          <VisualizationPanel
+            className="col-span-1 row-span-1 max-h-full min-h-0" // Updated spans
+            activeSongIds={activeSongIds}
+            songs={songs}
+            // Pass raw features, unprocessed matrix, and processed matrix
+            songFeatures={songFeatures}
+            unprocessedData={unprocessedData}
+            processedData={processedData}
+            // Existing props for clustering results
+            reducedDataPoints={reducedDataPoints}
+            reductionDimensions={reductionDimensions}
+            kmeansAssignments={kmeansAssignments}
+            kmeansCentroids={kmeansCentroids}
+            kmeansIteration={kmeansIteration}
+            latestSuccessfulStage={latestSuccessfulStage}
+            visualizationDisplayStage={visualizationDisplayStage} // NEW: Pass user's selected stage
+            onStageSelect={handleVisualizationStageSelect} // NEW: Pass handler for stage selection
+            availableFeatureKeys={availableFeatureKeys} // <-- Pass new prop
+          />
 
-         {/* Controls Panel (Right Column, Full Height, Max Width)*/}
-        <ControlsPanel
-          className="col-span-1 row-span-2 max-w-sm"
-          isProcessing={isProcessing}
-          isReducing={isReducing}
-          isClustering={isClustering}
-          essentiaWorkerReady={essentiaWorkerReady}
-          activeSongCount={activeSongIds.size}
-          hasFeaturesForActiveSongs={hasFeaturesForActiveSongs}
-          hasReducedDataForActiveSongs={hasReducedDataForActiveSongs}
-          onExtractFeatures={handleExtractFeatures}
-          onReduceDimensions={handleReduceDimensions}
-          onRunClustering={handleRunClustering}
-          onShowExplanation={handleShowExplanation}
-          isProcessingData={isProcessingData}
-          hasProcessedData={hasProcessedData}
-          onProcessData={handleStartDataProcessing}
-          // K-Means Step Control Props
-          isKmeansInitialized={isKmeansInitialized}
-          onNextStep={handleNextKmeansStep}
-          // Pass isClustering to potentially disable init button while clustering is active
-          isClusteringActive={isClustering}
-        />
+          {/* Controls Panel (Right Column, Full Height, Max Width)*/}
+          <ControlsPanel
+            className="col-span-1 row-span-2 max-w-sm"
+            isProcessing={isProcessing}
+            isReducing={isReducing}
+            isClustering={isClustering}
+            essentiaWorkerReady={essentiaWorkerReady}
+            activeSongCount={activeSongIds.size}
+            hasFeaturesForActiveSongs={hasFeaturesForActiveSongs}
+            hasReducedDataForActiveSongs={hasReducedDataForActiveSongs}
+            onExtractFeatures={handleExtractFeatures}
+            onReduceDimensions={handleReduceDimensions}
+            onRunClustering={handleRunClustering}
+            onShowExplanation={handleShowExplanation}
+            isProcessingData={isProcessingData}
+            hasProcessedData={hasProcessedData}
+            onProcessData={handleStartDataProcessing}
+            // K-Means Step Control Props
+            isKmeansInitialized={isKmeansInitialized}
+            onNextStep={handleNextKmeansStep}
+            // Pass isClustering to potentially disable init button while clustering is active
+            isClusteringActive={isClustering}
+          />
 
-        {/* Log Panel (Middle Column, Bottom Row) */}
-        <LogPanel
-           className="col-span-1 row-span-1 max-h-56" // Updated spans
-           logs={filteredLogMessages}
-        />
+          {/* Log Panel (Middle Column, Bottom Row) */}
+          <LogPanel
+            className="col-span-1 row-span-1 h-[21vh]" // Updated spans
+            logs={filteredLogMessages}
+          />
+        </div>
       </div>
 
       {/* Footer Placeholder - UPDATED */}
