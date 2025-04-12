@@ -216,17 +216,18 @@ const featureIdToDataKeysMap: Map<string, (keyof Features)[]> = new Map([
   ['mfcc', ['mfccMeans', 'mfccStdDevs']],
   ['energy', ['energy']],
   ['entropy', ['entropy']],
+  ['dynamicComplexity', ['dynamicComplexity', 'loudness']],
   // Example: Grouping Key/Scale/Strength under a single user-selectable 'key' option
   ['key', ['key', 'keyScale', 'keyStrength']],
   // Map conceptual 'loudness' (user-facing) to its underlying feature + error
   ['loudness', ['loudness']], // Check if dynamicComplexityError is the right one
   ['rms', ['rms']],
   // Example: Grouping Rhythm features under 'bpm' user-selectable option
-  ['bpm', ['bpm']],
+  ['rhythm', ['bpm']],
   // ['onsetRate', ['onsetRate']],
   ['danceability', ['danceability']],
   ['intensity', ['intensity']], // Note: Intensity is categorical
-  ['spectralCentroid', ['spectralCentroidTimeMean', 'spectralCentroidTimeStdDev']],
+  ['spectralCentroidTime', ['spectralCentroidTimeMean', 'spectralCentroidTimeStdDev']],
   ['spectralComplexity', ['spectralComplexityMean', 'spectralComplexityStdDev']],
   ['spectralContrast', ['spectralContrastMeans', 'spectralContrastStdDevs']],
   ['inharmonicity', ['inharmonicityMean', 'inharmonicityStdDev']],
