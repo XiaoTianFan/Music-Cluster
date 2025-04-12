@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from '@vercel/analytics/next';
+import DynamicBackground from "@/components/DynamicBackground";
 import "./globals.css";
 import "augmented-ui/augmented-ui.min.css";
 
@@ -39,6 +40,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <DynamicBackground />
         {children}
         <Analytics />
       </body>

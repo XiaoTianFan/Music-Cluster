@@ -23,7 +23,9 @@
     "plotly.js-dist": "^3.0.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-fast-marquee": "^1.6.5",
     "react-markdown": "^10.1.0",
+    "react-parallax-tilt": "^1.7.290",
     "react-plotly.js": "^2.6.0",
     "remark-gfm": "^4.0.1",
     "tf-kmeans": "^0.0.3"

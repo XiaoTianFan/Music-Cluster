@@ -1900,7 +1900,7 @@ export default function DashboardPage() {
   }, [isProcessing, processingSongIds, featureStatus]); // Dependencies
 
   return (
-    <main className="flex flex-col min-h-screen p-4 bg-gray-900 text-gray-100 font-[family-name:var(--font-geist-mono)] hide-scrollbar">
+    <main className="flex flex-col min-h-screen p-4 bg-gray-900/20 text-gray-100 font-[family-name:var(--font-geist-mono)] hide-scrollbar">
        {/* Hidden File Input */}
        <input
           ref={fileInputRef}
