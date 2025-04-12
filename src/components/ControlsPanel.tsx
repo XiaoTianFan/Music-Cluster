@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
+import { CogIcon, InformationCircleIcon, BeakerIcon, PlayIcon, StopIcon, ArrowPathIcon, SparklesIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/solid';
 
 // Type for reduction method (assuming it's defined elsewhere or should be here)
 type ReductionMethod = 'pca' | 'tsne' | 'umap';
@@ -34,17 +35,26 @@ interface ControlsPanelProps {
 
 // Placeholder for available MIR features
 const availableMirFeatures = [
-  { id: 'mfcc', name: 'MFCC' },
+  { id: 'mfcc', name: 'MFCC' }, // Represents mfccMeans, mfccStdDevs
   { id: 'energy', name: 'Energy' },
-  { id: 'entropy', name: 'Entropy' },
-  { id: 'key', name: 'Key' },
-  // { id: 'loudness', name: 'Loudness (EBU R128)' }, // Removed Loudness
-  { id: 'dynamicComplexity', name: 'Dynamic Complexity' },
-  // { id: 'onsetRate', name: 'Onset Rate' }, // Removed Onset Rate
+  { id: 'entropy', name: 'ZCR Entropy' },
+  { id: 'key', name: 'Key & Scale' }, // Represents key, keyScale, keyStrength
+  { id: 'dynamicComplexity', name: 'Dynamic Complexity' }, // Represents dynamicComplexity, loudness
   { id: 'rms', name: 'RMS' },
-  { id: 'tuningFrequency', name: 'Tuning Frequency' },
-  // { id: 'spectral_centroid', name: 'Spectral Centroid' },
-  // { id: 'spectral_flux', name: 'Spectral Flux' },
+  { id: 'tuningFrequency', name: 'Tuning Frequency' }, // Represents tuningFrequency
+  // --- NEW FEATURES --- Based on worker capabilities ---
+  { id: 'rhythm', name: 'BPM'}, // Represents bpm, rhythmConfidence
+  // { id: 'onsetRate', name: 'Onset Rate'},
+  { id: 'danceability', name: 'Danceability'},
+  { id: 'intensity', name: 'Intensity'},
+  { id: 'spectralCentroidTime', name: 'Spectral Centroid'},
+  { id: 'spectralComplexity', name: 'Spectral Complexity'},
+  { id: 'spectralContrast', name: 'Spectral Contrast'},
+  { id: 'inharmonicity', name: 'Inharmonicity'},
+  { id: 'dissonance', name: 'Dissonance'},
+  { id: 'melBands', name: 'Mel Bands'},
+  { id: 'pitchSalience', name: 'Pitch Salience'},
+  { id: 'spectralFlux', name: 'Spectral Flux'},
 ];
 
 // Placeholder for available Dim Reduction algorithms
@@ -147,14 +157,14 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
       <h2 className="text-lg font-semibold mb-3 text-green-400 flex-shrink-0">Controls</h2>
 
       {/* Scrollable area for controls */}
-      <div className="flex-grow overflow-y-auto pr-1">
+      <div className="flex-grow overflow-y-auto pr-1 hide-scrollbar">
         {/* === MIR Feature Selection === */}
         <div 
             className="mb-4 p-3 border border-gray-700/80 flex flex-col"
             data-augmented-ui="tl-clip br-clip border"
             style={{ '--aug-border-color': '#555' } as React.CSSProperties} >
           <h3 className="text-md font-semibold mb-2 text-green-300">MIR Features</h3>
-          <div className="flex flex-wrap gap-x-3 gap-y-2 flex-grow">
+          <div className="flex flex-wrap gap-x-1 gap-y-2 flex-grow">
             {availableMirFeatures.map(feature => (
               <div key={feature.id} className="relative group flex items-center justify-between text-xs">
                  <button 
@@ -176,7 +186,30 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
                 </button>
               </div>
             ))}
-             {/* Add more features later */}
+          </div>
+          {/* Select All / Clear Buttons */}
+          <div className="flex gap-2 mt-2 mb-1">
+            <button
+              onClick={() => {
+                const allFeatureIds = new Set(availableMirFeatures.map(f => f.id));
+                setSelectedMirFeatures(allFeatureIds);
+              }}
+              disabled={isProcessing}
+              className="px-4 py-0.5 text-xs bg-gray-600 hover:bg-gray-500 text-gray-200 border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Select all available features"
+              data-augmented-ui="tl-clip br-clip"
+            >
+              All
+            </button>
+            <button
+              onClick={() => setSelectedMirFeatures(new Set())}
+              disabled={isProcessing || selectedMirFeatures.size === 0}
+              className="px-4 py-0.5 text-xs bg-gray-600 hover:bg-gray-500 text-gray-200 border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Clear feature selection"
+              data-augmented-ui="tl-clip br-clip"
+            >
+              Clear
+            </button>
           </div>
           <div className="mt-2 flex-shrink-0">
              <button

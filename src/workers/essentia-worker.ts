@@ -3,8 +3,8 @@ console.log("Worker script evaluating... [Bundled Approach using require]");
 // Use require - Webpack will handle this during build
 const esPkg = require('essentia.js');
 
-// Import feature extraction modules
-import { extractMFCC } from './features/mfcc';
+// Import the new frame-based feature extractor
+import { extractFrameBasedFeatures } from './features/frame-feature-extractor';
 
 console.log('[Debug] esPkg structure keys:', Object.keys(esPkg));
 
@@ -27,7 +27,7 @@ const initializeEssentia = async (): Promise<boolean> => {
                     
                     // Check if there's a nested EssentiaWASM property (based on debug output)
                     if (esPkg.EssentiaWASM.EssentiaWASM) {
-                        console.log('[Debug] Found nested EssentiaWASM - using that instead');
+                        console.log('[Debug] Found nested EssentiaWASM - using that first');
                         try {
                             essentia = new esPkg.Essentia(esPkg.EssentiaWASM.EssentiaWASM);
                             if (essentia && typeof essentia.version !== 'undefined') {
@@ -37,7 +37,6 @@ const initializeEssentia = async (): Promise<boolean> => {
                             }
                         } catch (nestedError) {
                             console.error('[Debug] Nested WASM approach failed:', nestedError);
-                            // Continue with patching approach
                         }
                     }
                 }
@@ -105,8 +104,21 @@ const initializeEssentia = async (): Promise<boolean> => {
                         return true;
                     }
                 } catch (directError) {
-                    console.log('[Debug] Direct approach failed, continuing with patch');
-                }
+                    console.log('[Debug] Direct approach failed, continuing with patch if available');
+                    if (esPkg.EssentiaWASM) {
+                         console.log('[Debug] Trying direct Essentia(EssentiaWASM)');
+                         try {
+                             essentia = new esPkg.Essentia(esPkg.EssentiaWASM);
+                             if (essentia && typeof essentia.version !== 'undefined') {
+                                 console.log('[Initialize] Created using direct Essentia(EssentiaWASM). Version:', essentia.version);
+                                 self.postMessage({ type: 'essentiaReady', payload: true });
+                                 return true;
+                             }
+                         } catch (directWasmError) {
+                             console.log('[Debug] Direct Essentia(EssentiaWASM) failed, initialization likely failed.', directWasmError);
+                         }
+                    }
+                 }
                 
                 // Step 3: Try to use the patched module
                 console.log('[Debug] Trying Essentia with enhanced patched WASM module');
@@ -126,10 +138,8 @@ const initializeEssentia = async (): Promise<boolean> => {
                 console.error('[Initialize] Error during Essentia initialization process:', e);
                 
                 // Provide a more helpful error message
-                if (errorMessage.includes('EssentiaWASM.EssentiaJS is not a constructor')) {
-                    const helpfulError = 'Essentia.js initialization failed: The current version (0.1.3) has ' +
-                        'compatibility issues with WebWorkers. Consider upgrading to a newer version ' +
-                        'when available, or check the Essentia.js GitHub repository for worker-specific examples.';
+                if (errorMessage.includes('EssentiaWASM.EssentiaJS is not a constructor') || errorMessage.includes('Failed to initialize Essentia')) {
+                    const helpfulError = 'Essentia.js initialization failed: The current version may have worker compatibility issues. Please check console logs and Essentia.js documentation.';
                     self.postMessage({ 
                         type: 'essentiaReady', 
                         payload: false, 
@@ -144,6 +154,19 @@ const initializeEssentia = async (): Promise<boolean> => {
     }
     return await essentiaInstancePromise;
 };
+
+// --- Define features requiring frame-based processing ---
+const FRAME_BASED_FEATURES = new Set([
+    'mfcc',
+    'spectralCentroidTime',
+    'spectralComplexity',
+    'spectralContrast',
+    'inharmonicity',
+    'dissonance',
+    'melBands',
+    'pitchSalience',
+    'spectralFlux'
+]);
 
 // --- Type definitions for message payloads (optional but good practice) ---
 type InitPayload = {}; // No payload for init
@@ -160,7 +183,7 @@ type WorkerMessageData =
 
 // Main message handler
 self.onmessage = async (event: MessageEvent<WorkerMessageData>) => {
-    console.log("Worker received message:", event.data);
+    console.log("Worker received message:", event.data.type);
     const { type, payload } = event.data;
 
     if (type === 'init') {
@@ -185,186 +208,249 @@ self.onmessage = async (event: MessageEvent<WorkerMessageData>) => {
             return;
         }
 
-        console.log(`[Extract] Processing songId: ${songId}, Features: [${featuresToExtract.join(', ')}], Sample Rate: ${sampleRate}, Length: ${audioVector.length}`);
-        let audioVectorEssentia: any = null; // Define here for broader scope and cleanup
+        console.log(`[MainWorker Extract ${songId}] Processing. Requested: [${featuresToExtract.join(', ')}]`);
+
+        // Separate features
+        const fullSignalFeaturesToExtract = featuresToExtract.filter(f => !FRAME_BASED_FEATURES.has(f));
+        const frameBasedFeaturesToExtract = featuresToExtract.filter(f => FRAME_BASED_FEATURES.has(f));
+
+        console.log(`[MainWorker Extract ${songId}] Full Signal Features: [${fullSignalFeaturesToExtract.join(', ')}]`);
+        console.log(`[MainWorker Extract ${songId}] Frame-Based Features: [${frameBasedFeaturesToExtract.join(', ')}]`);
+
+        let combinedFeatures: any = {}; // Object to hold all results
+        let audioVectorEssentia: any = null; // Essentia vector for full-signal features
+
         try {
-            console.log(`[Extract] Converting audio data for ${songId}...`);
-            // Convert primary (left/mono) channel
-            const audioData = new Float32Array(audioVector);
-            audioVectorEssentia = essentia.arrayToVector(audioData);
-
-            let extractedFeatures: any = {}; 
-
-            // --- Extract Selected Features --- 
-            console.log(`[Extract] Starting feature extraction for ${songId} at ${sampleRate} Hz...`);
-
-            // Ensure audioVectorEssentia is valid before proceeding
-            if (!audioVectorEssentia || audioVectorEssentia.size() === 0) {
-                throw new Error("Audio vector is invalid or empty.");
-            }
-
-            if (featuresToExtract.includes('mfcc')) {
-                console.log(`[Extract][MFCC] Starting for ${songId}`);
-                // Use original audioData and sampleRate
-                // No need for temporary conversion back here if extractMFCC uses audioData
-                const mfccResult = await extractMFCC(essentia, audioData, sampleRate, songId);
-                extractedFeatures = { ...extractedFeatures, ...mfccResult };
-                console.log(`[Extract][MFCC] Completed for ${songId}`);
-            }
-            
-            if (featuresToExtract.includes('energy')) {
-                console.log(`[Extract][Energy] Starting for ${songId}`);
-                const energyResult = essentia.Energy(audioVectorEssentia); 
-                extractedFeatures.energy = energyResult.energy;
-                console.log(`[Extract][Energy] Completed for ${songId}:`, extractedFeatures.energy);
-            }
-            
-            if (featuresToExtract.includes('entropy')) {
-                console.log(`[Extract][Entropy] Starting for ${songId}`);
-                let nonNegativeVector: any = null; 
-                try {
-                    // Use original audioData
-                    const nonNegativeAudioData = audioData.map(Math.abs);
-                    nonNegativeVector = essentia.arrayToVector(nonNegativeAudioData);
-                    const entropyResult = essentia.Entropy(nonNegativeVector);
-                    extractedFeatures.entropy = entropyResult.entropy;
-                    console.log(`[Extract][Entropy] Completed for ${songId}:`, extractedFeatures.entropy);
-                } catch (entropyError) {
-                    console.error(`[Extract][Entropy] Error for ${songId}:`, entropyError);
-                    extractedFeatures.entropyError = (entropyError instanceof Error) ? entropyError.message : String(entropyError);
-                } finally {
-                    if (nonNegativeVector) nonNegativeVector.delete(); 
-                }
-            }
-            
-            if (featuresToExtract.includes('key')) {
-                console.log(`[Extract][Key] Starting for ${songId}`);
-                try {
-                    // Use original audioVectorEssentia and sampleRate
-                    const keyResult = essentia.KeyExtractor(audioVectorEssentia, true, 4096, 4096, 12, 3500, 60, 25, 0.2, 'bgate', sampleRate, 0.0001, 440, 'cosine', 'hann');
-                    extractedFeatures.key = keyResult.key;
-                    extractedFeatures.keyScale = keyResult.scale;
-                    extractedFeatures.keyStrength = keyResult.strength;
-                    console.log(`[Extract][Key] Completed for ${songId}:`, keyResult.key, keyResult.scale, keyResult.strength);
-                } catch (keyError) {
-                     console.error(`[Extract][Key] Error for ${songId}:`, keyError);
-                     extractedFeatures.keyError = (keyError instanceof Error) ? keyError.message : String(keyError);
-                }
-            }
-            
-            if (featuresToExtract.includes('dynamicComplexity')) {
-                console.log(`[Extract][DynamicComplexity] Starting for ${songId}`);
-                try {
-                    // Use original audioVectorEssentia and sampleRate
-                    const dynamicComplexityResult = essentia.DynamicComplexity(audioVectorEssentia, 0.2, sampleRate);
-                    extractedFeatures.dynamicComplexity = dynamicComplexityResult.dynamicComplexity;
-                    extractedFeatures.loudness = dynamicComplexityResult.loudness; 
-                    console.log(`[Extract][DynamicComplexity] Completed for ${songId}:`, dynamicComplexityResult);
-                } catch (dynCompError) {
-                    console.error(`[Extract][DynamicComplexity] Error for ${songId}:`, dynCompError);
-                    extractedFeatures.dynamicComplexityError = (dynCompError instanceof Error) ? dynCompError.message : String(dynCompError);
+            // --- 1. Prepare Full Signal Vector (only if needed) ---
+            if (fullSignalFeaturesToExtract.length > 0) {
+                console.log(`[MainWorker Extract ${songId}] Converting audio data for full-signal features...`);
+                const audioDataFull = new Float32Array(audioVector); // Create Float32Array once
+                audioVectorEssentia = essentia.arrayToVector(audioDataFull);
+                if (!audioVectorEssentia || audioVectorEssentia.size() === 0) {
+                    throw new Error("Audio vector is invalid or empty for full-signal processing.");
                 }
             }
 
-            // --- RMS --- (NEW)
-            if (featuresToExtract.includes('rms')) {
-                console.log(`[Extract][RMS] Starting for ${songId}`);
+            // --- 2. Extract Full Signal Features ---
+            for (const featureId of fullSignalFeaturesToExtract) {
+                console.log(`[MainWorker Extract ${songId}] Calculating full-signal feature: ${featureId}`);
                 try {
-                    const rmsResult = essentia.RMS(audioVectorEssentia);
-                    extractedFeatures.rms = rmsResult.rms;
-                    console.log(`[Extract][RMS] Completed for ${songId}:`, rmsResult.rms);
-                 } catch (rmsError) {
-                     console.error(`[Extract][RMS] Error for ${songId}:`, rmsError);
-                     extractedFeatures.rmsError = (rmsError instanceof Error) ? rmsError.message : String(rmsError);
-                 }
-             }
-             
-            // --- Rhythm Extractor --- (NEW)
-            if (featuresToExtract.includes('rhythm')) {
-                console.log(`[Extract][Rhythm] Starting for ${songId}`);
-                 try {
-                     // Using default method ('multifeature') and tempo ranges (40-208) explicitly
-                     const rhythmResult = essentia.RhythmExtractor2013(
-                         audioVectorEssentia,
-                         208, // maxTempo
-                         'degara', // method
-                         40 // minTempo
-                     );
-                     extractedFeatures.bpm = rhythmResult.bpm;
-                     extractedFeatures.ticks = essentia.vectorToArray(rhythmResult.ticks);
-                     extractedFeatures.rhythmConfidence = rhythmResult.confidence;
-                     // Optionally extract estimates and bpmIntervals if needed later
-                     // extractedFeatures.estimates = essentia.vectorToArray(rhythmResult.estimates);
-                     // extractedFeatures.bpmIntervals = essentia.vectorToArray(rhythmResult.bpmIntervals);
-                    console.log(`[Extract][Rhythm] Completed for ${songId}: BPM = ${rhythmResult.bpm}, Confidence = ${rhythmResult.confidence}, Ticks = ${extractedFeatures.ticks.length}`);
-                 } catch (rhythmError) {
-                     console.error(`[Extract][Rhythm] Error for ${songId}:`, rhythmError);
-                     extractedFeatures.rhythmError = (rhythmError instanceof Error) ? rhythmError.message : String(rhythmError);
-                 }
-            }
+                    switch (featureId) {
+                        case 'energy':
+                            const energyResult = essentia.Energy(audioVectorEssentia);
+                            combinedFeatures.energy = energyResult.energy;
+                            break;
+                        case 'entropy': // Requires non-negative input
+                            let nonNegativeVector: any = null;
+                            try {
+                                const nonNegativeAudioData = new Float32Array(audioVector).map(Math.abs);
+                                nonNegativeVector = essentia.arrayToVector(nonNegativeAudioData);
+                                const entropyResult = essentia.Entropy(nonNegativeVector);
+                                combinedFeatures.entropy = entropyResult.entropy;
+                            } finally {
+                                if (nonNegativeVector) nonNegativeVector.delete();
+                            }
+                            break;
+                        case 'key':
+                            const keyResult = essentia.KeyExtractor(audioVectorEssentia, true, 4096, 4096, 12, 3500, 60, 25, 0.2, 'bgate', sampleRate, 0.0001, 440, 'cosine', 'hann');
+                            combinedFeatures.key = keyResult.key;
+                            combinedFeatures.keyScale = keyResult.scale;
+                            combinedFeatures.keyStrength = keyResult.strength;
+                            break;
+                        case 'dynamicComplexity':
+                            const dynamicComplexityResult = essentia.DynamicComplexity(audioVectorEssentia, 0.2, sampleRate);
+                            combinedFeatures.dynamicComplexity = dynamicComplexityResult.dynamicComplexity;
+                            combinedFeatures.loudness = dynamicComplexityResult.loudness;
+                            break;
+                        case 'rms':
+                            const rmsResult = essentia.RMS(audioVectorEssentia);
+                            combinedFeatures.rms = rmsResult.rms;
+                            break;
+                        case 'rhythm': // Includes BPM
+                            const rhythmResult = essentia.RhythmExtractor2013(audioVectorEssentia, 208, 'degara', 40);
+                            combinedFeatures.bpm = rhythmResult.bpm;
+                           // combinedFeatures.ticks = essentia.vectorToArray(rhythmResult.ticks); // Keep ticks commented unless needed
+                           // combinedFeatures.rhythmConfidence = rhythmResult.confidence;
+                           // rhythmResult.ticks?.delete(); // Clean up vector if extracted
+                           // rhythmResult.estimates?.delete();
+                           // rhythmResult.bpmIntervals?.delete();
+                            break;
+                        case 'tuningFrequency':
+                            let vectorToDelete: any = null; // Keep track of vector to delete
+                             try {
+                                 // Use the dedicated extractor
+                                 const tuningResult = essentia.TuningFrequencyExtractor(audioVectorEssentia);
+                                 const frequencyVector = tuningResult.tuningFrequency;
+                                 vectorToDelete = frequencyVector; // Assign vector for potential cleanup
 
-            // --- Tuning Frequency --- (NEW)
-            if (featuresToExtract.includes('tuningFrequency')) {
-                console.log(`[Extract][TuningFreq] Starting for ${songId}`);
-                // Needs intermediate steps: Windowing -> Spectrum -> SpectralPeaks
-                let windowedFrameVec: any = null;
-                let spectrumVec: any = null;
-                let freqVec: any = null;
-                let magVec: any = null;
-                try {
-                    // 1. Windowing (using default Hann window, size matching audio for simplicity? Or standard like 2048? Let's use 2048)
-                    // Note: TuningFrequency often works better on a representative frame rather than the whole signal averaged.
-                    // However, for simplicity now, let's process the whole signal vector as one large frame.
-                    // This might not be the most musically meaningful way, but demonstrates the chain.
-                    // A better approach would involve framing and averaging results.
-                    windowedFrameVec = essentia.Windowing(audioVectorEssentia).frame; // Apply default Hann window
+                                 console.log(`[MainWorker Extract ${songId}] Raw tuningResult object:`, tuningResult);
+                                 console.log(`[MainWorker Extract ${songId}] Type of frequencyVector:`, typeof frequencyVector);
 
-                    // 2. Spectrum
-                    spectrumVec = essentia.Spectrum(windowedFrameVec).spectrum;
+                                 // Check if it's an object with a size method (likely VectorFloat)
+                                 if (frequencyVector && typeof frequencyVector === 'object' && typeof frequencyVector.size === 'function') {
+                                     if (frequencyVector.size() > 0) {
+                                          const freqArray = essentia.vectorToArray(frequencyVector);
 
-                    // 3. Spectral Peaks
-                    const peaks = essentia.SpectralPeaks(spectrumVec);
-                    freqVec = peaks.frequencies;
-                    magVec = peaks.magnitudes;
+                                          // Calculate Median for robustness
+                                          if (freqArray && freqArray.length > 0) {
+                                               freqArray.sort((a: number, b: number) => a - b); // Sort numerically
+                                               const mid = Math.floor(freqArray.length / 2);
+                                               let medianFreq: number;
+                                               if (freqArray.length % 2 === 0) {
+                                                   // Even number of elements: average the two middle ones
+                                                   medianFreq = (freqArray[mid - 1] + freqArray[mid]) / 2;
+                                               } else {
+                                                   // Odd number of elements: take the middle one
+                                                   medianFreq = freqArray[mid];
+                                               }
 
-                    // 4. Tuning Frequency (using default resolution = 1 cent)
-                    if (freqVec.size() > 0) { // Check if any peaks were found
-                        const tuningResult = essentia.TuningFrequency(freqVec, magVec);
-                        extractedFeatures.tuningFrequency = tuningResult.tuningFrequency;
-                        extractedFeatures.tuningCents = tuningResult.tuningCents;
-                        console.log(`[Extract][TuningFreq] Completed for ${songId}: Freq = ${tuningResult.tuningFrequency} Hz, Cents = ${tuningResult.tuningCents}`);
-                    } else {
-                         console.warn(`[Extract][TuningFreq] No spectral peaks found for ${songId}, skipping tuning calculation.`);
-                         extractedFeatures.tuningFrequencyError = "No spectral peaks found";
+                                               console.log(`[MainWorker Extract ${songId}] Calculated median tuning frequency:`, medianFreq);
+
+                                               if (typeof medianFreq === 'number' && isFinite(medianFreq)) {
+                                                   combinedFeatures.tuningFrequency = medianFreq;
+                                                   console.log(`[MainWorker Extract ${songId}] TuningFrequency assigned (median): ${medianFreq} Hz`);
+                                               } else {
+                                                   console.warn(`[MainWorker Extract ${songId}] Calculated median frequency is not a valid number.`);
+                                                   combinedFeatures.tuningFrequency = undefined;
+                                                   combinedFeatures.tuningFrequencyError = "Invalid median value calculated";
+                                               }
+                                          } else {
+                                               console.warn(`[MainWorker Extract ${songId}] Tuning frequency vector is empty.`);
+                                               combinedFeatures.tuningFrequency = undefined;
+                                               combinedFeatures.tuningFrequencyError = "Result vector is empty";
+                                          }
+                                     } else {
+                                          console.warn(`[MainWorker Extract ${songId}] Tuning frequency vector is empty.`);
+                                          combinedFeatures.tuningFrequency = undefined;
+                                          combinedFeatures.tuningFrequencyError = "Result vector is empty";
+                                     }
+                                 } else {
+                                     console.warn(`[MainWorker Extract ${songId}] Invalid or missing tuning frequency VectorFloat in result.`);
+                                     combinedFeatures.tuningFrequency = undefined;
+                                     combinedFeatures.tuningFrequencyError = "Invalid/missing VectorFloat from extractor";
+                                 }
+                             } catch (tuningError) {
+                                 const errorMsg = (tuningError instanceof Error) ? tuningError.message : String(tuningError);
+                                 console.error(`[MainWorker Extract ${songId}] Error calculating TuningFrequency:`, tuningError);
+                                 combinedFeatures.tuningFrequencyError = errorMsg;
+                             } finally {
+                                 // Clean up the VectorFloat if it was created
+                                 if (vectorToDelete && typeof vectorToDelete.delete === 'function') {
+                                     console.log(`[MainWorker Extract ${songId}] Cleaning up tuningFrequency vector.`);
+                                     vectorToDelete.delete();
+                                 }
+                             }
+                             break;
+                         case 'onsetRate':
+                             let vectorForOnset = audioVectorEssentia;
+                             let needsCleanup = false;
+                             try {
+                                 if (sampleRate !== 44100) {
+                                     console.log(`[MainWorker Extract ${songId}] Resampling for OnsetRate from ${sampleRate}Hz to 44100Hz...`);
+                                     console.log(`[MainWorker Extract ${songId}] Input vector size for Resample: ${audioVectorEssentia?.size()}`);
+                                     // *** Isolate Resample Call with Quality=0 ***
+                                     let resampleResult: any = null;
+                                     try {
+                                         resampleResult = essentia.Resample(audioVectorEssentia, sampleRate, 44100, 0 /* quality=0 */);
+                                         console.log(`[MainWorker Extract ${songId}] Raw resampleResult object:`, JSON.stringify(resampleResult));
+                                         console.log(`[MainWorker Extract ${songId}] Type of resampleResult.signal:`, typeof resampleResult?.signal);
+                                         // Add validation for the resampled vector
+                                         if (!resampleResult || !resampleResult.signal || typeof resampleResult.signal.size !== 'function') {
+                                             throw new Error("Resample algorithm failed to return a valid signal vector.");
+                                         }
+                                         vectorForOnset = resampleResult.signal;
+                                         needsCleanup = true;
+                                         console.log(`[MainWorker Extract ${songId}] Resampling complete.`);
+                                     } catch (resampleError) {
+                                         console.error(`[MainWorker Extract ${songId}] essentia.Resample call failed:`, resampleError);
+                                         // Re-throw or handle specifically? Re-throwing to be caught by outer catch.
+                                         throw resampleError;
+                                     }
+                                 } else {
+                                     console.log(`[MainWorker Extract ${songId}] Using original sample rate (44100Hz) for OnsetRate.`);
+                                 }
+
+                                 const onsetResult = essentia.OnsetRate(vectorForOnset);
+                                 combinedFeatures.onsetRate = onsetResult.onsetRate;
+                                 console.log(`[MainWorker Extract ${songId}] OnsetRate completed: ${onsetResult.onsetRate}`);
+                                 // onsetResult.onsets?.delete(); // Essentia object cleanup likely not needed for results
+
+                             } catch (onsetRateError) {
+                                 // Log the full error object for better debugging
+                                console.error(`[MainWorker Extract ${songId}] Full OnsetRate Error Object:`, onsetRateError);
+                                 const errorMsg = (onsetRateError instanceof Error) ? onsetRateError.message : String(onsetRateError);
+                                 console.error(`[MainWorker Extract ${songId}] Error calculating OnsetRate:`, onsetRateError);
+                                 combinedFeatures.onsetRateError = errorMsg;
+                             } finally {
+                                 // Clean up the resampled vector *only* if it was created
+                                 if (needsCleanup && vectorForOnset) {
+                                     console.log(`[MainWorker Extract ${songId}] Cleaning up resampled vector for OnsetRate.`);
+                                     vectorForOnset.delete();
+                                 }
+                             }
+                             break;
+                         case 'danceability':
+                             const danceResult = essentia.Danceability(audioVectorEssentia);
+                             combinedFeatures.danceability = danceResult.danceability;
+                             // danceResult.dfa?.delete(); // If DFA vector exists and needs cleanup
+                             break;
+                         case 'intensity':
+                             const intensityResult = essentia.Intensity(audioVectorEssentia);
+                             combinedFeatures.intensity = intensityResult.intensity;
+                             break;
+                        // Add cases for other full-signal features here
+                        default:
+                            console.warn(`[MainWorker Extract ${songId}] Unknown full-signal feature requested: ${featureId}`);
+                            combinedFeatures[`${featureId}Error`] = "Unknown full-signal feature";
                     }
-                 } catch (tuningError) {
-                     console.error(`[Extract][TuningFreq] Error for ${songId}:`, tuningError);
-                     extractedFeatures.tuningFrequencyError = (tuningError instanceof Error) ? tuningError.message : String(tuningError);
-                 } finally {
-                     // Cleanup intermediate vectors
-                     if (windowedFrameVec) windowedFrameVec.delete();
-                     if (spectrumVec) spectrumVec.delete();
-                     if (freqVec) freqVec.delete();
-                     if (magVec) magVec.delete();
-                 }
+                    console.log(`[MainWorker Extract ${songId}] Completed full-signal feature: ${featureId}`);
+                } catch (featureError) {
+                    const errorMsg = (featureError instanceof Error) ? featureError.message : String(featureError);
+                    console.error(`[MainWorker Extract ${songId}] Error calculating ${featureId}:`, featureError);
+                    combinedFeatures[`${featureId}Error`] = errorMsg;
+                }
             }
 
-            // --- Cleanup primary audio vector --- 
-            if (audioVectorEssentia) { 
-                 console.log(`[Extract] Cleaning up audio vector for ${songId}`);
-                 audioVectorEssentia.delete(); 
-            } 
-            
-            console.log(`[Extract] All selected features extracted for ${songId}.`);
-            
-            // Send results back to main thread
-            self.postMessage({ type: 'featureExtractionComplete', songId, features: extractedFeatures });
-            console.log(`[Extract] Finished processing songId: ${songId}`);
+            // --- 3. Delegate Frame-Based Features ---
+            if (frameBasedFeaturesToExtract.length > 0) {
+                console.log(`[MainWorker Extract ${songId}] Delegating frame-based features...`);
+                try {
+                    // Pass Float32Array directly
+                    const frameFeaturesResult = await extractFrameBasedFeatures(
+                        essentia,
+                        new Float32Array(audioVector), // Pass the raw audio data again
+                        sampleRate,
+                        songId,
+                        frameBasedFeaturesToExtract
+                    );
+                    console.log(`[MainWorker Extract ${songId}] Received frame-based results.`);
+                    // Merge results, potentially overwriting error keys if successful
+                    combinedFeatures = { ...combinedFeatures, ...frameFeaturesResult };
+                } catch (frameProcessingError) {
+                     const errorMsg = (frameProcessingError instanceof Error) ? frameProcessingError.message : String(frameProcessingError);
+                     console.error(`[MainWorker Extract ${songId}] Error during delegated frame processing:`, frameProcessingError);
+                     combinedFeatures['frameProcessingError'] = errorMsg;
+                }
+            } else {
+                 console.log(`[MainWorker Extract ${songId}] No frame-based features requested.`);
+            }
+
+            // --- 4. Post Combined Results --- 
+            console.log(`[MainWorker Extract ${songId}] All processing finished. Posting results.`);
+            self.postMessage({ type: 'featureExtractionComplete', songId, features: combinedFeatures });
 
         } catch (error) {
+            // Catch errors from top-level processing (e.g., initial vector conversion)
             const errorMessage = (error instanceof Error) ? error.message : String(error);
-            console.error(`[Extract] Error extracting features for song ${songId} in worker:`, error);
+            console.error(`[MainWorker Extract ${songId}] Top-level error extracting features:`, error);
             self.postMessage({ type: 'featureExtractionError', songId, error: errorMessage });
+        } finally {
+            // --- Cleanup Full Signal Vector ---
+            if (audioVectorEssentia) {
+                console.log(`[MainWorker Extract ${songId}] Cleaning up full-signal audio vector.`);
+                audioVectorEssentia.delete();
+            }
+            console.log(`[MainWorker Extract ${songId}] Cleanup complete.`);
         }
     }
 };
@@ -372,8 +458,8 @@ self.onmessage = async (event: MessageEvent<WorkerMessageData>) => {
 // Generic error handler for the worker itself
 self.onerror = (error) => {
     const errorMessage = (error instanceof Error) ? error.message : (typeof error === 'string' ? error : 'Unknown worker error');
-    console.error("Unhandled error in worker:", error);
+    console.error("Unhandled error in main worker:", error);
     self.postMessage({ type: 'workerError', error: errorMessage });
 };
 
-console.log("Worker setup complete (Bundled with require). Waiting for messages..."); 
+console.log("Main Worker setup complete. Waiting for messages..."); 

@@ -53,10 +53,28 @@ type ProcessingStage = 'features' | 'processed' | 'reduced' | 'kmeans' | null;
 
 // --- NEW: Redefine canonical feature order from page.tsx --- 
 const canonicalFeatureOrder: (keyof Features)[] = [
-  'energy', 'entropy', 'loudness', 'rms', 'dynamicComplexity', 'keyStrength',
-  'tuningFrequency', 'tuningCents',
-  'mfccMeans', 'mfccStdDevs', // Array features
-  'key', 'keyScale' // String features for one-hot encoding
+  // Existing Scalar Rhythmic/Dynamic/Loudness
+  'energy', 'entropy', 'loudness', 'rms', 'dynamicComplexity', 'bpm', 'onsetRate',
+  // Existing Scalar Tonal/Pitch
+  'keyStrength', 'tuningFrequency', 'rhythmConfidence', 'pitchSalienceMean', 'pitchSalienceStdDev',
+  // NEW Scalar Spectral/Timbral
+  'spectralCentroidTimeMean', 'spectralCentroidTimeStdDev',
+  'spectralComplexityMean', 'spectralComplexityStdDev',
+  'spectralFluxMean', 'spectralFluxStdDev', // Added Spectral Flux
+  // NEW Scalar Harmonic Property
+  'inharmonicityMean', 'inharmonicityStdDev',
+  'dissonanceMean', 'dissonanceStdDev',
+  // NEW High-level / Categorical (Consider placement)
+  'danceability', 'intensity', // Intensity is categorical
+
+  // Existing Vector Features (MFCC)
+  'mfccMeans', 'mfccStdDevs',
+  // NEW Vector Features (Spectral Contrast, Mel Bands)
+  'spectralContrastMeans', 'spectralContrastStdDevs',
+  'melBandsMeans', 'melBandsStdDevs',
+
+  // Existing Categorical for OHE (Keep last or group with other categoricals)
+  'key', 'keyScale'
 ];
 // -----------------------------------------------------------
 
@@ -107,11 +125,33 @@ const FEATURE_FIELD_ORDER = [
   { key: 'rms', prefix: 'RMS', isArray: false },
   // Tuning fields
   { key: 'tuningFrequency', prefix: 'Tuning Frequency', isArray: false },
-  { key: 'tuningCents', prefix: 'Tuning Cents', isArray: false },
   // Categorical fields (for coloring, not for axes)
   { key: 'key', prefix: 'Key', isArray: false, isCategorical: true },
   { key: 'keyScale', prefix: 'Scale', isArray: false, isCategorical: true },
-  { key: 'keyStrength', prefix: 'Key Strength', isArray: false }
+  { key: 'keyStrength', prefix: 'Key Strength', isArray: false },
+
+
+  { key: 'bpm', prefix: 'BPM', isArray: false },
+  { key: 'onsetRate', prefix: 'Onset Rate', isArray: false },
+  { key: 'rhythmConfidence', prefix: 'Rhythm Confidence', isArray: false },
+  { key: 'pitchSalienceMean', prefix: 'Pitch Salience μ', isMean: true },
+  { key: 'pitchSalienceStdDev', prefix: 'Pitch Salience σ', isStdDev: true },
+  { key: 'spectralCentroidTimeMean', prefix: 'Spec. Centroid μ', isMean: true },
+  { key: 'spectralCentroidTimeStdDev', prefix: 'Spec. Centroid σ', isStdDev: true },
+  { key: 'spectralComplexityMean', prefix: 'Spec. Complexity μ', isMean: true },
+  { key: 'spectralComplexityStdDev', prefix: 'Spec. Complexity σ', isStdDev: true },
+  { key: 'inharmonicityMean', prefix: 'Inharmonicity μ', isMean: true },
+  { key: 'inharmonicityStdDev', prefix: 'Inharmonicity σ', isStdDev: true },
+  { key: 'dissonanceMean', prefix: 'Dissonance μ', isMean: true },
+  { key: 'dissonanceStdDev', prefix: 'Dissonance σ', isStdDev: true },
+  { key: 'danceability', prefix: 'Danceability', isArray: false },
+  { key: 'intensity', prefix: 'Intensity', isCategorical: true }, // Mark intensity as categorical
+  { key: 'spectralContrastMeans', prefix: 'Spec. Contrast μ', isMeanVector: true, isArray: true },
+  { key: 'spectralContrastStdDevs', prefix: 'Spec. Contrast σ', isStdDevVector: true, isArray: true },
+  { key: 'melBandsMeans', prefix: 'Mel Bands μ', isMeanVector: true, isArray: true },
+  { key: 'melBandsStdDevs', prefix: 'Mel Bands σ', isStdDevVector: true, isArray: true },
+  { key: 'spectralFluxMean', prefix: 'Spectral Flux μ', isMean: true, isArray: false },
+  { key: 'spectralFluxStdDev', prefix: 'Spectral Flux σ', isStdDev: true, isArray: false },
 ];
 
 // Define a type for feature column metadata
@@ -470,7 +510,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         else if (targetStage === 'clustering' && Object.keys(reducedDataPoints).length > 0 && Object.keys(kmeansAssignments).length > 0) dataExists = true; 
 
         if (dataExists) {
-            console.log(`[VizPanel] Auto-switching view from ${selectedDataStage} to ${targetStage}`);
+           // console.log(`[VizPanel] Auto-switching view from ${selectedDataStage} to ${targetStage}`);
             setSelectedDataStage(targetStage); // <-- UPDATE: Set the correct state
         } else {
             // console.log(`[VizPanel] Auto-switch to ${targetStage} skipped: Data not available.`);
@@ -503,7 +543,6 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
       if (features.rms !== undefined) hoverText += `<br>RMS: ${features.rms.toFixed(3)}`;
       if (features.keyStrength !== undefined) hoverText += `<br>Key Strength: ${features.keyStrength.toFixed(3)}`;
       if (features.tuningFrequency !== undefined) hoverText += `<br>Tuning Frequency: ${features.tuningFrequency.toFixed(2)} Hz`;
-      if (features.tuningCents !== undefined) hoverText += `<br>Tuning Cents: ${features.tuningCents.toFixed(2)}`;
       
       // Add categorical values
       if (features.key !== undefined) hoverText += `<br>Key: ${features.key}`;
@@ -518,6 +557,23 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         const stdPreview = features.mfccStdDevs.slice(0, 3).map(v => v.toFixed(3)).join(', ');
         hoverText += `<br>MFCC StdDevs: [${stdPreview}${features.mfccStdDevs.length > 3 ? ', ...' : ''}]`;
       }
+
+      // NEW Frame-based aggregated features
+      if (features.spectralCentroidTimeMean !== undefined) hoverText += `<br>Spec. Centroid Mean: ${features.spectralCentroidTimeMean.toFixed(2)}`;
+      if (features.spectralCentroidTimeStdDev !== undefined) hoverText += `<br>Spec. Centroid Std: ${features.spectralCentroidTimeStdDev.toFixed(2)}`;
+      if (features.spectralComplexityMean !== undefined) hoverText += `<br>Spec. Complexity Mean: ${features.spectralComplexityMean.toFixed(2)}`;
+      if (features.spectralComplexityStdDev !== undefined) hoverText += `<br>Spec. Complexity Std: ${features.spectralComplexityStdDev.toFixed(2)}`;
+      if (features.inharmonicityMean !== undefined) hoverText += `<br>Inharmonicity Mean: ${features.inharmonicityMean.toFixed(4)}`;
+      if (features.inharmonicityStdDev !== undefined) hoverText += `<br>Inharmonicity Std: ${features.inharmonicityStdDev.toFixed(4)}`;
+      if (features.dissonanceMean !== undefined) hoverText += `<br>Dissonance Mean: ${features.dissonanceMean.toFixed(3)}`;
+      if (features.dissonanceStdDev !== undefined) hoverText += `<br>Dissonance Std: ${features.dissonanceStdDev.toFixed(3)}`;
+      if (features.pitchSalienceMean !== undefined) hoverText += `<br>Pitch Salience Mean: ${features.pitchSalienceMean.toFixed(3)}`;
+      if (features.pitchSalienceStdDev !== undefined) hoverText += `<br>Pitch Salience Std: ${features.pitchSalienceStdDev.toFixed(3)}`;
+      if (features.spectralFluxMean !== undefined) hoverText += `<br>Spectral Flux Mean: ${features.spectralFluxMean.toFixed(4)}`;
+      if (features.spectralFluxStdDev !== undefined) hoverText += `<br>Spectral Flux Std: ${features.spectralFluxStdDev.toFixed(4)}`;
+
+      // Optional: Add vector features (MFCC, Contrast, Mel) summary if needed
+      if (features.mfccMeans) hoverText += `<br>MFCC Means: [${features.mfccMeans.length} vals]`;
     }
     
     return hoverText;
@@ -530,17 +586,17 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
   const plotDataAndLayout = useMemo(() => {
     try { 
-      console.log('[Plot Memo] Recalculating plot data...'); 
+     // console.log('[Plot Memo] Recalculating plot data...'); 
       let dataPoints: Record<string, number[]> = {};
       let songIds: string[] = [];
       let dataTitle = '';
 
-      console.log(`[Plot Memo] Selected Stage: ${selectedDataStage}`); 
+     // console.log(`[Plot Memo] Selected Stage: ${selectedDataStage}`); 
 
       switch (selectedDataStage) {
         case 'raw':
           if (!unprocessedData || unprocessedData.vectors.length === 0) {
-            console.log('[Plot Memo] No raw data available.'); 
+           // console.log('[Plot Memo] No raw data available.'); 
             return { plotData: [], plotLayout: basePlotLayout }; 
           }
           dataTitle = 'Raw Features';
@@ -552,7 +608,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
           break;
         case 'processed':
           if (!processedData || processedData.vectors.length === 0) {
-            console.log('[Plot Memo] No processed data available.');
+           // console.log('[Plot Memo] No processed data available.');
             return { plotData: [], plotLayout: basePlotLayout };
           }
           dataTitle = 'Processed Data';
@@ -564,7 +620,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
           break;
         case 'reduction':
           if (!isReducedDataAvailable) {
-            console.log('[Plot Memo] No reduced data points available.'); 
+           // console.log('[Plot Memo] No reduced data points available.'); 
             return { plotData: [], plotLayout: basePlotLayout }; 
           }
           dataTitle = 'Reduced Dimensions';
@@ -574,7 +630,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         case 'clustering':
         default:
           if (!isClusteringDataAvailable) {
-            console.log('[Plot Memo] No clustering data available.'); 
+           // console.log('[Plot Memo] No clustering data available.'); 
             return { plotData: [], plotLayout: basePlotLayout }; 
           }
           dataTitle = `K-Means Clustering - Iteration ${kmeansIteration}`;
@@ -585,7 +641,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
       
       const filteredSongIds = songIds.filter(id => activeSongIds.has(id));
       if (filteredSongIds.length === 0) {
-        console.log('[Plot Memo] No active songs for current stage/filter.'); 
+       // console.log('[Plot Memo] No active songs for current stage/filter.'); 
         return { plotData: [], plotLayout: basePlotLayout }; 
       }
       
@@ -611,8 +667,8 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
       yAxisTitle = getAxisTitle(selectedAxisY, 'Dimension');
       zAxisTitle = getAxisTitle(selectedAxisZ, 'Dimension');
 
-      console.log(`[Plot Memo] Axis Indices: X=${xAxisIndex}, Y=${yAxisIndex}, Z=${zAxisIndex}`); 
-      console.log(`[Plot Memo] Axis Titles: X='${xAxisTitle}', Y='${yAxisTitle}', Z='${zAxisTitle}'`); 
+     // console.log(`[Plot Memo] Axis Indices: X=${xAxisIndex}, Y=${yAxisIndex}, Z=${zAxisIndex}`); 
+     // console.log(`[Plot Memo] Axis Titles: X='${xAxisTitle}', Y='${yAxisTitle}', Z='${zAxisTitle}'`); 
       
       const traceType = selectedDimensions === 3 ? 'scatter3d' : 'scatter';
       
@@ -644,9 +700,9 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         }
       });
       
-      console.log(`[Plot Memo] Generated ${intermediatePoints.length} intermediate points.`);
+     // console.log(`[Plot Memo] Generated ${intermediatePoints.length} intermediate points.`);
       if (intermediatePoints.length === 0) {
-        console.log('[Plot Memo] No valid points generated after axis mapping.');
+       // console.log('[Plot Memo] No valid points generated after axis mapping.');
         return { plotData: [], plotLayout: basePlotLayout }; 
       }
       
@@ -654,7 +710,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
       const colorByCluster = selectedColorBy === 'cluster' && selectedDataStage === 'clustering';
       const colorByCategorical = selectedColorBy?.startsWith('feature:');
       const categoryKey = colorByCategorical ? selectedColorBy!.substring(8) : null;
-      console.log(`[Plot Memo] Color Strategy: ${selectedColorBy ?? 'Default'}`);
+     // console.log(`[Plot Memo] Color Strategy: ${selectedColorBy ?? 'Default'}`);
 
       const groupedPoints: Record<string, typeof intermediatePoints> = {};
       const categoryToColor: Record<string, string> = {};
@@ -687,7 +743,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         }
         groupedPoints[groupName].push(point);
       });
-      console.log(`[Plot Memo] Generated ${Object.keys(groupedPoints).length} groups/traces.`);
+     // console.log(`[Plot Memo] Generated ${Object.keys(groupedPoints).length} groups/traces.`);
 
       // Generate Traces from Groups
       const plotData: Partial<Plotly.PlotData>[] = [];
@@ -754,9 +810,9 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         delete plotLayout.scene;
       }
       
-      console.log('[Plot Memo] Final Plot Data Length:', plotData.length); 
-      console.log('[Plot Memo] Final Plot Layout Title:', plotLayout.title);
-      console.log('[Plot Memo] Final Plot Layout BgColor:', plotLayout.paper_bgcolor, plotLayout.plot_bgcolor);
+     // console.log('[Plot Memo] Final Plot Data Length:', plotData.length); 
+     // console.log('[Plot Memo] Final Plot Layout Title:', plotLayout.title);
+     // console.log('[Plot Memo] Final Plot Layout BgColor:', plotLayout.paper_bgcolor, plotLayout.plot_bgcolor);
       
       return { plotData, plotLayout };
     } catch (error) { 
@@ -955,7 +1011,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
                       id="axis-x-select"
                       value={selectedAxisX ?? ''}
                       onChange={(e) => handleAxisChange('X', e.target.value || null)}
-                      className="bg-gray-800 border border-gray-600 px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500 min-w-[100px]"
+                      className="bg-gray-800 border border-gray-600 px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500 min-w-[100px] hide-scrollbar"
                       disabled={(selectedDataStage === 'raw' && !canSelectRaw) || 
                                 (selectedDataStage === 'processed' && !canSelectProcessed) || 
                                 (selectedDataStage === 'clustering' && !canSelectClustering)}
@@ -989,7 +1045,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
                       id="axis-y-select"
                       value={selectedAxisY ?? ''}
                       onChange={(e) => handleAxisChange('Y', e.target.value || null)}
-                      className="bg-gray-800 border border-gray-600 px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500 min-w-[100px]"
+                      className="bg-gray-800 border border-gray-600 px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500 min-w-[100px] hide-scrollbar"
                       disabled={(selectedDataStage === 'raw' && !canSelectRaw) || 
                                (selectedDataStage === 'processed' && !canSelectProcessed) || 
                                (selectedDataStage === 'clustering' && !canSelectClustering)}
@@ -1024,7 +1080,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
                         id="axis-z-select"
                         value={selectedAxisZ ?? ''}
                         onChange={(e) => handleAxisChange('Z', e.target.value || null)}
-                        className="bg-gray-800 border border-gray-600 px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500 min-w-[100px]"
+                        className="bg-gray-800 border border-gray-600 px-1 py-0.5 text-xs focus:outline-none focus:border-pink-500 min-w-[100px] hide-scrollbar"
                         disabled={(selectedDataStage === 'raw' && !canSelectRaw) || 
                                  (selectedDataStage === 'processed' && !canSelectProcessed) || 
                                  (selectedDataStage === 'clustering' && !canSelectClustering)}

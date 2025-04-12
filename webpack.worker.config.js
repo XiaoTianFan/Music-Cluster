@@ -10,6 +10,7 @@ module.exports = {
     'druid-worker': './src/workers/druid-worker.ts',
     'kmeans-worker': './src/workers/kmeans-worker.ts',
     'data-processing-worker': './src/workers/data-processing-worker.ts',
+    // 'frame-feature-extractor-worker': './src/workers/features/frame-feature-extractor.ts'
   },
   output: {
     // Output directory for the bundled worker (inside public)

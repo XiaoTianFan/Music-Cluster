@@ -43,21 +43,66 @@ export interface Song {
 }
 
 export interface Features {
-  mfccMeans?: number[];      
-  mfccStdDevs?: number[];    
-  energy?: number;          
-  entropy?: number;         
-  key?: string;             
-  keyScale?: string;        
-  keyStrength?: number;     
-  // Dynamic Complexity related fields:
+  // Existing Features
+  mfccMeans?: number[];
+  mfccStdDevs?: number[];
+  energy?: number;
+  entropy?: number;
+  key?: string;
+  keyScale?: string;
+  keyStrength?: number;
   dynamicComplexity?: number;
   loudness?: number; // Note: This 'loudness' is from DynamicComplexity
-  // RMS field:
   rms?: number;
-  // Tuning Frequency fields:
-  tuningFrequency?: number; // Estimated tuning frequency in Hz
-  tuningCents?: number;     // Deviation from 440 Hz in cents
+  tuningFrequency?: number;
+  bpm?: number; // From RhythmExtractor2013
+  rhythmConfidence?: number; // From RhythmExtractor2013
+
+  // --- NEW Full Signal Features ---
+  onsetRate?: number;
+  danceability?: number;
+  intensity?: number; // Categorical (-1, 0, 1)
+
+  // --- NEW Frame-Based Aggregated Features ---
+  spectralCentroidTimeMean?: number;
+  spectralCentroidTimeStdDev?: number;
+  spectralComplexityMean?: number;
+  spectralComplexityStdDev?: number;
+  spectralContrastMeans?: number[];
+  spectralContrastStdDevs?: number[];
+  inharmonicityMean?: number;
+  inharmonicityStdDev?: number;
+  dissonanceMean?: number;
+  dissonanceStdDev?: number;
+  melBandsMeans?: number[];
+  melBandsStdDevs?: number[];
+  pitchSalienceMean?: number;
+  pitchSalienceStdDev?: number;
+
+  // --- NEW Frame-Based Scalar Features ---
+  spectralFluxMean?: number;
+  spectralFluxStdDev?: number;
+
+  // Optional Error fields (can be useful for debugging)
+  mfccError?: string;
+  energyError?: string;
+  entropyError?: string;
+  keyError?: string;
+  dynamicComplexityError?: string;
+  rmsError?: string;
+  tuningFrequencyError?: string;
+  rhythmError?: string;
+  onsetRateError?: string;
+  danceabilityError?: string;
+  intensityError?: string;
+  spectralCentroidTimeError?: string;
+  spectralComplexityError?: string;
+  spectralContrastError?: string;
+  inharmonicityError?: string;
+  dissonanceError?: string;
+  melBandsError?: string;
+  pitchSalienceError?: string;
+  spectralFluxError?: string;
 }
 
 // Type for feature processing status
@@ -132,10 +177,28 @@ type ProcessingStage = 'features' | 'processed' | 'reduced' | 'kmeans' | null; /
 // Needs to be consistent between page.tsx and VisualizationPanel.tsx
 // Exporting might be better long-term, but redefining for now.
 const canonicalFeatureOrder: (keyof Features)[] = [
-  'energy', 'entropy', 'loudness', 'rms', 'dynamicComplexity', 'keyStrength',
-  'tuningFrequency', 'tuningCents',
-  'mfccMeans', 'mfccStdDevs', // Array features
-  'key', 'keyScale' // String features for one-hot encoding
+  // Existing Scalar Rhythmic/Dynamic/Loudness
+  'energy', 'entropy', 'loudness', 'rms', 'dynamicComplexity', 'bpm', 'onsetRate',
+  // Existing Scalar Tonal/Pitch
+  'keyStrength', 'tuningFrequency', 'rhythmConfidence', 'pitchSalienceMean', 'pitchSalienceStdDev',
+  // NEW Scalar Spectral/Timbral
+  'spectralCentroidTimeMean', 'spectralCentroidTimeStdDev',
+  'spectralComplexityMean', 'spectralComplexityStdDev',
+  'spectralFluxMean', 'spectralFluxStdDev', // Added Spectral Flux
+  // NEW Scalar Harmonic Property
+  'inharmonicityMean', 'inharmonicityStdDev',
+  'dissonanceMean', 'dissonanceStdDev',
+  // NEW High-level / Categorical (Consider placement)
+  'danceability', 'intensity', // Intensity is categorical
+
+  // Existing Vector Features (MFCC)
+  'mfccMeans', 'mfccStdDevs',
+  // NEW Vector Features (Spectral Contrast, Mel Bands)
+  'spectralContrastMeans', 'spectralContrastStdDevs',
+  'melBandsMeans', 'melBandsStdDevs',
+
+  // Existing Categorical for OHE (Keep last or group with other categoricals)
+  'key', 'keyScale'
 ];
 
 // --- Helper: Prepare Matrix (Extracted Logic) ---
@@ -1174,7 +1237,7 @@ export default function DashboardPage() {
 
     addLogMessage('[Cache Check] Attempting to load feature cache /default_features.json...', 'info'); // Fixed backtick
     try {
-      const response = await fetch('/default_features.json');
+      const response = await fetch('default_features.json');
       addLogMessage(`[Cache Check] Fetch response status: ${response.status}`, 'info');
       if (!response.ok) {
         // Gracefully handle not found - it's not an error, just cache miss
@@ -1192,16 +1255,25 @@ export default function DashboardPage() {
         } else {
           cachedKeysSet = new Set(loadedCacheData.cachedFeatureKeys);
           // Compare selected features with cached features
-          const selectedKeysSet = selectedFeatures; 
-          if (setsAreEqual(selectedKeysSet, cachedKeysSet)) {
-            isCacheValidAndApplicable = true;
-            addLogMessage('[Cache Check] Cache loaded, format valid, and features match.', 'complete'); // Fixed backtick
-          } else {
-            addLogMessage('[Cache Check] Cache skipped: Selected features do not match cached features.', 'info'); // Fixed backtick
-            console.log('Selected Features:', selectedKeysSet);
-            console.log('Cached Features:', cachedKeysSet);
-            loadedCacheData = null; // Treat feature mismatch as cache miss
+          const selectedKeysSet = selectedFeatures; // This is already a Set
+          // --- MODIFIED CHECK: Check if selected features are a SUBSET of cached features ---
+          let allSelectedAreCached = true;
+          for (const key of selectedKeysSet) {
+            if (!cachedKeysSet.has(key)) {
+              allSelectedAreCached = false;
+              break;
+            }
           }
+          // ------------------------------------------------------------------------
+          if (allSelectedAreCached) {
+              isCacheValidAndApplicable = true;
+              addLogMessage('[Cache Check] Cache loaded, format valid, and selected features are available in cache.', 'complete'); 
+            } else {
+              addLogMessage('[Cache Check] Cache skipped: Not all selected features are present in the cache file.', 'info'); 
+              console.log('Selected Features:', selectedKeysSet);
+              console.log('Cached Features:', cachedKeysSet);
+              loadedCacheData = null; // Treat feature mismatch as cache miss
+            }
         }
       }
     } catch (error: unknown) {
@@ -1234,7 +1306,36 @@ export default function DashboardPage() {
         }
 
         if (useCache) {
-            cachedFeaturesToAdd[songId] = loadedCacheData.songData[songId];
+            // --- SELECTIVE CACHE APPLICATION: Copy only requested features --- 
+            const songCacheData = loadedCacheData.songData[songId];
+            const featuresToApply: Partial<Features> = {};
+            selectedFeatures.forEach(featureKey => {
+              // Map the base key (e.g., 'mfcc') to the actual data keys (e.g., 'mfccMeans', 'mfccStdDevs')
+              // This needs a more robust mapping, but for now, handle common cases explicitly
+              if (featureKey === 'mfcc' && songCacheData.mfccMeans) featuresToApply.mfccMeans = songCacheData.mfccMeans;
+              if (featureKey === 'mfcc' && songCacheData.mfccStdDevs) featuresToApply.mfccStdDevs = songCacheData.mfccStdDevs;
+              if (featureKey === 'spectralContrast' && songCacheData.spectralContrastMeans) featuresToApply.spectralContrastMeans = songCacheData.spectralContrastMeans;
+              if (featureKey === 'spectralContrast' && songCacheData.spectralContrastStdDevs) featuresToApply.spectralContrastStdDevs = songCacheData.spectralContrastStdDevs;
+              if (featureKey === 'melBands' && songCacheData.melBandsMeans) featuresToApply.melBandsMeans = songCacheData.melBandsMeans;
+              if (featureKey === 'melBands' && songCacheData.melBandsStdDevs) featuresToApply.melBandsStdDevs = songCacheData.melBandsStdDevs;
+              // Handle scalar features (Mean/StdDev pairs or single values)
+              const meanKey = `${featureKey}Mean` as keyof Features;
+              const stdDevKey = `${featureKey}StdDev` as keyof Features;
+              const singleKey = featureKey as keyof Features;
+              if (songCacheData[meanKey] !== undefined) featuresToApply[meanKey] = songCacheData[meanKey];
+              if (songCacheData[stdDevKey] !== undefined) featuresToApply[stdDevKey] = songCacheData[stdDevKey];
+              if (songCacheData[singleKey] !== undefined && !meanKey.endsWith('Mean')) { 
+                  // Check if it's a known single value feature that isn't part of a pair
+                  if (['energy', 'entropy', 'key', 'keyScale', 'keyStrength', 'dynamicComplexity', 'loudness', 'rms', 'tuningFrequency', 'bpm', 'rhythmConfidence', 'onsetRate', 'danceability', 'intensity'].includes(singleKey)) {
+                     featuresToApply[singleKey] = songCacheData[singleKey];
+                  }
+              }
+              // Add corresponding error field if it exists
+              const errorKey = `${featureKey}Error` as keyof Features;
+              if (songCacheData[errorKey]) featuresToApply[errorKey] = songCacheData[errorKey];
+            });
+            cachedFeaturesToAdd[songId] = featuresToApply;
+            // --------------------------------------------------------------------------
             statusUpdatesFromCache[songId] = 'complete';
             cacheAppliedCount++;
         } else {
@@ -1277,14 +1378,14 @@ export default function DashboardPage() {
             addLogMessage(`[Worker Send] Requesting features for ${song.name}...`, 'info');
             // Use getDecodedAudio which handles its own errors and sets status to 'error' on failure
             const audioBuffer = await getDecodedAudio(song); 
-
+            
             if (audioBuffer && workerRef.current) {
                 try { // Add try/catch around potentially large data prep or postMessage
                    const audioData = audioBuffer.getChannelData(0);
                    // Optimization: Consider transferring ArrayBuffer if possible, depends on worker setup
                    // For now, create a copy using Array.from
                    const audioVector = Array.from(audioData); 
-
+                   console.log(`[Page Debug ${song.name}] Decoded Sample Rate: ${audioBuffer.sampleRate}`); // <-- ADD THIS LOG
                    workerRef.current.postMessage({
                       type: 'extractFeatures',
                       payload: {
