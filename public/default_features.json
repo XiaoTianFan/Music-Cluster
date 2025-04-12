@@ -1,5 +1,5 @@
 {
-    "cachedFeatureKeys": [
+    "availableDataKeys": [
     "intensity", "key", "keyScale", "keyStrength", "tuningFrequency",
     "energy", "entropy", "dynamicComplexity", "loudness", "bpm",
     "danceability", "rms", "spectralFluxMean", "spectralFluxStdDev", 
