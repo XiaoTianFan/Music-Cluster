@@ -1900,7 +1900,7 @@ export default function DashboardPage() {
   }, [isProcessing, processingSongIds, featureStatus]); // Dependencies
 
   return (
-    <main className="flex flex-col min-h-screen p-4 bg-gray-900/20 text-gray-100 font-[family-name:var(--font-geist-mono)] hide-scrollbar">
+    <main className="flex flex-col min-h-screen p-4 bg-gray-900/10  text-gray-100 font-[family-name:var(--font-geist-mono)] hide-scrollbar">
        {/* Hidden File Input */}
        <input
           ref={fileInputRef}
@@ -1914,7 +1914,7 @@ export default function DashboardPage() {
 
       {/* Header/Top Controls Placeholder */}
       <div
-        className="w-full h-16 mb-4 p-2 flex justify-between items-center border border-cyan-500"
+        className="w-full h-16 mb-4 p-2 flex justify-between bg-gray-900/60 items-center border border-cyan-500"
         data-augmented-ui="tl-clip tr-clip br-clip bl-clip border"
         style={{ '--aug-border-color': 'cyan', '--aug-border-bg': 'transparent' } as React.CSSProperties}
       >

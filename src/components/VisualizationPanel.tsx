@@ -910,7 +910,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
   return (
     <div
-      className={`flex flex-col items-center justify-start ${className || ''}`}
+      className={`flex flex-col items-center bg-gray-900/60 justify-start ${className || ''}`}
     >
       {/* Plot Area (Takes up most space) */}
       <div 
@@ -930,7 +930,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
       {/* Controls Container (Fixed height at the bottom) */}
       <div 
-        className="w-full flex-shrink-0 p-2 mt-2 border-t border-b border-pink-700/50 bg-gray-900/80"
+        className="w-full flex-shrink-0 p-2 mt-2 border-t border-b border-pink-700/50 bg-gray-900/60"
         style={{ backdropFilter: 'blur(2px)' }} // Optional: Add blur for better separation
         >
           {/* Control Row 1: ALWAYS contains Data Stage, Dimensionality, and Color selection */}

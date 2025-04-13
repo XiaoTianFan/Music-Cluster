@@ -36,7 +36,7 @@ const LogPanel: React.FC<LogPanelProps> = ({ logs, className }) => {
 
   return (
     <div
-      className={`flex flex-col p-4 border border-yellow-500 text-yellow-400 ${className}`}
+      className={`flex flex-col p-4 bg-gray-900/60 border border-yellow-500 text-yellow-400 ${className}`}
       data-augmented-ui="tl-clip tr-clip br-clip bl-clip border"
       style={{ '--aug-border-color': 'goldenrod', '--aug-border-bg': '#FEFEFE' } as React.CSSProperties}
     >

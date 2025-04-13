@@ -36,54 +36,68 @@ interface Ripple {
     color: string;
 }
 
+// --- NEW: Highlighted Hex Interface ---
+interface HighlightedHex {
+    id: number;
+    center: Point;
+    radius: number; // Store radius for drawing
+    startTime: number;
+    duration: number;
+    maxOpacity: number;
+    color: string;
+}
+
 // Component Props (optional for now, could add config later)
 interface DynamicBackgroundProps {
     className?: string;
     hexRadius?: number;
     gridColor?: string;
     lineWidth?: number;
-    glowColor?: string; // Added for glow
+    glowColor?: string; // Base color for hover glow
     maxGlowRadius?: number; // Added for glow size/intensity calculation
     maxGlowOpacity?: number; // Added for glow opacity calculation
-    pulseColor?: string; // Added for pulses
-    pulseSpeed?: number; // Added for pulses
-    pulseInterval?: number; // Time between new pulses in ms
-    pulseMaxLength?: number; // Max simultaneous pulses
     rippleColor?: string; // Added for ripples
     rippleMaxRadius?: number;
     rippleDuration?: number;
     rippleLineWidthMultiplier?: number; // Optional: Make ripple lines thicker
     waveThickness?: number; // << NEW: Thickness of the wave band
+    highlightInterval?: number; // Time between highlight bursts (ms)
+    highlightDuration?: number; // How long each highlight lasts (ms)
+    highlightPercentage?: number; // Percentage of hexes to highlight per burst (0-1)
+    highlightColor?: string; // Color for highlights (supports alpha)
+    highlightMaxOpacity?: number; // Peak opacity during fade
+    highlightMaxAmount?: number; // Max simultaneous highlighted hexes (optional limit)
 }
 
 const DynamicBackground: React.FC<DynamicBackgroundProps> = ({
     className = '',
-    hexRadius = 50, // << Increased default radius
-    gridColor = 'rgba(0, 255, 255, 0.08)', // << Slightly dimmer grid
+    hexRadius = 20, // << Increased default radius
+    gridColor = 'rgba(0, 255, 255, 0.2)', 
     lineWidth = 1,
-    glowColor = 'rgba(0, 255, 255, alpha)', // Cyan glow, alpha calculated dynamically
+    glowColor = 'rgba(0, 255, 255, alpha)', // Base color for hover glow
     maxGlowRadius = 200, // << Increased glow radius
     maxGlowOpacity = 0.5, // Max opacity of the glow at the center
-    pulseColor = 'rgba(255, 0, 255, 0.7)', // Magenta pulse color
-    pulseSpeed = 120, // Pixels per second (approximate)
-    pulseInterval = 400, // Add a new pulse every 400ms
-    pulseMaxLength = 8, // Limit concurrent pulses
     rippleColor = 'rgba(0, 255, 255, alpha)', // Ripple color (cyan, alpha calculated)
-    rippleMaxRadius = 800, // 
-    rippleDuration = 1000, //
+    rippleMaxRadius = 300, // 
+    rippleDuration = 300, //
     rippleLineWidthMultiplier = 1.5, // << Default thicker ripple lines
     waveThickness = 60, // << NEW: Default wave thickness (adjust as needed)
+    highlightInterval = 2000, 
+    highlightDuration = 2000, 
+    highlightPercentage = 0.5, // Highlight 5% of hexes per burst
+    highlightColor = 'rgba(0, 255, 255, alpha)', // Slightly different cyan for highlight
+    highlightMaxOpacity = 0.2, // Keep highlight subtle
+    highlightMaxAmount = 200, // Limit concurrent highlights (optional)
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [ctx, setCtx] = useState<CanvasRenderingContext2D | null>(null);
   const animationFrameId = useRef<number | null>(null); // Ref to store animation frame ID
   const hexCentersRef = useRef<HexCenterData[]>([]); // Ref to store pre-calculated centers
   const mousePosition = useRef<Point | null>(null); // Ref for mouse position (state causes re-renders)
-  const activePulsesRef = useRef<Pulse[]>([]); // Ref to store active pulses
-  const pulseIntervalId = useRef<NodeJS.Timeout | null>(null); // Ref for interval ID
-  const lastTimestampRef = useRef<number>(0); // For delta time calculation
-  // --- NEW: State/Refs for Ripples ---
   const activeRipplesRef = useRef<Ripple[]>([]);
+  const activeHighlightsRef = useRef<HighlightedHex[]>([]);
+  const highlightIntervalId = useRef<NodeJS.Timeout | null>(null);
+  const lastTimestampRef = useRef<number>(0); // For delta time calculation
 
   // --- Hexagon Geometry Helpers ---
   const getHexCorner = useCallback((center: Point, radius: number, i: number): Point => {
@@ -97,23 +111,30 @@ const DynamicBackground: React.FC<DynamicBackgroundProps> = ({
   }, []);
 
   // --- NEW: Helper to draw hexagon outline from corners ---
-  const drawHexOutline = (context: CanvasRenderingContext2D, corners: Point[]) => {
+  const drawHexOutline = useCallback((context: CanvasRenderingContext2D, corners: Point[]) => {
       if (!corners || corners.length < 6) return;
       context.moveTo(corners[0].x, corners[0].y);
       for (let i = 1; i < 6; i++) {
           context.lineTo(corners[i].x, corners[i].y);
       }
       context.closePath(); // Close the path back to the start
-  };
+  }, []);
 
-  // --- Grid Calculation & Tessellation Drawing Logic (Revised) ---
+  // --- Grid Calculation & Tessellation Drawing Logic (Revised for Glow) ---
   const calculateAndDrawTessellatedGrid = useCallback((context: CanvasRenderingContext2D, width: number, height: number, radius: number) => {
     context.clearRect(0, 0, width, height);
+
+    // --- Grid Glow Settings ---
+    context.shadowColor = gridColor.replace('alpha', '1'); // Use grid color for shadow, full opacity
+    context.shadowBlur = 5; // Adjust blur radius as needed
+    context.shadowOffsetX = 2;
+    context.shadowOffsetY = -2;
+    // ------------------------
+
     context.strokeStyle = gridColor;
     context.lineWidth = lineWidth;
 
     const newCentersData: HexCenterData[] = [];
-    // const drawnEdges = new Set<string>(); // Removed edge tracking
 
     const hexHeight = radius * Math.sqrt(3);
     const hexWidth = radius * 2;
@@ -123,7 +144,7 @@ const DynamicBackground: React.FC<DynamicBackgroundProps> = ({
     const rows = Math.ceil(height / vertDist) + 2;
     const cols = Math.ceil(width / horizDist) + 2;
 
-    context.beginPath(); // Start path for all hexagons
+    context.beginPath();
 
     for (let row = -1; row < rows; row++) {
       for (let col = -1; col < cols; col++) {
@@ -131,22 +152,24 @@ const DynamicBackground: React.FC<DynamicBackgroundProps> = ({
         const cy = row * vertDist + (col % 2 !== 0 ? vertDist / 2 : 0);
         const center = { x: cx, y: cy };
 
-        // Store center if within rough bounds
         if (cx > -horizDist - radius && cx < width + horizDist + radius && cy > -vertDist - radius && cy < height + vertDist + radius) {
             newCentersData.push({ center });
-            // Calculate corners and draw the full hexagon outline
             const corners = Array.from({ length: 6 }, (_, i) => getHexCorner(center, radius, i));
             drawHexOutline(context, corners);
         }
-
-        // --- Removed edge drawing logic --- //
       }
     }
-    context.stroke(); // Stroke all hexagon paths at once
+    context.stroke();
+
+    // --- Reset Shadow Settings ---
+    context.shadowColor = 'transparent';
+    context.shadowBlur = 0;
+    // ---------------------------
+
     hexCentersRef.current = newCentersData;
   }, [getHexCorner, gridColor, lineWidth]);
 
-  // --- Glow Logic ---
+  // --- Glow Logic (Revised for Glow Effect) ---
   const getNearbyHexCenters = useCallback((targetPos: Point | null, maxDist: number): HexCenterData[] => {
       if (!targetPos) return [];
       const nearby: HexCenterData[] = [];
@@ -164,6 +187,15 @@ const DynamicBackground: React.FC<DynamicBackgroundProps> = ({
 
   const drawGlows = useCallback((context: CanvasRenderingContext2D, targetPos: Point | null) => {
       if (!targetPos) return;
+
+      // --- Glow Shadow Settings ---
+      // Use the glow color itself for the shadow to enhance it
+      context.shadowColor = glowColor.replace('alpha', '1'); 
+      context.shadowBlur = 10; // Make hover glow blurrier
+      context.shadowOffsetX = 2;
+      context.shadowOffsetY = 2;
+      // --------------------------
+
       const nearbyCenters = getNearbyHexCenters(targetPos, maxGlowRadius);
       for (const hexData of nearbyCenters) {
           const dx = hexData.center.x - targetPos.x;
@@ -173,90 +205,21 @@ const DynamicBackground: React.FC<DynamicBackgroundProps> = ({
           const opacity = maxGlowOpacity * proximityFactor * proximityFactor;
           const radius = hexRadius * 0.5 * proximityFactor;
           if (opacity > 0.01 && radius > 1) {
-              context.fillStyle = glowColor.replace('alpha', opacity.toFixed(3));
+              // Base fill color can be slightly less opaque now
+              context.fillStyle = glowColor.replace('alpha', (opacity * 0.7).toFixed(3)); 
               context.beginPath();
               context.arc(hexData.center.x, hexData.center.y, radius, 0, Math.PI * 2);
               context.fill();
           }
       }
+
+      // --- Reset Shadow Settings ---
+      context.shadowColor = 'transparent';
+      context.shadowBlur = 0;
+      // ---------------------------
   }, [getNearbyHexCenters, maxGlowRadius, hexRadius, glowColor, maxGlowOpacity]);
 
-  // --- Pulse Logic ---
-  const lerp = (start: number, end: number, t: number): number => {
-      return start * (1 - t) + end * t;
-  };
-
-  // Function to find adjacent hex centers (simplified approach)
-  const findAdjacentCenter = useCallback((startCenter: Point, allCenters: HexCenterData[]): Point | null => {
-    const minDistSq = (hexRadius * 1.8) ** 2;
-    const maxDistSq = (hexRadius * 2.2) ** 2;
-    const potentialNeighbors: Point[] = [];
-    for (const hexData of allCenters) {
-      if (hexData.center === startCenter) continue;
-      const dx = hexData.center.x - startCenter.x;
-      const dy = hexData.center.y - startCenter.y;
-      const distSq = dx * dx + dy * dy;
-      if (distSq > minDistSq && distSq < maxDistSq) {
-        potentialNeighbors.push(hexData.center);
-      }
-    }
-    if (potentialNeighbors.length > 0) {
-      return potentialNeighbors[Math.floor(Math.random() * potentialNeighbors.length)];
-    } else {
-      return null;
-    }
-  }, [hexRadius]);
-
-  const createPulse = useCallback(() => {
-    if (hexCentersRef.current.length === 0 || activePulsesRef.current.length >= pulseMaxLength) {
-      return;
-    }
-    const startIndex = Math.floor(Math.random() * hexCentersRef.current.length);
-    const startData = hexCentersRef.current[startIndex];
-    const endCenter = findAdjacentCenter(startData.center, hexCentersRef.current);
-    if (endCenter) {
-      const newPulse: Pulse = {
-        id: Date.now() + Math.random(),
-        start: startData.center,
-        end: endCenter,
-        progress: 0,
-        speed: pulseSpeed,
-        color: pulseColor,
-        startTime: performance.now(),
-      };
-      activePulsesRef.current.push(newPulse);
-    }
-  }, [findAdjacentCenter, pulseSpeed, pulseColor, pulseMaxLength]);
-
-  const drawPulses = useCallback((context: CanvasRenderingContext2D, deltaTime: number) => {
-    const pulsesToRemove: number[] = [];
-    context.lineWidth = lineWidth * 1.5;
-    for (let i = 0; i < activePulsesRef.current.length; i++) {
-        const pulse = activePulsesRef.current[i];
-        const distance = Math.sqrt(
-            (pulse.end.x - pulse.start.x) ** 2 + (pulse.end.y - pulse.start.y) ** 2
-        );
-        const timeToTravel = (distance / pulse.speed) * 1000;
-        const elapsedTime = performance.now() - pulse.startTime;
-        pulse.progress = Math.min(1, elapsedTime / timeToTravel);
-        const currentX = lerp(pulse.start.x, pulse.end.x, pulse.progress);
-        const currentY = lerp(pulse.start.y, pulse.end.y, pulse.progress);
-        context.strokeStyle = pulse.color;
-        context.beginPath();
-        context.arc(currentX, currentY, lineWidth * 1.5, 0, Math.PI * 2);
-        context.fillStyle = pulse.color;
-        context.fill();
-        if (pulse.progress >= 1) {
-            pulsesToRemove.push(pulse.id);
-        }
-    }
-    activePulsesRef.current = activePulsesRef.current.filter(
-        pulse => !pulsesToRemove.includes(pulse.id)
-    );
-    context.lineWidth = lineWidth;
-  }, [lineWidth, pulseColor]);
-
-  // --- NEW: Ripple Logic ---
+  // --- Ripple Logic (Could optionally add shadow here too) ---
   const createRipple = useCallback((center: Point) => {
       const now = performance.now();
       const newRipple: Ripple = {
@@ -325,7 +288,103 @@ const DynamicBackground: React.FC<DynamicBackgroundProps> = ({
     context.lineWidth = originalLineWidth; // Restore original line width
   }, [maxGlowOpacity, waveThickness, rippleLineWidthMultiplier, rippleColor, getHexCorner, hexRadius, drawHexOutline]);
 
-  // --- Animation Loop ---
+  // --- NEW: Highlight Logic ---
+  const createHighlightBurst = useCallback(() => {
+      if (hexCentersRef.current.length === 0) return;
+
+      const numToHighlight = Math.max(1, Math.floor(hexCentersRef.current.length * highlightPercentage));
+      const availableIndices = Array.from(hexCentersRef.current.keys());
+      const now = performance.now();
+      let countAdded = 0;
+
+      for (let i = 0; i < numToHighlight; i++) {
+          if (availableIndices.length === 0) break;
+          if (activeHighlightsRef.current.length >= highlightMaxAmount) break;
+
+          const randomIndex = Math.floor(Math.random() * availableIndices.length);
+          const hexIndex = availableIndices.splice(randomIndex, 1)[0];
+          const hexData = hexCentersRef.current[hexIndex];
+          if (!hexData) continue;
+
+          const newHighlight: HighlightedHex = {
+              id: now + Math.random(),
+              center: hexData.center,
+              radius: hexRadius,
+              startTime: now,
+              duration: highlightDuration,
+              maxOpacity: highlightMaxOpacity,
+              color: highlightColor,
+          };
+          activeHighlightsRef.current.push(newHighlight);
+          countAdded++;
+      }
+      // *** DEBUG LOG ***
+      if (countAdded > 0) {
+          console.log(`[Highlight] Created Burst: Added ${countAdded} highlights. Total active: ${activeHighlightsRef.current.length}`);
+      }
+
+  }, [highlightPercentage, highlightDuration, highlightMaxOpacity, highlightColor, hexRadius, highlightMaxAmount]);
+
+  const drawHighlights = useCallback((context: CanvasRenderingContext2D, timestamp: number) => {
+    const highlightsToRemove: number[] = [];
+    const originalLineWidth = context.lineWidth;
+
+    // Define fade phases (e.g., 20% fade in, 60% hold, 20% fade out)
+    const fadeInRatio = 0.2;
+    const fadeOutRatio = 0.2;
+    const holdRatio = 1.0 - fadeInRatio - fadeOutRatio;
+
+    activeHighlightsRef.current.forEach(highlight => {
+        const elapsedTime = Math.max(0, timestamp - highlight.startTime);
+        const lifeProgress = Math.min(1, elapsedTime / highlight.duration);
+
+        // --- Only remove when duration is fully complete ---
+        if (lifeProgress >= 1) {
+            highlightsToRemove.push(highlight.id);
+            return; // Stop processing this highlight if it's expired
+        }
+
+        // --- Plateau Fade Calculation with Easing --- 
+        let phaseProgress = 0;
+        if (lifeProgress < fadeInRatio) { 
+            // Fade In Phase (Ease Out Quad)
+            const t = lifeProgress / fadeInRatio; // Normalize progress within phase (0 to 1)
+            phaseProgress = 1 - (1 - t) * (1 - t);
+        } else if (lifeProgress < fadeInRatio + holdRatio) {
+            // Hold Phase
+            phaseProgress = 1.0;
+        } else { 
+            // Fade Out Phase (Ease In Quad)
+            const t = (lifeProgress - (fadeInRatio + holdRatio)) / fadeOutRatio; // Normalize progress (0 to 1)
+            phaseProgress = 1 - (t * t);
+        }
+
+        const opacity = highlight.maxOpacity * Math.max(0, Math.min(1, phaseProgress)); 
+        // ---------------------------------------------
+
+        // --- Removed opacity check for removal ---
+
+        // --- Only draw if opacity is significant ---
+        if (opacity > 0.01) {
+            context.strokeStyle = highlight.color.replace('alpha', opacity.toFixed(3));
+            context.lineWidth = originalLineWidth * 2.5;
+            const corners = Array.from({ length: 6 }, (_, i) => getHexCorner(highlight.center, highlight.radius, i));
+            context.beginPath();
+            drawHexOutline(context, corners);
+            context.stroke();
+        }
+        // Else, do nothing (don't draw if opacity is too low)
+    });
+
+    // Remove completed highlights based on duration ONLY
+    activeHighlightsRef.current = activeHighlightsRef.current.filter(
+        highlight => !highlightsToRemove.includes(highlight.id)
+    );
+
+    context.lineWidth = originalLineWidth;
+  }, [getHexCorner, drawHexOutline, highlightColor, highlightMaxOpacity, highlightDuration]);
+
+  // --- Animation Loop (Changed Draw Order) ---
   const animate = useCallback((timestamp: number) => {
     if (!ctx || !canvasRef.current) {
       animationFrameId.current = requestAnimationFrame(animate);
@@ -344,18 +403,19 @@ const DynamicBackground: React.FC<DynamicBackgroundProps> = ({
     // Clear canvas
     ctx.clearRect(0, 0, width, height);
 
-    // --- Draw Tessellated Grid (Using the revised function) ---\
+    // 1. Draw Base Grid
     calculateAndDrawTessellatedGrid(ctx, width, height, hexRadius);
 
-    // --- Draw Effects --- //
+    // 2. Draw Base Highlights 
+    drawHighlights(ctx, timestamp);
+
+    // 3. Draw Interactive Effects (Glow, Ripple)
     drawGlows(ctx, mousePosition.current);
-    drawPulses(ctx, deltaTime);
-    drawRipples(ctx, timestamp); // Pass timestamp for ripple timing
+    drawRipples(ctx, timestamp);
 
     // Request next frame
     animationFrameId.current = requestAnimationFrame(animate);
-  // Updated dependencies
-  }, [ctx, calculateAndDrawTessellatedGrid, drawGlows, drawPulses, drawRipples, hexRadius]);
+  }, [ctx, calculateAndDrawTessellatedGrid, drawHighlights, drawGlows, drawRipples, hexRadius]);
 
   // --- Resize Handling ---
   const handleResize = useCallback(() => {
@@ -370,10 +430,9 @@ const DynamicBackground: React.FC<DynamicBackgroundProps> = ({
       // Use the tessellated grid draw function
       calculateAndDrawTessellatedGrid(ctx, canvas.width / dpr, canvas.height / dpr, hexRadius);
     }
-  // Updated dependency
   }, [ctx, calculateAndDrawTessellatedGrid, hexRadius]);
 
-  // --- Use Effects (Setup, Resize, Animation, Mouse, Pulse Interval) ---
+  // --- Use Effects (Setup, Resize, Animation, Mouse, Click) ---
   useEffect(() => {
     const canvas = canvasRef.current;
     if (canvas && !ctx) {
@@ -389,15 +448,15 @@ const DynamicBackground: React.FC<DynamicBackgroundProps> = ({
     window.addEventListener('resize', handleResize);
     lastTimestampRef.current = 0;
     animationFrameId.current = requestAnimationFrame(animate);
-    if (pulseInterval > 0) {
-        pulseIntervalId.current = setInterval(createPulse, pulseInterval);
+    if (highlightInterval > 0) {
+        highlightIntervalId.current = setInterval(createHighlightBurst, highlightInterval);
     }
     return () => {
       window.removeEventListener('resize', handleResize);
       if (animationFrameId.current) cancelAnimationFrame(animationFrameId.current);
-      if (pulseIntervalId.current) clearInterval(pulseIntervalId.current);
+      if (highlightIntervalId.current) clearInterval(highlightIntervalId.current);
     };
-  }, [ctx, handleResize, animate, createPulse, pulseInterval]);
+  }, [ctx, handleResize, animate, createHighlightBurst, highlightInterval]);
 
   useEffect(() => {
     const handleMouseMove = (event: MouseEvent) => {
@@ -443,7 +502,7 @@ const DynamicBackground: React.FC<DynamicBackgroundProps> = ({
     <canvas
       ref={canvasRef}
       className={`fixed top-0 left-0 w-full h-full -z-10 ${className}`}
-      style={{ pointerEvents: 'none' }}
+      style={{ pointerEvents: 'none', filter: 'blur(0.75px)' }}
     />
   );
 };

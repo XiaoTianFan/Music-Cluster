@@ -197,7 +197,7 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
 
   return (
     <div
-      className={`p-4 border border-blue-500 flex flex-col h-[85vh] transition-colors duration-200 ${isDraggingOver ? 'bg-blue-900/30 border-blue-300' : ''} ${className || ''}`}
+      className={`p-4 border bg-gray-900/60 border-blue-500 flex flex-col h-[85vh] transition-colors duration-200 ${isDraggingOver ? 'bg-blue-900/30 border-blue-300' : ''} ${className || ''}`}
       data-augmented-ui="tl-clip tr-clip br-clip bl-clip border"
       style={{ '--aug-border-color': isDraggingOver ? 'dodgerblue' : 'deepskyblue' } as React.CSSProperties}
       // Attach drag/drop handlers

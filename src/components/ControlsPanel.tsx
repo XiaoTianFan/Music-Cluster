@@ -150,7 +150,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
 
   return (
     <div
-      className={`p-4 border border-green-500 flex overflow-y-scroll hide-scrollbar flex-col h-[85vh] ${className || ''}`}
+      className={`p-4 border border-green-500 bg-gray-900/60 flex overflow-y-scroll hide-scrollbar flex-col h-[85vh] ${className || ''}`}
       data-augmented-ui="tl-round tr-clip br-clip-x bl-clip border"
       style={{ '--aug-border-color': 'lime' } as React.CSSProperties}
     >
