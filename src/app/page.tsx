@@ -1981,7 +1981,7 @@ export default function DashboardPage() {
 
       {/* New Grid Layout - Based on Wireframe */}
       <div className='h-[85vh]'>
-        <div className="flex-grow grid grid-cols-[auto_1fr_auto] grid-rows-[3fr_1fr] min-h-full max-h-full gap-4"> {/* Use auto columns for sides, fr for middle */} 
+        <div className="flex-grow px-2 grid grid-cols-[auto_1fr_auto] grid-rows-[3fr_1fr] min-h-full max-h-full gap-4"> {/* Use auto columns for sides, fr for middle */} 
           {/* Song List Panel (Left Column, Full Height, Max Width) */}
           <SongListPanel
             className="col-span-1 row-span-2 max-w-xs max-h-full" // Added max-width
@@ -2007,7 +2007,7 @@ export default function DashboardPage() {
 
           {/* Visualization Panel (Middle Column, Top Row) */}
           <VisualizationPanel
-            className="col-span-1 row-span-1 max-h-full min-h-0" // Updated spans
+            className="col-span-1 row-span-1 max-h-full min-h-0 px-4" // Updated spans
             activeSongIds={activeSongIds}
             songs={songs}
             // Pass raw features, unprocessed matrix, and processed matrix
@@ -2055,7 +2055,7 @@ export default function DashboardPage() {
 
           {/* Log Panel (Middle Column, Bottom Row) */}
           <LogPanel
-            className="col-span-1 row-span-1 h-[21vh]" // Updated spans
+            className="col-span-1 row-span-1 h-[21vh] ml-4 mr-4" // Updated spans
             logs={filteredLogMessages}
           />
         </div>

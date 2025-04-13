@@ -910,11 +910,11 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
   return (
     <div
-      className={`flex flex-col items-center bg-gray-900/60 justify-start ${className || ''}`}
+      className={`flex flex-col items-center justify-start ${className || ''}`}
     >
       {/* Plot Area (Takes up most space) */}
       <div 
-        className="w-full h-full flex-grow relative mb-2 min-h-0 bg-gray-900/60 border border-pink-500 justify-center items-center"
+        className="w-full h-full flex-grow relative mb-2 min-h-0 bg-gray-900/70 border border-pink-500 justify-center items-center"
         data-augmented-ui="tl-clip-x tr-round br-clip bl-round border"
         style={{ '--aug-border-color': 'hotpink' } as React.CSSProperties}
       >
