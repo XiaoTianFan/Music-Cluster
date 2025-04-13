@@ -400,8 +400,11 @@ const DynamicBackground: React.FC<DynamicBackgroundProps> = ({
     const width = canvas.width / dpr;
     const height = canvas.height / dpr;
 
-    // Clear canvas
-    ctx.clearRect(0, 0, width, height);
+    // --- Fill background instead of clearRect ---
+    ctx.fillStyle = '#030712'; // Very dark background (like gray-950)
+    ctx.fillRect(0, 0, width, height); 
+    // ctx.clearRect(0, 0, width, height); // Removed clearRect
+    // -------------------------------------------
 
     // 1. Draw Base Grid
     calculateAndDrawTessellatedGrid(ctx, width, height, hexRadius);
@@ -499,11 +502,13 @@ const DynamicBackground: React.FC<DynamicBackgroundProps> = ({
   }, [createRipple]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      className={`fixed top-0 left-0 w-full h-full -z-10 ${className}`}
-      style={{ pointerEvents: 'none', filter: 'blur(0.75px)' }}
-    />
+    <div className="fixed top-0 left-0 w-full h-full -z-20 bg-black">
+      <canvas
+        ref={canvasRef}
+        className={`fixed top-0 left-0 w-full h-full -z-10 ${className}`}
+        style={{ pointerEvents: 'none', filter: 'blur(0.75px)' }}
+      />
+    </div>
   );
 };
 

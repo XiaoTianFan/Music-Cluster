@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from '@vercel/analytics/next';
 import DynamicBackground from "@/components/DynamicBackground";
+import MobileLayoutWrapper from "@/components/MobileLayoutWrapper";
 import "./globals.css";
 import "augmented-ui/augmented-ui.min.css";
 
@@ -17,7 +18,7 @@ const geistMono = Geist_Mono({
 
 // Define metadata for SEO and sharing
 export const metadata: Metadata = {
-  title: "MusicCluster - Unsupervised Audio Clustering", // Sets the <title> tag
+  title: "MusicCluster - MIR with Unsupervised Music Clustering", // Sets the <title> tag
   description: "Explore unsupervised k-means clustering of audio files based on extracted features. A web application demonstrating MIR, dimensionality reduction, and clustering.", // Sets <meta name="description">
   // You can add more metadata here, like Open Graph tags for social media sharing:
   openGraph: {
@@ -36,13 +37,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <DynamicBackground />
-        {children}
-        <Analytics />
+        <div className="fixed top-0 left-0 w-full h-full -z-20 bg-black">
+          <DynamicBackground />
+          <MobileLayoutWrapper>
+              {children}
+          </MobileLayoutWrapper>
+          <Analytics />
+        </div>
       </body>
     </html>
   );
