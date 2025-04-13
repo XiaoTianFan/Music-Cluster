@@ -1,5 +1,6 @@
-import React, { useState, DragEvent } from 'react';
-import { PlayIcon, PauseIcon, TrashIcon, InformationCircleIcon } from '@heroicons/react/24/solid';
+import React, { useState, DragEvent, useCallback, useMemo } from 'react';
+import { PlayIcon, PauseIcon, TrashIcon, InformationCircleIcon, ArrowUpTrayIcon } from '@heroicons/react/24/solid';
+import Marquee from "react-fast-marquee";
 
 // Re-import types from page.tsx or define locally/globally
 interface Song {
@@ -99,11 +100,11 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
   // ----------------------------------
   className 
 }) => {
-  // State for drag-over visual feedback
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [hoveredItemId, setHoveredItemId] = useState<string | null>(null);
 
   // Sort songs: user songs first, then default songs (alphabetically within groups)
-  const sortedSongs = React.useMemo(() => {
+  const sortedSongs = useMemo(() => {
     return [...songs].sort((a, b) => {
       // NEW Primary sort: selected first
       const aIsActive = activeSongIds.has(a.id);
@@ -136,19 +137,18 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
       // Quaternary sort: alphabetically by name
       return a.name.localeCompare(b.name);
     });
-  // UPDATE: Added activeSongIds dependency + kmeansAssignments
   }, [songs, activeSongIds, kmeansAssignments]);
 
   // Drag and Drop Handlers
-  const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
+  const handleDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
     event.preventDefault(); // Necessary to allow dropping
     event.stopPropagation();
     if (!isDraggingOver) {
       setIsDraggingOver(true);
     }
-  };
+  }, [isDraggingOver]);
 
-  const handleDragLeave = (event: DragEvent<HTMLDivElement>) => {
+  const handleDragLeave = useCallback((event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.stopPropagation();
     // Check if the leave event is going outside the component boundary
@@ -156,9 +156,9 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
     if (!event.currentTarget.contains(event.relatedTarget as Node)) {
         setIsDraggingOver(false);
     }
-  };
+  }, []);
 
-  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+  const handleDrop = useCallback((event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.stopPropagation();
     setIsDraggingOver(false); // Reset visual state
@@ -193,7 +193,7 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
     if (newSongs.length > 0) {
       onAddSongs(newSongs); // Pass the generated song objects to the parent
     }
-  };
+  }, [isProcessing, onAddSongs]);
 
   return (
     <div
@@ -228,13 +228,15 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
                 }
                 // Determine if this song is the one currently playing
                 const isCurrentlyPlaying = currentlyPlayingSongId === song.id && isPlaying;
-                const status = featureStatus[song.id]; // Get status for convenience
+                const status = featureStatus[song.id] ?? 'idle';
                 // -------------------------------------
                 return (
                     <li 
                         key={song.id} 
                         className="group flex justify-between items-center max-h-[5vh] text-xs p-2 pr-2 hover:bg-gray-800/50 border-b border-gray-700/50 relative" 
                         style={{ backgroundColor }} 
+                        onMouseEnter={() => setHoveredItemId(song.id)}
+                        onMouseLeave={() => setHoveredItemId(null)}
                     >
                         {/* Content Container (In Flow - Checkbox and Text only) */}
                         <div className="flex items-center min-w-0 w-full"> 
@@ -247,9 +249,26 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
                                 title={activeSongIds.has(song.id) ? "Exclude from processing" : "Include in processing"}
                             />
                             {/* Text now takes all available space in the flow */}
-                            <span title={song.name} className="truncate flex-grow">
-                                {song.name}
-                            </span>
+                            <div title={song.name} className="truncate flex-grow min-w-0"> 
+                                {/* Conditionally Render Marquee or Static Text */}
+                                {hoveredItemId === song.id ? (
+                                    <Marquee 
+                                       play={true} // Always play when rendered/hovered
+                                       gradient={false} 
+                                       speed={30} 
+                                       pauseOnHover={true} // Still useful if cursor moves onto the marquee itself
+                                       className="overflow-visible" 
+                                    >
+                                       {song.name} 
+                                       {/* Add spacing for continuous loop appearance */}
+                                       <>&nbsp;&nbsp;&nbsp;</> 
+                                    </Marquee>
+                                ) : (
+                                    <span className="block truncate">{/* Use span for static text */} 
+                                        {song.name}
+                                    </span>
+                                )}
+                            </div>
                         </div>
                         
                         {/* --- Button Container (Absolute Position, Hover Visible, Higher Z-Index) --- */} 
