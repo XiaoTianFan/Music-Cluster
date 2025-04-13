@@ -1900,7 +1900,7 @@ export default function DashboardPage() {
   }, [isProcessing, processingSongIds, featureStatus]); // Dependencies
 
   return (
-    <main className="flex flex-col min-h-screen p-4 bg-gray-900/10  text-gray-100 font-[family-name:var(--font-geist-mono)] hide-scrollbar">
+    <main className="flex flex-col min-h-screen p-4 bg-gray-950/30 bg-blur-md text-gray-100 font-[family-name:var(--font-geist-mono)] hide-scrollbar">
        {/* Hidden File Input */}
        <input
           ref={fileInputRef}
@@ -1914,9 +1914,20 @@ export default function DashboardPage() {
 
       {/* Header/Top Controls Placeholder */}
       <div
-        className="w-full h-16 mb-4 p-2 flex justify-between bg-gray-900/60 items-center border border-cyan-500"
-        data-augmented-ui="tl-clip tr-clip br-clip bl-clip border"
-        style={{ '--aug-border-color': 'cyan', '--aug-border-bg': 'transparent' } as React.CSSProperties}
+        className="w-full h-16 mb-4 p-2 flex justify-between items-center"
+        data-augmented-ui="bl-clip-y tr-clip-y border inlay"
+        style={{'--aug-border-bg': 'var(--foreground)',
+          '--aug-border-opacity': '0.8',
+          '--aug-border-x': '1px',
+          '--aug-border-y': '3px',
+          '--aug-inlay-bg': 'var(--background)',
+          '--aug-inlay-opacity': '0.05',
+          filter: `drop-shadow(0 0 2px var(--accent-primary))`, 
+          '--aug-tl': '10px', 
+          '--aug-tr': '10px', 
+          '--aug-br': '10px', 
+          '--aug-bl': '10px',
+         } as React.CSSProperties}
       >
         <h1 className="px-4 text-xl font-bold text-cyan-400 flex-shrink-0">MusicCluster Dashboard</h1>
         {/* --- NEW: Add Audio Player in the middle --- */}
@@ -1981,7 +1992,7 @@ export default function DashboardPage() {
 
       {/* New Grid Layout - Based on Wireframe */}
       <div className='h-[85vh]'>
-        <div className="flex-grow px-2 grid grid-cols-[auto_1fr_auto] grid-rows-[3fr_1fr] min-h-full max-h-full gap-4"> {/* Use auto columns for sides, fr for middle */} 
+        <div className="flex-grow px-2 py-2 grid grid-cols-[auto_1fr_auto] grid-rows-[3fr_1fr] min-h-full max-h-full gap-2"> {/* Use auto columns for sides, fr for middle */} 
           {/* Song List Panel (Left Column, Full Height, Max Width) */}
           <SongListPanel
             className="col-span-1 row-span-2 max-w-xs max-h-full" // Added max-width
@@ -2055,7 +2066,7 @@ export default function DashboardPage() {
 
           {/* Log Panel (Middle Column, Bottom Row) */}
           <LogPanel
-            className="col-span-1 row-span-1 h-[21vh] ml-4 mr-4" // Updated spans
+            className="col-span-1 row-span-1 h-[20vh] ml-4 mr-4" // Updated spans
             logs={filteredLogMessages}
           />
         </div>

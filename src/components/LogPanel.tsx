@@ -1,5 +1,6 @@
 // songcluster/src/components/LogPanel.tsx
 import React, { useRef, useEffect } from 'react';
+import BasePanel from './ui/BasePanel';
 
 // Re-import LogLevel and LogMessage if they are defined elsewhere and exported,
 // or define them here if they are specific to this component usage.
@@ -34,13 +35,17 @@ const LogPanel: React.FC<LogPanelProps> = ({ logs, className }) => {
     }
   }, [logs]);
 
+  // Combine original classes, removing p-4 and relative which BasePanel provides
+  const panelClassName = `flex flex-col mt-2 ${className}`.replace('p-4', '').replace('relative', '').trim();
+
   return (
-    <div
-      className={`flex flex-col p-4 bg-gray-900/60 border border-yellow-500 text-yellow-400 ${className}`}
+    <BasePanel
+      className={panelClassName}
       data-augmented-ui="tl-clip tr-clip br-clip bl-clip border"
-      style={{ '--aug-border-color': 'goldenrod', '--aug-border-bg': '#FEFEFE' } as React.CSSProperties}
+      style={{ '--aug-border-bg': 'var(--foreground)', 
+        '--aug-border-x': '1px' } as React.CSSProperties}
     >
-      <h2 className="text-lg font-semibold mb-2 text-yellow-300">Program Logs</h2>
+      <h2 className="ml-2 text-lg font-semibold mb-2 text-[var(--accent-secondary)]">Program Logs</h2>
       <div
         ref={scrollContainerRef}
         className="flex-grow overflow-y-auto bg-grey/90 p-2 text-xs font-mono hide-scrollbar"
@@ -55,7 +60,7 @@ const LogPanel: React.FC<LogPanelProps> = ({ logs, className }) => {
           ))
         )}
       </div>
-    </div>
+    </BasePanel>
   );
 };
 

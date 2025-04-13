@@ -71,12 +71,12 @@ interface DynamicBackgroundProps {
 
 const DynamicBackground: React.FC<DynamicBackgroundProps> = ({
     className = '',
-    hexRadius = 20, // << Increased default radius
+    hexRadius = 15, // << Increased default radius
     gridColor = 'rgba(0, 255, 255, 0.2)', 
     lineWidth = 1,
     glowColor = 'rgba(0, 255, 255, alpha)', // Base color for hover glow
     maxGlowRadius = 200, // << Increased glow radius
-    maxGlowOpacity = 0.5, // Max opacity of the glow at the center
+    maxGlowOpacity = 0.3, // Max opacity of the glow at the center
     rippleColor = 'rgba(0, 255, 255, alpha)', // Ripple color (cyan, alpha calculated)
     rippleMaxRadius = 300, // 
     rippleDuration = 300, //
@@ -84,7 +84,7 @@ const DynamicBackground: React.FC<DynamicBackgroundProps> = ({
     waveThickness = 60, // << NEW: Default wave thickness (adjust as needed)
     highlightInterval = 2000, 
     highlightDuration = 2000, 
-    highlightPercentage = 0.5, // Highlight 5% of hexes per burst
+    highlightPercentage = 0.7, // Highlight 5% of hexes per burst
     highlightColor = 'rgba(0, 255, 255, alpha)', // Slightly different cyan for highlight
     highlightMaxOpacity = 0.2, // Keep highlight subtle
     highlightMaxAmount = 200, // Limit concurrent highlights (optional)
@@ -506,7 +506,7 @@ const DynamicBackground: React.FC<DynamicBackgroundProps> = ({
       <canvas
         ref={canvasRef}
         className={`fixed top-0 left-0 w-full h-full -z-10 ${className}`}
-        style={{ pointerEvents: 'none', filter: 'blur(0.75px)' }}
+        style={{ pointerEvents: 'none', filter: 'blur(1px)' }}
       />
     </div>
   );

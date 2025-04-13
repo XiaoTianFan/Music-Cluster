@@ -1,6 +1,8 @@
 import React, { useState, DragEvent, useCallback, useMemo } from 'react';
 import { PlayIcon, PauseIcon, TrashIcon, InformationCircleIcon, ArrowUpTrayIcon } from '@heroicons/react/24/solid';
 import Marquee from "react-fast-marquee";
+import BasePanel from './ui/BasePanel'; // <-- Import BasePanel
+import Button from './ui/Button'; // <-- Import Button
 
 // Re-import types from page.tsx or define locally/globally
 interface Song {
@@ -195,17 +197,33 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
     }
   }, [isProcessing, onAddSongs]);
 
+  // Prepare props for BasePanel
+  const panelClassName = `
+    flex flex-col h-[85vh] 
+    transition-colors duration-200 
+    ${isDraggingOver ? 'bg-blue-900/30 border-blue-300' : ''} 
+    ${className || ''}
+  `.replace('p-4', '').replace('relative', '').trim();
+  
+  const panelStyle: React.CSSProperties = {
+    '--aug-border-bg': 'var(--foreground)',
+    '--aug-border-all': '1px', 
+    '--aug-border-y': '2px' 
+  } as React.CSSProperties;
+
+  const panelDataAugmentedUi = "tl-clip tr-clip br-clip bl-clip border";
+
   return (
-    <div
-      className={`p-4 border bg-gray-900/60 border-blue-500 flex flex-col h-[85vh] transition-colors duration-200 ${isDraggingOver ? 'bg-blue-900/30 border-blue-300' : ''} ${className || ''}`}
-      data-augmented-ui="tl-clip tr-clip br-clip bl-clip border"
-      style={{ '--aug-border-color': isDraggingOver ? 'dodgerblue' : 'deepskyblue' } as React.CSSProperties}
-      // Attach drag/drop handlers
+    <BasePanel
+      className={panelClassName}
+      data-augmented-ui={panelDataAugmentedUi}
+      style={panelStyle}
+      // Attach drag/drop handlers to BasePanel
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <h2 className="text-lg font-semibold mb-2 text-blue-400 flex-shrink-0">Song Pool ({activeSongIds.size}/{songs.length} selected)</h2>
+      <h2 className="text-lg font-semibold mb-2 text-[var(--accent-secondary)] flex-shrink-0">Song Pool ({activeSongIds.size}/{songs.length} selected)</h2>
       
       {/* Drop Target Hint */} 
        {isDraggingOver && (
@@ -316,48 +334,43 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
          </ul>
       </div>
 
-      {/* Selection Controls Area (Pagination removed) */}
+      {/* Selection Controls Area */}
       <div className="flex justify-between items-center mt-2 mb-2 flex-shrink-0">
         {/* Select/Clear Buttons */}
         <div className="flex gap-1">
-            <button
+            <Button // <-- Use Button component
                 onClick={onSelectAll}
                 disabled={isProcessing}
-                className="px-4 py-1 text-xs bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                variant="secondary" // <-- Specify variant
+                className="px-4 py-1 text-xs" // Keep specific padding/text size if needed, remove old styling
                 title="Select all songs"
-                data-augmented-ui="tl-clip br-clip"
             >
                 All
-            </button>
-            <button
+            </Button>
+            <Button // <-- Use Button component
                 onClick={onClearAll}
                 disabled={isProcessing || activeSongIds.size === 0}
-                className="px-4 py-1 text-xs bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                variant="secondary" // <-- Specify variant
+                className="px-4 py-1 text-xs" // Keep specific padding/text size if needed, remove old styling
                 title="Deselect all songs"
-                data-augmented-ui="tl-clip br-clip"
             >
                 Clear
-            </button>
+            </Button>
         </div>
-
-        {/* Removed Pagination Controls section */}
-        {/* <div className="flex justify-center items-center"> ... </div> */}
-        {/* Add an empty div or adjust justify content if needed to keep Select/Clear left-aligned */}
         <div className="flex-grow"></div> 
       </div>
 
       {/* Upload Button */}
-      <button
+      <Button // <-- Use Button component
         onClick={onUploadClick}
-        className="w-full p-2 mt-auto text-center font-semibold text-sm bg-cyan-700 hover:bg-cyan-600 text-cyan-100 flex-shrink-0"
-        data-augmented-ui="tl-clip br-clip border"
-        style={{ '--aug-border-color': 'cyan' } as React.CSSProperties}
-        disabled={isProcessing} // Disable upload during processing?
+        className="w-full mt-auto flex-shrink-0" // Adjust classes for layout
+        variant="primary" // <-- Specify variant
+        disabled={isProcessing} 
       >
         Upload Audio Files
-      </button>
+      </Button>
 
-    </div>
+    </BasePanel>
   );
 };
 

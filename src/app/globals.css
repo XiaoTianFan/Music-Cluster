@@ -14,8 +14,39 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    /* Core Backgrounds */
+    --background: #090d18; /* Main background */
+    --panel-background: #1f2937; /* Panel/Surface background */
+    --rgb-panel-background: 9, 13, 24; /* MUST USE THIS RGB */
+
+    /* Text */
+    --text-primary: #e2e3e5;
+    --text-secondary: #abadb2;
+    --text-disabled: #abadb2; /* Same as secondary for color, use opacity */
+    --text-on-accent: var(--panel-background); /* Text color on accent backgrounds */
+
+    /* Accents */
+    --accent-primary: #00bdd6;   /* Cyan */
+    --accent-secondary: #fc7500; /* Orange */
+    --accent-tertiary: #c52e61;  /* Magenta */
+
+    /* Glows */
+    --glow-primary: #33f8ffB3;     /* Cyan Glow */
+    --glow-secondary: #ffa500B3;   /* Orange Glow */
+    --glow-tertiary: #ff1b8dB3;    /* Magenta Glow */
+
+    /* Interactive States - Backgrounds/Opacities */
+    --panel-hover-background: #28313e;
+    --panel-active-background: #1f2937;
+    --disabled-opacity: 0.4;
+
+    /* Interactive States - Accent Variants */
+    --accent-primary-active: #00a4ba;
+    --accent-secondary-active: #db6500;
+    --accent-tertiary-active: #ab2753;
+
+    /* --- Old variables (keep for potential fallback or remove later) --- */
+    --foreground: var(--text-primary); /* Map old foreground to new primary text */
   }
 }
 
@@ -35,3 +66,39 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* --- BasePanel Glow Layer --- */
+.base-panel-container::before {
+  content: '';
+  position: absolute;
+  inset: 0; /* Cover the entire parent element */
+  z-index: -1; /* Place behind the main content */
+  pointer-events: none; /* Don't interfere with mouse events */
+
+  /* Apply the augmentation for border shape */
+  /* Note: Ensure clip sizes match the main element if customized */
+  /* Defaulting to the same clips used in BasePanel.tsx initially */
+  --aug-tl: 10px;
+  --aug-tr: 10px;
+  --aug-br: 10px;
+  --aug-bl: 10px;
+  data-augmented-ui: inherit; /* Inherit base aug shapes */
+  /* Explicitly add the border part */
+  --aug-border: initial; 
+  --aug-border-all: 1px; /* Or desired border thickness */
+  --aug-border-bg: var(--accent-primary); /* Or desired border color */
+
+  /* Apply the filter drop-shadow for the glow */
+  filter: drop-shadow(0 0 3px var(--glow-primary)) drop-shadow(0 0 6px var(--glow-primary));
+}
+/* ----------------------------- */
+
+/* --- Custom Button Styling --- */
+.button-base {
+  /* Base styles - No inlay settings needed */
+}
+
+/* Hover & Active States - BG controlled by Tailwind now */
+/* REMOVE ALL HOVER/ACTIVE/DISABLED RULES MODIFYING INLAY */
+
+/* -------------------------- */
