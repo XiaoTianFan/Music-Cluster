@@ -224,7 +224,7 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
                 const clusterIndex = kmeansAssignments[song.id];
                 if (clusterIndex !== undefined) {
                     const baseColor = plotlyColors[clusterIndex % plotlyColors.length];
-                    backgroundColor = hexToRgba(baseColor, 0.3); // 30% opacity
+                    backgroundColor = hexToRgba(baseColor, 0.2); // 30% opacity
                 }
                 // Determine if this song is the one currently playing
                 const isCurrentlyPlaying = currentlyPlayingSongId === song.id && isPlaying;
