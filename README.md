@@ -57,16 +57,20 @@ This web application demonstrates and visualizes the process of unsupervised k-m
 ```
 ├── public/
 │   ├── audio/         # Default audio samples
-│   ├── lib/           # Utility functions, library configurations
-│   └── workers/       # Build .js workers
+│   ├── workers/       # Bundled JavaScript workers for deployment
+│   ├── featureExplanations.json # Descriptions for MIR features
+│   ├── algorithmExplanations.json # Descriptions for algorithms
+│   └── default_features.json # Pre-computed features for default songs (optional cache)
 ├── src/
-│   ├── app/           # Next.js App Router pages (Dashboard)
-│   ├── components/    # React components (Controls, Visualizations, UI elements)
-│   ├── types/         # TypeScript type definitions
-│   └── workers/       # Web Worker scripts in .ts (Essentia, DruidJS, TF.js, Data Processing)
-├── eslint.config.mjs  # ESLint configuration
+│   ├── app/           # Next.js App Router pages (page.tsx, globals.css, layout.tsx, etc.)
+│   ├── components/
+│   │   ├── ui/        # Reusable UI elements (BasePanel, Button, etc.)
+│   │   └── ...        # Panel components (SongListPanel, ControlsPanel, etc.), Dialogs
+│   └── workers/       # TypeScript source code for Web Workers (Essentia, DruidJS, Kmeans, Data Processing)
+├── eslint.config.mjs  # ESLint configuration (adjust if using a different name)
 ├── next.config.mjs    # Next.js configuration
 ├── package.json       # Project dependencies and scripts
+├── tailwind.config.js # Tailwind CSS configuration
 ├── tsconfig.json      # TypeScript configuration
 └── README.md          # This file
 ```
