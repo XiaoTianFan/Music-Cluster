@@ -25,19 +25,27 @@ interface CacheData {
 // Dynamically import VisualizationPanel with SSR disabled
 const VisualizationPanel = dynamic(
   () => import('@/components/VisualizationPanel'),
-  { 
-    ssr: false, 
-    // Optional: Add a loading component while the panel loads on the client
-    loading: () => (
-        <div 
-          className="col-span-2 row-span-1 flex items-center justify-center p-4 border border-pink-500 text-pink-400" 
-          data-augmented-ui="tl-clip-x tr-round br-clip bl-round border" 
-          style={{ '--aug-border-color': 'hotpink' } as React.CSSProperties} // Cast style object
+  {
+    ssr: false,
+    // Use a styled placeholder mimicking BasePanel
+    loading: () => {
+      const panelStyle: React.CSSProperties = {
+        '--aug-border-bg': 'var(--foreground)',
+        '--aug-border-all': '1px',
+        '--aug-border-y': '2px'
+      } as React.CSSProperties;
+
+      return (
+        <div
+          className="col-span-2 row-span-1 flex items-center justify-center p-4 text-[var(--text-secondary)]"
+          data-augmented-ui="tl-clip tr-clip br-clip bl-clip border"
+          style={panelStyle}
         >
-          <p>Loading Visualization...</p>
+          <p className="animate-pulse">Loading Visualization...</p> {/* Added subtle pulse animation */}
         </div>
-      )
-  } 
+      );
+    }
+  }
 );
 
 // Define interfaces for data structures
@@ -1921,7 +1929,7 @@ export default function DashboardPage() {
           '--aug-border-x': '1px',
           '--aug-border-y': '3px',
           '--aug-inlay-bg': 'var(--background)',
-          '--aug-inlay-opacity': '0.05',
+          '--aug-inlay-opacity': '0.1',
           filter: `drop-shadow(0 0 2px var(--accent-primary))`, 
           '--aug-tl': '10px', 
           '--aug-tr': '10px', 
@@ -1929,7 +1937,7 @@ export default function DashboardPage() {
           '--aug-bl': '10px',
          } as React.CSSProperties}
       >
-        <h1 className="px-4 text-xl font-bold text-[var(--accent-primary)] flex-shrink-0">MusicCluster Dashboard</h1>
+        <h1 className="px-4 text-xl font-bold text-[var(--accent-primary)] flex-shrink-0">Music Cluster Dashboard</h1>
         {/* --- NEW: Add Audio Player in the middle --- */}
         <AudioPlayer 
           song={currentlyPlayingSong} 

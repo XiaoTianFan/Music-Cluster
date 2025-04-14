@@ -218,9 +218,10 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
           <div className="mt-2 flex-shrink-0">
             <Button
                 variant="primary"
+                enableTilt={true}
                 onClick={() => onExtractFeatures(selectedMirFeatures)}
                 disabled={!essentiaWorkerReady || isProcessing || activeSongCount === 0 || selectedMirFeatures.size === 0}
-                className="w-full text-sm"
+                className="flex w-full text-sm"
                 title={
                     !essentiaWorkerReady ? "Worker initializing..." :
                     (activeSongCount === 0 ? "Select songs to process" :
@@ -455,6 +456,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
                 variant="secondary"
                 onClick={onNextStep}
                 disabled={!canRunNextStep}
+                enableTilt={true}
                 className="w-full text-sm mt-2"
                 title={
                     !isKmeansInitialized ? "Initialize clustering first" :
