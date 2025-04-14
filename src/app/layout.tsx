@@ -4,7 +4,6 @@ import { Analytics } from '@vercel/analytics/next';
 import DynamicBackground from "@/components/DynamicBackground";
 import MobileLayoutWrapper from "@/components/MobileLayoutWrapper";
 import "./globals.css";
-import "augmented-ui/augmented-ui.min.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -37,7 +36,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className="">
+      <head>
+        <link rel="stylesheet" href="/augmented-ui.min.css" />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

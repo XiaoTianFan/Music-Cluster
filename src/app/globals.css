@@ -1,8 +1,40 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* === Defaults (Now Dark Theme) === */
+  /* Core Backgrounds */
+  --background: #090d18; /* Main background */
+  --panel-background: #1f2937; /* Panel/Surface background */
+  --rgb-panel-background: 9, 13, 24; /* MUST USE THIS RGB */
+
+  /* Text */
+  --text-primary: #e2e3e5;
+  --text-secondary: #abadb2;
+  --text-disabled: #abadb2; /* Same as secondary for color, use opacity */
+  --text-on-accent: var(--panel-background); /* Text color on accent backgrounds */
+
+  /* Accents */
+  --accent-primary: #00bdd6;   /* Cyan */
+  --accent-secondary: #fc7500; /* Orange */
+  --accent-tertiary: #c52e61;  /* Magenta */
+
+  /* Glows */
+  --glow-primary: #33f8ffB3;     /* Cyan Glow */
+  --glow-secondary: #ffa500B3;   /* Orange Glow */
+  --glow-tertiary: #ff1b8dB3;    /* Magenta Glow */
+
+  /* Interactive States - Backgrounds/Opacities */
+  --panel-hover-background: #28313e;
+  --panel-active-background: #1f2937;
+  --disabled-opacity: 0.4;
+
+  /* Interactive States - Accent Variants */
+  --accent-primary-active: #00a4ba;
+  --accent-secondary-active: #db6500;
+  --accent-tertiary-active: #ab2753;
+
+  /* Old foreground mapping */
+  --foreground: var(--text-primary); 
 }
 
 @theme inline {
@@ -10,44 +42,6 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* Core Backgrounds */
-    --background: #090d18; /* Main background */
-    --panel-background: #1f2937; /* Panel/Surface background */
-    --rgb-panel-background: 9, 13, 24; /* MUST USE THIS RGB */
-
-    /* Text */
-    --text-primary: #e2e3e5;
-    --text-secondary: #abadb2;
-    --text-disabled: #abadb2; /* Same as secondary for color, use opacity */
-    --text-on-accent: var(--panel-background); /* Text color on accent backgrounds */
-
-    /* Accents */
-    --accent-primary: #00bdd6;   /* Cyan */
-    --accent-secondary: #fc7500; /* Orange */
-    --accent-tertiary: #c52e61;  /* Magenta */
-
-    /* Glows */
-    --glow-primary: #33f8ffB3;     /* Cyan Glow */
-    --glow-secondary: #ffa500B3;   /* Orange Glow */
-    --glow-tertiary: #ff1b8dB3;    /* Magenta Glow */
-
-    /* Interactive States - Backgrounds/Opacities */
-    --panel-hover-background: #28313e;
-    --panel-active-background: #1f2937;
-    --disabled-opacity: 0.4;
-
-    /* Interactive States - Accent Variants */
-    --accent-primary-active: #00a4ba;
-    --accent-secondary-active: #db6500;
-    --accent-tertiary-active: #ab2753;
-
-    /* --- Old variables (keep for potential fallback or remove later) --- */
-    --foreground: var(--text-primary); /* Map old foreground to new primary text */
-  }
 }
 
 /* Hide scrollbar for Chrome, Safari and Opera */

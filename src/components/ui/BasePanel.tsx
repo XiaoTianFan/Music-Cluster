@@ -32,7 +32,7 @@ const BasePanel: React.FC<BasePanelProps> = ({
     '--aug-border-all': '3px', 
     '--aug-border-bg': `var(--foreground)`, 
     '--aug-border-opacity': `0.9`, 
-    filter: `drop-shadow(0 0 2px var(--accent-primary))`, 
+    filter: `drop-shadow(0 0 5px var(--accent-primary))`, 
     '--aug-inlay-all': '10px', 
     '--aug-inlay-bg': `var(--background)`,
     '--aug-inlay-opacity': '0.0', 

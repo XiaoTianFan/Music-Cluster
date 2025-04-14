@@ -1929,7 +1929,7 @@ export default function DashboardPage() {
           '--aug-bl': '10px',
          } as React.CSSProperties}
       >
-        <h1 className="px-4 text-xl font-bold text-cyan-400 flex-shrink-0">MusicCluster Dashboard</h1>
+        <h1 className="px-4 text-xl font-bold text-[var(--accent-primary)] flex-shrink-0">MusicCluster Dashboard</h1>
         {/* --- NEW: Add Audio Player in the middle --- */}
         <AudioPlayer 
           song={currentlyPlayingSong} 
@@ -1940,7 +1940,7 @@ export default function DashboardPage() {
         />
         {/* -------------------------------------------- */}
         <div className="flex items-center gap-4 flex-shrink-0"> {/* Wrapper for status and button, add flex-shrink-0 */}
-          <div className="text-sm text-cyan-300">
+          <div className="text-sm text-[var(--accent-primary)]/80">
             {/* Status Text */}
             <span>
                  {/* Display Cache Status */}
@@ -1966,7 +1966,7 @@ export default function DashboardPage() {
             {isProcessing && processingSongIds.size > 0 && (
                <div className="w-full h-1.5 bg-gray-700 -full overflow-hidden mt-1">
                 <div
-                  className="h-full bg-cyan-500 transition-width duration-150 ease-linear"
+                  className="h-full bg-[var(--accent-primary)] transition-width duration-150 ease-linear"
                   style={{ width: `${progressPercent}%` }}
                 ></div>
               </div>
@@ -1975,7 +1975,7 @@ export default function DashboardPage() {
           {/* About Text Link */}
           <span
             onClick={handleToggleAboutDialog}
-            className="text-cyan-300 hover:text-cyan-400 cursor-pointer text-sm whitespace-nowrap mr-4"
+            className="text-[var(--accent-primary)] hover:text-cyan-400 cursor-pointer text-sm whitespace-nowrap mr-4"
             role="button" // Accessibility: Indicate it behaves like a button
             tabIndex={0}  // Accessibility: Make it focusable
             onKeyDown={(e) => {
