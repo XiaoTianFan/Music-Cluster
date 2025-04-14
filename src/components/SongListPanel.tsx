@@ -334,41 +334,45 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
          </ul>
       </div>
 
-      {/* Selection Controls Area */}
-      <div className="flex justify-between items-center mt-2 mb-2 flex-shrink-0">
-        {/* Select/Clear Buttons */}
-        <div className="flex gap-1">
-            <Button // <-- Use Button component
-                onClick={onSelectAll}
-                disabled={isProcessing}
-                variant="secondary" // <-- Specify variant
-                className="px-4 py-1 text-xs" // Keep specific padding/text size if needed, remove old styling
-                title="Select all songs"
-            >
-                All
-            </Button>
-            <Button // <-- Use Button component
-                onClick={onClearAll}
-                disabled={isProcessing || activeSongIds.size === 0}
-                variant="secondary" // <-- Specify variant
-                className="px-4 py-1 text-xs" // Keep specific padding/text size if needed, remove old styling
-                title="Deselect all songs"
-            >
-                Clear
-            </Button>
-        </div>
-        <div className="flex-grow"></div> 
+      {/* --- Controls Footer Wrapper (Pushes controls to bottom) --- */}
+      <div className="mt-auto flex-shrink-0 pt-2"> 
+          {/* Selection Controls Area */}
+          <div className="flex justify-between items-center mb-2 flex-shrink-0"> {/* Removed mt-2 */}
+            {/* Select/Clear Buttons */}
+            <div className="flex gap-1">
+                <Button // <-- Use Button component
+                    onClick={onSelectAll}
+                    disabled={isProcessing}
+                    variant="secondary" // <-- Specify variant
+                    className="px-4 py-1 text-xs" // Keep specific padding/text size if needed, remove old styling
+                    title="Select all songs"
+                >
+                    All
+                </Button>
+                <Button // <-- Use Button component
+                    onClick={onClearAll}
+                    disabled={isProcessing || activeSongIds.size === 0}
+                    variant="secondary" // <-- Specify variant
+                    className="px-4 py-1 text-xs" // Keep specific padding/text size if needed, remove old styling
+                    title="Deselect all songs"
+                >
+                    Clear
+                </Button>
+            </div>
+            <div className="flex-grow"></div> 
+          </div>
+    
+          {/* Upload Button */}
+          <Button // <-- Use Button component
+            onClick={onUploadClick}
+            className="w-full flex-shrink-0" // Removed mt-auto, kept w-full and flex-shrink-0
+            variant="primary" // <-- Specify variant
+            disabled={isProcessing} 
+          >
+            Upload Audio Files
+          </Button>
       </div>
-
-      {/* Upload Button */}
-      <Button // <-- Use Button component
-        onClick={onUploadClick}
-        className="w-full mt-auto flex-shrink-0" // Adjust classes for layout
-        variant="primary" // <-- Specify variant
-        disabled={isProcessing} 
-      >
-        Upload Audio Files
-      </Button>
+      {/* --------------------------------------------------------- */}
 
     </BasePanel>
   );

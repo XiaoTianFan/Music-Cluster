@@ -71,26 +71,41 @@ const MobileLayoutWrapper: React.FC<MobileLayoutWrapperProps> = ({ children }) =
     // Render Notification and About Content for Mobile
     return (
       // Outer container for scrolling if content overflows
-      <div className="fixed top-0 left-0 w-full h-full -z-20 p-8 space-y-8 overflow-y-auto hide-scrollbar bg-gray-950/20">
-          {/* Notification Box */}
+      <div 
+        className="fixed top-0 left-0 w-full h-full -z-20 p-8 space-y-8 overflow-y-auto hide-scrollbar bg-gray-950/20"
+        style={{ 
+            // Apply the scanline gradient layered over the background color
+            backgroundImage: 'repeating-linear-gradient(0deg, rgba(40, 40, 50, 0.5) 0px, rgba(40, 40, 50, 0.5) 2px, transparent 2px, transparent 5px)'
+        }}
+      >
+          {/* Notification Box - Apply BasePanel style */}
           <div 
-              className="flex flex-col h-[90vh] items-center justify-center text-center p-6 mb-6 text-cyan-300 bg-gray-900/80 border border-cyan-500"
-              data-augmented-ui="tl-clip tr-clip br-clip bl-clip border"
-              style={{ '--aug-border-color': 'cyan'} as React.CSSProperties}
+              className="flex flex-col h-[90vh] items-center justify-center text-center p-6 mb-6 text-[var(--accent-primary)] bg-gray-900/30"
+              data-augmented-ui="tl-clip tr-clip br-clip bl-clip border" // Match BasePanel shape
+              style={{ 
+                '--aug-border-bg': 'var(--accent-primary)', // Use correct var and theme color
+                '--aug-border-all': '1px' // Explicit border width
+              } as React.CSSProperties}
           >
-              <h1 className="text-xl font-bold mb-3">Desktop Recommended</h1>
-              <p className="text-base">
-              This application is designed for optimal viewing and interaction on a desktop display.
-              </p>
-              <p className="text-xs mt-3 text-gray-400">
-              Mobile layout is not supported.
-              </p>
+              {/* Original Content */}
+              <div className="relative z-0"> {/* Content wrapper, relative z-index no longer strictly needed */}
+                  <h1 className="text-xl font-bold mb-3">Desktop Recommended</h1>
+                  <p className="text-base">
+                  This application is designed for optimal viewing and interaction on a desktop display.
+                  </p>
+                  <p className="text-xs mt-3 text-gray-400">
+                  Mobile layout is not supported.
+                  </p>
+              </div>
           </div>
 
-          {/* About Section Box */}
-          <div className="p-6 mt-8 border border-gray-700 text-gray-300 bg-gray-950/20 max-w-3xl mx-auto text-sm" 
-               data-augmented-ui="tl-round tr-round br-round bl-round inlay border" 
-               style={{ '--aug-border-color': '#555'} as React.CSSProperties}
+          {/* About Section Box - Apply BasePanel style */}
+          <div className="p-6 mt-8 text-gray-300 bg-gray-950/20 max-w-3xl mx-auto text-sm" 
+               data-augmented-ui="tl-clip tr-clip br-clip bl-clip border" // Match BasePanel shape 
+               style={{ 
+                 '--aug-border-bg': 'var(--text-secondary)', // Use correct var and theme color
+                 '--aug-border-all': '1px' // Explicit border width
+                } as React.CSSProperties}
            >
              {isLoadingAbout ? (
                  <p>Loading About information...</p>

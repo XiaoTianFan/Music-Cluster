@@ -21,7 +21,7 @@ const BasePanel: React.FC<BasePanelProps> = ({
   // Combine default classes, augmented-ui styles, and passed className
   const combinedClassName = `
     p-4 relative
-    before:absolute before:inset-0 before:bg-red-500 before:content-[\'\'] // DEBUG: Solid red, no blur, no z-index
+    before:absolute before:inset-0 before:bg-red-500 before:content-[\'\'] 
     ${className} 
   `.trim();
 

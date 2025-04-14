@@ -45,9 +45,11 @@ export default function RootLayout({
       >
         <div className="fixed top-0 left-0 w-full h-full -z-20 bg-black">
           <DynamicBackground />
-          <MobileLayoutWrapper>
-              {children}
-          </MobileLayoutWrapper>
+            <div className="fixed top-0 left-0 w-full h-full -z-15">
+              <MobileLayoutWrapper>
+                  {children}
+              </MobileLayoutWrapper>
+            </div>
           <Analytics />
         </div>
       </body>

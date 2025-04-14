@@ -1,5 +1,6 @@
 import React from 'react';
 import { Song, Features } from '../app/page'; // Assuming types are exported from page.tsx
+import BasePanel from './ui/BasePanel'; // <-- Import BasePanel
 
 interface SongDetailsDialogProps {
   song: Song;
@@ -22,58 +23,70 @@ const SongDetailsDialog: React.FC<SongDetailsDialogProps> = ({ song, features, o
     return String(value);
   };
 
+  // Define styles and props for BasePanel (copied from AboutDialog)
+  const panelClassName = "text-gray-100 shadow-xl max-w-lg w-full relative max-h-[80vh] flex flex-col"; // Adjusted max-width, added flex
+  const panelStyle: React.CSSProperties = {
+    '--aug-border-bg': 'var(--foreground)',
+  } as React.CSSProperties;
+  const panelDataAugmentedUi = "tl-clip-x tr-round br-clip bl-round border";
+
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-50 p-4">
-      <div 
-        className="bg-gray-800 p-6 shadow-xl max-w-lg w-full border border-teal-500 relative max-h-[80vh] flex flex-col"
-        data-augmented-ui="tl-clip tr-clip br-clip bl-clip border"
-        style={{ '--aug-border-color': 'teal' } as React.CSSProperties}
+      {/* Use BasePanel */}
+      <BasePanel 
+        className={panelClassName}
+        data-augmented-ui={panelDataAugmentedUi}
+        style={panelStyle}
+        // Note: No stopPropagation needed here as BasePanel doesn't handle onClose directly
       >
-        {/* Header */}
-        <div className="flex justify-between items-center mb-4 flex-shrink-0">
-          <h2 className="text-xl font-semibold text-teal-300 truncate pr-10" title={song.name}>
-            Details: {song.name}
-          </h2>
-          <button 
-            onClick={onClose} 
-            className="absolute top-3 right-3 text-gray-400 hover:text-white text-2xl font-bold"
-            aria-label="Close details dialog"
-            title="Close"
-          >
-            &times; {/* Unicode multiplication sign for 'X' */}
-          </button>
-        </div>
+        {/* Content Wrapper - Apply padding here */}
+        <div className="p-6 flex flex-col flex-grow min-h-0"> 
+          {/* Header */}
+          <div className="flex justify-between items-center mb-4 flex-shrink-0">
+            <h2 className="text-xl font-semibold text-[var(--accent-primary)] truncate pr-10" title={song.name}>
+              Details: {song.name}
+            </h2>
+            <button 
+              onClick={onClose} 
+              className="absolute top-3 right-3 text-gray-400 hover:text-[var(--accent-primary)] text-2xl font-bold p-1 leading-none" // Updated hover color
+              aria-label="Close details dialog"
+              title="Close"
+            >
+              &times; {/* Unicode multiplication sign for 'X' */}
+            </button>
+          </div>
 
-        {/* Content Area - Scrollable */}
-        <div className="overflow-y-auto flex-grow pr-2 text-sm"> 
-          {!features ? (
-            <p className="text-yellow-400">Feature data not available for this song.</p>
-          ) : (
-            <ul className="list-none p-0 space-y-2">
-              {Object.entries(features).map(([key, value]) => (
-                <li key={key} className="flex justify-between border-b border-gray-700 pb-1">
-                  <span className="font-medium text-teal-400 mr-2">{key}:</span> 
-                  <span className="text-right text-gray-300 truncate" title={String(value)}>
-                     {formatValue(value)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+          {/* Content Area - Scrollable */}
+          <div className="overflow-y-auto flex-grow pr-2 text-sm hide-scrollbar"> {/* Added hide-scrollbar */}
+            {!features ? (
+              <p className="text-yellow-400">Feature data not available for this song.</p>
+            ) : (
+              <ul className="list-none p-0 space-y-2">
+                {Object.entries(features).map(([key, value]) => (
+                  <li key={key} className="flex justify-between border-b border-gray-700 pb-1">
+                    <span className="font-medium text-[var(--accent-primary)] mr-2">{key}:</span> 
+                    <span className="text-right text-gray-300 truncate" title={String(value)}>
+                      {formatValue(value)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
-         {/* Footer/Actions (Optional) */}
-         <div className="mt-4 pt-3 border-t border-gray-700 flex justify-end flex-shrink-0">
-             <button 
-                onClick={onClose} 
-                className="px-4 py-2 bg-teal-700 hover:bg-teal-600 text-teal-100 text-sm font-semibold"
-                data-augmented-ui="tl-clip br-clip border"
-                style={{ '--aug-border-color': 'teal' } as React.CSSProperties}
-             >
-                Close
-             </button>
-         </div>
-      </div>
+          {/* Footer/Actions (Optional) */}
+          <div className="mt-4 pt-3 border-t border-gray-700 flex justify-end flex-shrink-0">
+              <button 
+                  onClick={onClose} 
+                  className="px-4 py-2 bg-[var(--accent-primary)]/80 hover:bg-[var(--accent-primary)]/100 text-gray-100 text-sm font-semibold"
+                  data-augmented-ui="tl-clip br-clip border"
+                  style={{ '--aug-border-color': 'var(--accent-primary)' } as React.CSSProperties} // Use accent color
+              >
+                  Close
+              </button>
+          </div>
+        </div>
+      </BasePanel>
     </div>
   );
 };

@@ -1,4 +1,5 @@
 import React from 'react';
+import BasePanel from './ui/BasePanel';
 
 interface ExplanationDialogProps {
   isOpen: boolean;
@@ -20,42 +21,53 @@ const ExplanationDialog: React.FC<ExplanationDialogProps> = ({
     e.stopPropagation();
   };
 
+  // Define styles and props for BasePanel (copied from AboutDialog)
+  const panelClassName = "text-gray-100 shadow-xl max-w-xl w-full relative"; // Adjusted max-width
+  const panelStyle: React.CSSProperties = {
+    '--aug-border-bg': 'var(--foreground)',
+  } as React.CSSProperties;
+  const panelDataAugmentedUi = "tl-clip-x tr-round br-clip bl-round border";
+
+
   return (
     // Overlay
     <div 
       className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" 
       onClick={onClose} // Close when clicking the overlay
     >
-      {/* Dialog Box */}
-      <div 
-        className="relative bg-gray-800 p-6 rounded-lg shadow-xl max-w-xl w-full text-gray-200 border border-blue-500"
-        data-augmented-ui="tl-clip tr-round br-clip bl-round border"
-        style={{ '--aug-border-color': 'rgb(59 130 246)', '--aug-border-bg': '#1f293780' } as React.CSSProperties}
+      {/* Use BasePanel */}
+      <BasePanel 
+        className={panelClassName}
+        data-augmented-ui={panelDataAugmentedUi}
+        style={panelStyle}
         onClick={handleDialogClick} // Prevent overlay click from propagating
       >
         {/* Close Button */}
         <button 
           onClick={onClose}
-          className="absolute top-2 right-2 text-gray-400 hover:text-gray-100 text-2xl font-bold leading-none" // Adjusted styling
+          className="absolute top-2 right-2 text-gray-400 hover:text-[var(--accent-primary)] text-2xl font-bold leading-none p-1" // Updated color
           aria-label="Close Explanation"
         >
           &times;
         </button>
 
-        {/* Title */}
-        <h2 
-          className="text-xl font-bold mb-4 text-blue-400"
-          data-augmented-ui="tl-clip br-clip inlay"
-          style={{ '--aug-inlay-bg': 'rgba(59, 130, 246, 0.1)', '--aug-inlay-opacity': '0.8' } as React.CSSProperties}
-        >
-          {title}
-        </h2>
+        {/* Content Wrapper with Padding */}
+        <div className="p-6">
+          {/* Title */}
+          <h2 
+            className="text-xl font-bold mb-4 text-[var(--accent-primary)]" // Updated color
+            // data-augmented-ui="tl-clip br-clip inlay" // Remove inlay effect for consistency? or style with accent?
+            // style={{ '--aug-inlay-bg': 'var(--accent-primary-darker)', '--aug-inlay-opacity': '0.8' } as React.CSSProperties} // Example: Use accent color
+          >
+            {title}
+          </h2>
 
-        {/* Explanation Content */}
-        <div className="text-sm text-gray-300 whitespace-pre-wrap overflow-y-auto max-h-60 pr-2">
-          {explanation}
+          {/* Explanation Content */}
+          <div className="text-sm text-gray-300 whitespace-pre-wrap overflow-y-auto max-h-60 pr-2">
+            {explanation}
+          </div>
         </div>
-      </div>
+      </BasePanel>
     </div>
   );
 };

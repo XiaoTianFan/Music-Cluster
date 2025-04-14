@@ -71,13 +71,13 @@ interface DynamicBackgroundProps {
 
 const DynamicBackground: React.FC<DynamicBackgroundProps> = ({
     className = '',
-    hexRadius = 15, // << Increased default radius
-    gridColor = 'rgba(0, 255, 255, 0.2)', 
+    hexRadius = 10, // << Increased default radius
+    gridColor = 'rgba(0, 189, 214, 0.2)', 
     lineWidth = 1,
-    glowColor = 'rgba(0, 255, 255, alpha)', // Base color for hover glow
+    glowColor = 'rgba(0, 189, 214, alpha)', // Base color for hover glow
     maxGlowRadius = 200, // << Increased glow radius
     maxGlowOpacity = 0.3, // Max opacity of the glow at the center
-    rippleColor = 'rgba(0, 255, 255, alpha)', // Ripple color (cyan, alpha calculated)
+    rippleColor = 'rgba(0, 189, 214, alpha)', // Ripple color (cyan, alpha calculated)
     rippleMaxRadius = 300, // 
     rippleDuration = 300, //
     rippleLineWidthMultiplier = 1.5, // << Default thicker ripple lines
@@ -85,12 +85,14 @@ const DynamicBackground: React.FC<DynamicBackgroundProps> = ({
     highlightInterval = 2000, 
     highlightDuration = 2000, 
     highlightPercentage = 0.7, // Highlight 5% of hexes per burst
-    highlightColor = 'rgba(0, 255, 255, alpha)', // Slightly different cyan for highlight
+    highlightColor = 'rgba(0, 189, 214, alpha)', // Slightly different cyan for highlight
     highlightMaxOpacity = 0.2, // Keep highlight subtle
     highlightMaxAmount = 200, // Limit concurrent highlights (optional)
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [ctx, setCtx] = useState<CanvasRenderingContext2D | null>(null);
+  const ctx = useRef<CanvasRenderingContext2D | null>(null); // Use useRef for ctx
+  const offscreenCanvasRef = useRef<HTMLCanvasElement | null>(null); // <-- NEW: Ref for offscreen canvas
+  const offscreenCtxRef = useRef<CanvasRenderingContext2D | null>(null); // <-- NEW: Ref for offscreen context
   const animationFrameId = useRef<number | null>(null); // Ref to store animation frame ID
   const hexCentersRef = useRef<HexCenterData[]>([]); // Ref to store pre-calculated centers
   const mousePosition = useRef<Point | null>(null); // Ref for mouse position (state causes re-renders)
@@ -120,21 +122,25 @@ const DynamicBackground: React.FC<DynamicBackgroundProps> = ({
       context.closePath(); // Close the path back to the start
   }, []);
 
-  // --- Grid Calculation & Tessellation Drawing Logic (Revised for Glow) ---
-  const calculateAndDrawTessellatedGrid = useCallback((context: CanvasRenderingContext2D, width: number, height: number, radius: number) => {
+  // --- REVISED: Grid Calculation & Drawing (Draws to a given context) ---
+  const drawGridAndCalculateCenters = useCallback((context: CanvasRenderingContext2D, width: number, height: number, radius: number) => {
+    // Reset hex centers calculation for this run
+    hexCentersRef.current = [];
+    const newCentersData: HexCenterData[] = [];
+
+    // Clear only the context we're drawing to (the offscreen one)
     context.clearRect(0, 0, width, height);
 
-    // --- Grid Glow Settings ---
-    context.shadowColor = gridColor.replace('alpha', '1'); // Use grid color for shadow, full opacity
-    context.shadowBlur = 5; // Adjust blur radius as needed
+    // --- Grid Glow Settings (Apply to the offscreen canvas drawing) ---
+    // Keep shadows on the offscreen grid draw for now if desired effect
+    context.shadowColor = gridColor.replace('alpha', '1');
+    context.shadowBlur = 5;
     context.shadowOffsetX = 2;
     context.shadowOffsetY = -2;
     // ------------------------
 
     context.strokeStyle = gridColor;
     context.lineWidth = lineWidth;
-
-    const newCentersData: HexCenterData[] = [];
 
     const hexHeight = radius * Math.sqrt(3);
     const hexWidth = radius * 2;
@@ -144,6 +150,10 @@ const DynamicBackground: React.FC<DynamicBackgroundProps> = ({
     const rows = Math.ceil(height / vertDist) + 2;
     const cols = Math.ceil(width / horizDist) + 2;
 
+    // --- Apply Blur Filter ---
+    context.filter = 'blur(2px)';
+    // ------------------------
+
     context.beginPath();
 
     for (let row = -1; row < rows; row++) {
@@ -152,7 +162,9 @@ const DynamicBackground: React.FC<DynamicBackgroundProps> = ({
         const cy = row * vertDist + (col % 2 !== 0 ? vertDist / 2 : 0);
         const center = { x: cx, y: cy };
 
+        // Only calculate/draw if within extended bounds
         if (cx > -horizDist - radius && cx < width + horizDist + radius && cy > -vertDist - radius && cy < height + vertDist + radius) {
+            // Important: Calculate and STORE centers even though drawing is offscreen
             newCentersData.push({ center });
             const corners = Array.from({ length: 6 }, (_, i) => getHexCorner(center, radius, i));
             drawHexOutline(context, corners);
@@ -161,13 +173,18 @@ const DynamicBackground: React.FC<DynamicBackgroundProps> = ({
     }
     context.stroke();
 
-    // --- Reset Shadow Settings ---
+    // --- Reset Filter and Shadow Settings ---
+    context.filter = 'none'; // Reset blur immediately after drawing
     context.shadowColor = 'transparent';
     context.shadowBlur = 0;
-    // ---------------------------
+    context.shadowOffsetX = 0; // Also reset offsets
+    context.shadowOffsetY = 0;
+    // --------------------------------------
 
+    // Update the ref with the calculated centers
     hexCentersRef.current = newCentersData;
-  }, [getHexCorner, gridColor, lineWidth]);
+
+  }, [getHexCorner, drawHexOutline, gridColor, lineWidth]);
 
   // --- Glow Logic (Revised for Glow Effect) ---
   const getNearbyHexCenters = useCallback((targetPos: Point | null, maxDist: number): HexCenterData[] => {
@@ -384,9 +401,11 @@ const DynamicBackground: React.FC<DynamicBackgroundProps> = ({
     context.lineWidth = originalLineWidth;
   }, [getHexCorner, drawHexOutline, highlightColor, highlightMaxOpacity, highlightDuration]);
 
-  // --- Animation Loop (Changed Draw Order) ---
+  // --- Animation Loop (REVISED) ---
   const animate = useCallback((timestamp: number) => {
-    if (!ctx || !canvasRef.current) {
+    const mainCtx = ctx.current; // Get context from ref
+    const canvas = canvasRef.current;
+    if (!mainCtx || !canvas) {
       animationFrameId.current = requestAnimationFrame(animate);
       return;
     }
@@ -395,71 +414,141 @@ const DynamicBackground: React.FC<DynamicBackgroundProps> = ({
     const deltaTime = (timestamp - lastTimestampRef.current) / 1000;
     lastTimestampRef.current = timestamp;
 
-    const canvas = canvasRef.current;
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = window.devicePixelRatio || 1; // Recalculate here in case it changes? (unlikely)
+    // Use logical width/height for drawing operations
     const width = canvas.width / dpr;
     const height = canvas.height / dpr;
 
-    // --- Fill background instead of clearRect ---
-    ctx.fillStyle = '#030712'; // Very dark background (like gray-950)
-    ctx.fillRect(0, 0, width, height); 
+    // --- Fill background ---
+    mainCtx.fillStyle = '#030712';
+    mainCtx.fillRect(0, 0, width, height);
     // ctx.clearRect(0, 0, width, height); // Removed clearRect
     // -------------------------------------------
 
-    // 1. Draw Base Grid
-    calculateAndDrawTessellatedGrid(ctx, width, height, hexRadius);
+    // 1. --- Draw Pre-rendered Grid from Offscreen Canvas ---
+    const offscreenCanvas = offscreenCanvasRef.current;
+    if (offscreenCanvas && offscreenCanvas.width > 0 && offscreenCanvas.height > 0) {
+        // Use logical width/height for the destination size
+        // Ensure we draw from the 0,0 coordinate of the offscreen canvas
+        mainCtx.drawImage(offscreenCanvas, 0, 0, offscreenCanvas.width, offscreenCanvas.height, 0, 0, width, height);
+    }
+    // -----------------------------------------------------
 
-    // 2. Draw Base Highlights 
-    drawHighlights(ctx, timestamp);
+    // 2. Draw Base Highlights (on main canvas)
+    drawHighlights(mainCtx, timestamp);
 
-    // 3. Draw Interactive Effects (Glow, Ripple)
-    drawGlows(ctx, mousePosition.current);
-    drawRipples(ctx, timestamp);
+    // 3. Draw Interactive Effects (on main canvas)
+    drawGlows(mainCtx, mousePosition.current);
+    drawRipples(mainCtx, timestamp);
 
     // Request next frame
     animationFrameId.current = requestAnimationFrame(animate);
-  }, [ctx, calculateAndDrawTessellatedGrid, drawHighlights, drawGlows, drawRipples, hexRadius]);
+  }, [drawHighlights, drawGlows, drawRipples]); // Dependencies change: remove grid drawing
 
-  // --- Resize Handling ---
+  // --- Resize Handling (REVISED) ---
   const handleResize = useCallback(() => {
-    if (canvasRef.current && ctx) {
-      const canvas = canvasRef.current;
-      const dpr = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      ctx.resetTransform();
-      ctx.scale(dpr, dpr);
-      // Use the tessellated grid draw function
-      calculateAndDrawTessellatedGrid(ctx, canvas.width / dpr, canvas.height / dpr, hexRadius);
+    const canvas = canvasRef.current;
+    if (!canvas || !ctx.current) return; // Check main canvas and context ref
+
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+
+    // Resize main canvas
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.current.resetTransform(); // Reset transform on main context
+    ctx.current.scale(dpr, dpr);
+    const width = canvas.width / dpr;
+    const height = canvas.height / dpr;
+
+    // --- NEW: Manage Offscreen Canvas ---
+    // Create if doesn't exist
+    if (!offscreenCanvasRef.current) {
+      offscreenCanvasRef.current = document.createElement('canvas');
+      // console.log("[Offscreen] Created canvas");
     }
-  }, [ctx, calculateAndDrawTessellatedGrid, hexRadius]);
+    const offscreenCanvas = offscreenCanvasRef.current;
+
+    // Resize offscreen canvas (crucial!)
+    if (offscreenCanvas.width !== canvas.width || offscreenCanvas.height !== canvas.height) {
+        offscreenCanvas.width = canvas.width;
+        offscreenCanvas.height = canvas.height;
+        // console.log(`[Offscreen] Resized to ${offscreenCanvas.width}x${offscreenCanvas.height}`);
+
+        // Get/update offscreen context ONLY after size is set
+        if (!offscreenCtxRef.current) {
+            offscreenCtxRef.current = offscreenCanvas.getContext('2d', { alpha: false }); // alpha:false might improve perf slightly
+            // console.log("[Offscreen] Got context");
+        }
+
+        const offscreenCtx = offscreenCtxRef.current;
+        if (offscreenCtx) {
+            // Scale offscreen context like the main one
+            offscreenCtx.resetTransform();
+            offscreenCtx.scale(dpr, dpr);
+            // console.log("[Offscreen] Context scaled");
+
+            // Draw the grid onto the (now correctly sized) offscreen canvas
+            // console.log("[Offscreen] Drawing grid...");
+            drawGridAndCalculateCenters(offscreenCtx, width, height, hexRadius);
+            // console.log("[Offscreen] Grid drawn.");
+        } else {
+            console.error("Failed to get offscreen 2D context");
+        }
+    }
+    // --- END NEW ---
+
+    // No need to draw grid to main canvas here, animate loop will handle it
+  }, [drawGridAndCalculateCenters, hexRadius]); // Added drawGridAndCalculateCenters dependency
 
   // --- Use Effects (Setup, Resize, Animation, Mouse, Click) ---
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (canvas && !ctx) {
-      const context = canvas.getContext('2d');
-      if (context) setCtx(context);
-      else console.error("Failed to get 2D context");
+    // Get main context and store in ref
+    if (canvas && !ctx.current) {
+      const context = canvas.getContext('2d', { alpha: false }); // Use alpha:false for main too?
+      if (context) {
+        ctx.current = context;
+        // console.log("[Main Canvas] Context set in ref");
+      } else {
+        console.error("Failed to get main 2D context");
+      }
     }
-  }, [ctx]);
+
+    // Cleanup function remains the same
+    // return () => { ... };
+  }, []); // Run only once on mount to get context
 
   useEffect(() => {
-    if (!ctx) return;
-    handleResize();
+    // This effect depends on the main context being available in ctx.current
+    const mainCtxCurrent = ctx.current; // Capture the value for the effect closure
+    if (!mainCtxCurrent) return;
+
+    // console.log("[Resize Effect] Attaching listener and running initial resize");
+    // Initial setup: call resize handler to set initial sizes and draw offscreen grid
+    handleResize(); // <-- This will now handle the initial offscreen draw
+
     window.addEventListener('resize', handleResize);
-    lastTimestampRef.current = 0;
+    lastTimestampRef.current = 0; // Reset timestamp for animation start
     animationFrameId.current = requestAnimationFrame(animate);
-    if (highlightInterval > 0) {
+
+    if (highlightInterval > 0 && highlightIntervalId.current === null) { // Prevent multiple intervals
+        // console.log("[Highlight] Starting interval timer");
         highlightIntervalId.current = setInterval(createHighlightBurst, highlightInterval);
     }
+
     return () => {
+      // console.log("[Resize Effect] Cleaning up");
       window.removeEventListener('resize', handleResize);
       if (animationFrameId.current) cancelAnimationFrame(animationFrameId.current);
-      if (highlightIntervalId.current) clearInterval(highlightIntervalId.current);
+      if (highlightIntervalId.current) {
+        // console.log("[Highlight] Clearing interval timer");
+        clearInterval(highlightIntervalId.current);
+        highlightIntervalId.current = null; // Reset ref
+      }
     };
-  }, [ctx, handleResize, animate, createHighlightBurst, highlightInterval]);
+    // Re-run if context becomes available or resize handler/animate changes identity
+  }, [handleResize, animate, createHighlightBurst, highlightInterval]); // ctx.current dependency removed as it's captured
 
   useEffect(() => {
     const handleMouseMove = (event: MouseEvent) => {
@@ -506,7 +595,7 @@ const DynamicBackground: React.FC<DynamicBackgroundProps> = ({
       <canvas
         ref={canvasRef}
         className={`fixed top-0 left-0 w-full h-full -z-10 ${className}`}
-        style={{ pointerEvents: 'none', filter: 'blur(1px)' }}
+        style={{ pointerEvents: 'none' }}
       />
     </div>
   );

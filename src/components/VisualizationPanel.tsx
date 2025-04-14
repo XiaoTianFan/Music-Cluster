@@ -938,7 +938,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
       {/* Controls Container (Fixed height at the bottom) */}
       <div 
-        className="w-full flex-shrink-0 p-2 mt-2 border-t border-b border-[var(--accent-secondary)]/50 bg-gray-950/30"
+        className="w-full flex-shrink-0 p-2 mt-2 border-t border-b border-[var(--accent-secondary)]/50 bg-gray-950/10"
         style={{ backdropFilter: 'blur(2px)' }} // Optional: Add blur for better separation
         >
           {/* Control Row 1: ALWAYS contains Data Stage, Dimensionality, and Color selection */}
