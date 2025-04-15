@@ -365,6 +365,7 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
           {/* Upload Button */}
           <Button // <-- Use Button component
             onClick={onUploadClick}
+            enableTilt={true}
             className="w-full flex-shrink-0" // Removed mt-auto, kept w-full and flex-shrink-0
             variant="primary" // <-- Specify variant
             disabled={isProcessing} 

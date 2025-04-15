@@ -297,6 +297,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
             {/* Process Data Button */} 
             <Button
                 variant="primary"
+                enableTilt={true}
                 onClick={handleStartProcessing}
                 disabled={!canProcessData || isProcessingData}
                 className="w-full text-sm"
@@ -387,6 +388,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
           {/* ADDED Proceed Button - Updated Logic */}
           <Button
                 variant="primary"
+                enableTilt={true}
                 onClick={handleProceedReduction}
                 disabled={!canReduceDimensions || isReducing}
                 className="w-full text-sm"
@@ -433,6 +435,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
           {/* --- Replacing Initialize Clustering with Button Component (Preserving Logic) --- */}
           <Button
               variant="primary"
+              enableTilt={true}
               onClick={() => onRunClustering(numClusters)}
               disabled={!canInitializeCluster}
               className="w-full text-sm"
@@ -454,9 +457,9 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
           {/* --- Replacing Next Step with Button Component (Preserving Logic) --- */}
             <Button
                 variant="secondary"
+                enableTilt={true}
                 onClick={onNextStep}
                 disabled={!canRunNextStep}
-                enableTilt={true}
                 className="w-full text-sm mt-2"
                 title={
                     !isKmeansInitialized ? "Initialize clustering first" :
