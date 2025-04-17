@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import BasePanel from './ui/BasePanel';
+import 'github-markdown-css/github-markdown-dark.css';
 
 interface AboutDialogProps {
   isOpen: boolean;
@@ -72,9 +73,9 @@ const AboutDialog: React.FC<AboutDialogProps> = ({ isOpen, onClose }) => {
         </button>
         
         {/* Inner container for scrolling content - Adjust padding here */}
-        <div className="max-h-[calc(80vh-48px)] overflow-y-auto p-6 pr-2 hide-scrollbar"> {/* Added p-6 here */}
+        <div className="about-dialog-markdown-wrapper max-h-[calc(80vh-48px)] overflow-y-auto p-6 pr-2 hide-scrollbar"> {/* Added wrapper class */}
           <h2 className="text-2xl font-bold mb-4 text-[var(--accent-primary)]">About MusicCluster</h2>
-          <div className="prose prose-invert max-w-none"> {/* Removed prose-pink */}
+          <div className="markdown-body max-w-none"> {/* Removed bg-transparent */}
             {isLoading && <p>Loading...</p>}
             {error && <p className="text-red-500">{error}</p>}
             {!isLoading && !error && (

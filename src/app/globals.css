@@ -85,14 +85,9 @@ body {
   /* Apply the filter drop-shadow for the glow */
   filter: drop-shadow(0 0 3px var(--glow-primary)) drop-shadow(0 0 6px var(--glow-primary));
 }
-/* ----------------------------- */
 
-/* --- Custom Button Styling --- */
-.button-base {
-  /* Base styles - No inlay settings needed */
+.about-dialog-markdown-wrapper .markdown-body {
+  background-color: transparent !important;
 }
-
-/* Hover & Active States - BG controlled by Tailwind now */
-/* REMOVE ALL HOVER/ACTIVE/DISABLED RULES MODIFYING INLAY */
 
 /* -------------------------- */

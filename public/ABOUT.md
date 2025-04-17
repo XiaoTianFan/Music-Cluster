@@ -1,5 +1,3 @@
-# About MusicCluster
-
 Welcome to MusicCluster! This application demonstrates an end-to-end unsupervised machine learning pipeline for audio clustering, running entirely in your browser.
 
 ## Project Goal

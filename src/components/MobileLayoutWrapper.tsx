@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown'; // << Import react-markdown
+import 'github-markdown-css/github-markdown-dark.css'; // << Add this import
 
 // Define the mobile breakpoint
 const MOBILE_BREAKPOINT = 768;
@@ -100,7 +101,7 @@ const MobileLayoutWrapper: React.FC<MobileLayoutWrapperProps> = ({ children }) =
           </div>
 
           {/* About Section Box - Apply BasePanel style */}
-          <div className="p-6 mt-8 text-gray-300 bg-gray-950/20 max-w-3xl mx-auto text-sm" 
+          <div className="about-dialog-markdown-wrapper p-6 mt-8 text-gray-300 bg-gray-950/20 max-w-3xl mx-auto text-sm"
                data-augmented-ui="tl-clip tr-clip br-clip bl-clip border" // Match BasePanel shape 
                style={{ 
                  '--aug-border-bg': 'var(--text-secondary)', // Use correct var and theme color
@@ -110,8 +111,8 @@ const MobileLayoutWrapper: React.FC<MobileLayoutWrapperProps> = ({ children }) =
              {isLoadingAbout ? (
                  <p>Loading About information...</p>
              ) : (
-                /* Apply prose styling to a wrapper div */
-                 <div className="prose prose-sm prose-invert max-w-none prose-headings:text-cyan-400 prose-a:text-blue-400 hover:prose-a:text-blue-300 prose-strong:text-gray-100 prose-code:text-pink-400 prose-code:before:content-none prose-code:after:content-none prose-code:px-1 prose-code:py-0.5 prose-code:bg-gray-900/50 prose-code:rounded">
+                /* Apply markdown-body styling */
+                 <div className="markdown-body max-w-none">
                      <ReactMarkdown>
                          {aboutContent}
                      </ReactMarkdown>

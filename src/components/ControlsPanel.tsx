@@ -38,7 +38,7 @@ interface ControlsPanelProps {
 // Placeholder for available MIR features
 const availableMirFeatures = [
   { id: 'mfcc', name: 'MFCC' }, // Represents mfccMeans, mfccStdDevs
-  { id: 'energy', name: 'Energy' },
+  { id: 'energy', name: 'Aggregate Energy' },
   { id: 'entropy', name: 'ZCR Entropy' },
   { id: 'key', name: 'Key & Scale' }, // Represents key, keyScale, keyStrength
   { id: 'dynamicComplexity', name: 'Dynamic Complexity' }, // Represents dynamicComplexity, loudness
