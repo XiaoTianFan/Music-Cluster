@@ -405,12 +405,22 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
   // Helper to get the original categorical value for a song
   const getCategoricalValueForSong = (songId: string, category: string): string => {
     if (!songFeatures || !songFeatures[songId]) return 'N/A';
-    
+
     const features = songFeatures[songId];
     if (!features) return 'N/A';
-    
+
     const value = features[category as keyof Features];
-    return typeof value === 'string' ? value : 'N/A';
+
+    // --- MODIFICATION START ---
+    // Check for string OR number, convert number to string
+    if (typeof value === 'string') {
+        return value;
+    } else if (typeof value === 'number') {
+        return value.toString(); // Convert number to string
+    } else {
+        return 'N/A'; // Return 'N/A' for other types or undefined/null
+    }
+    // --- MODIFICATION END ---
   };
 
   // --- Dynamic options for controls ---
