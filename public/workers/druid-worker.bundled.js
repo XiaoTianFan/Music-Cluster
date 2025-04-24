@@ -7192,6 +7192,8 @@ self.onerror = (error) => {
     self.postMessage({ type: 'reductionError', payload: { error: `Unhandled worker error: ${errorMessage}` } });
 };
 console.log("[Druid Worker] Worker setup complete. Waiting for messages...");
+// Signal readiness to the main thread
+self.postMessage({ type: 'druidWorkerReady' });
 
 })();
 

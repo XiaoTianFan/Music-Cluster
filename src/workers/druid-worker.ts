@@ -129,3 +129,6 @@ self.onerror = (error) => {
 };
 
 console.log("[Druid Worker] Worker setup complete. Waiting for messages..."); 
+
+// Signal readiness to the main thread
+self.postMessage({ type: 'druidWorkerReady' }); 
