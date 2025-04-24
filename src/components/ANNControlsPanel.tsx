@@ -75,6 +75,29 @@ interface ANNControlsPanelProps {
     onSelectedFeaturesChange: (features: Set<string>) => void;
 }
 
+// --- ADDED: Feature list from ControlsPanel.tsx --- 
+const availableMirFeatures = [
+  { id: 'mfcc', name: 'MFCC' }, // Represents mfccMeans, mfccStdDevs
+  { id: 'energy', name: 'Aggregate Energy' },
+  { id: 'entropy', name: 'ZCR Entropy' },
+  { id: 'key', name: 'Key & Scale' }, // Represents key, keyScale, keyStrength
+  { id: 'dynamicComplexity', name: 'Dynamic Complexity' }, // Represents dynamicComplexity, loudness
+  { id: 'rms', name: 'RMS' },
+  { id: 'tuningFrequency', name: 'Tuning Frequency' }, // Represents tuningFrequency
+  { id: 'rhythm', name: 'BPM'}, // Represents bpm, rhythmConfidence
+  { id: 'danceability', name: 'Danceability'},
+  { id: 'intensity', name: 'Intensity'},
+  { id: 'spectralCentroidTime', name: 'Spectral Centroid'},
+  { id: 'spectralComplexity', name: 'Spectral Complexity'},
+  { id: 'spectralContrast', name: 'Spectral Contrast'},
+  { id: 'inharmonicity', name: 'Inharmonicity'},
+  { id: 'dissonance', name: 'Dissonance'},
+  { id: 'melBands', name: 'Mel Bands'},
+  { id: 'pitchSalience', name: 'Pitch Salience'},
+  { id: 'spectralFlux', name: 'Spectral Flux'},
+];
+// --------------------------------------------------
+
 // --- NEW: Helper Function for Nodes per Layer Input ---
 const parseNodesPerLayer = (input: string, layerCount: number): number[] | null => {
     const parts = input.split(',').map(s => s.trim()).filter(s => s !== '');
@@ -168,14 +191,13 @@ const ANNControlsPanel: React.FC<ANNControlsPanelProps> = ({
     const handleProcessClick = () => { onProcessData(processingMethod); };
     const handleReduceClick = () => { onReduceDimensions(reductionMethod, reductionDims); };
 
-    // Handler for placeholder feature selection change
-    const handleFeatureCheckboxChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const { value, checked } = event.target;
+    // MODIFIED: Handler for feature selection toggle buttons
+    const handleFeatureToggle = (featureId: string) => {
         const newSet = new Set(selectedFeatures);
-        if (checked) {
-            newSet.add(value);
+        if (newSet.has(featureId)) {
+            newSet.delete(featureId);
         } else {
-            newSet.delete(value);
+            newSet.add(featureId);
         }
         onSelectedFeaturesChange(newSet);
     };
@@ -185,84 +207,138 @@ const ANNControlsPanel: React.FC<ANNControlsPanelProps> = ({
 
     // --- Component UI --- 
     return (
-        <BasePanel className={`${className} flex flex-col`} title="ANN Controls">
-            <div className="flex-grow overflow-y-auto p-3 space-y-4 text-sm"> {/* Reduced base text size */}
+        <BasePanel
+            className={`flex overflow-y-scroll hide-scrollbar flex-col h-[85vh] ${className || ''}`}
+            data-augmented-ui="tl-clip tr-2-clip-x br-clip-x bl-clip border inlay"
+            style={{ '--aug-border-x': '1px' } as React.CSSProperties}
+        >
+            <h2 className="text-xl font-semibold mb-3 text-[var(--accent-secondary)] flex-shrink-0 p-1">ANN Controls</h2>
 
-                {/* Status Indicator */}
-                <div className="text-xs text-center mb-2 sticky top-0 bg-[var(--background-augmented)] py-1 z-10"> {/* Make status sticky */}
-                    {!essentiaWorkerReady && <span className="text-red-500 font-bold block">Essentia Worker Error!</span>}
-                    {!dataProcessingWorkerReady && <span className="text-red-500 font-bold block">DataProc Worker Error!</span>}
-                    {!druidWorkerReady && <span className="text-red-500 font-bold block">Druid Worker Error!</span>}
-                    {!mlpWorkerReady && <span className="text-red-500 font-bold block">MLP Worker Error!</span>}
-                    {areBaseWorkersReady && mlpWorkerReady && !isAnyProcessRunning && <span className="text-green-400">Ready</span>}
-                    {isExtracting && <span className="animate-pulse">Extracting Features...</span>}
-                    {isProcessingData && <span className="animate-pulse">Processing Data...</span>}
-                    {isReducing && <span className="animate-pulse">Reducing Dimensions...</span>}
-                    {isTraining && <span className="animate-pulse">Training Network...</span>}
-                    {isInferring && <span className="animate-pulse">Inferring Labels...</span>}
-                </div>
-
+            {/* Scrollable area for controls */}
+            <div className="flex-grow overflow-y-auto pr-1 pl-1 pb-3 hide-scrollbar space-y-4 text-base">
                 {/* --- Section 1: Feature Extraction --- */}
-                <section data-augmented-ui="tl-clip tr-clip br-clip bl-clip border" className="p-3">
-                    <h3 className="text-md font-semibold mb-2 border-b border-[var(--foreground)]/30 pb-1">1. Feature Extraction</h3>
-                    {/* Placeholder for feature selection checkboxes */}
-                    <div className="mb-2 space-y-1 text-xs max-h-24 overflow-y-auto pr-1">
-                        <p className="text-[var(--text-secondary)] italic text-xs mb-1">Select features:</p>
-                        {/* Example - replace with actual dynamic checkboxes based on available features */} 
-                        {['mfccMeans', 'mfccStdDevs', 'energy', 'entropy', 'bpm', 'loudness', 'key', 'keyScale'].map(f => (
-                             <div key={f} className="flex items-center">
-                                 <input
-                                     type="checkbox"
-                                     id={`feature-${f}`}
-                                     value={f}
-                                     checked={selectedFeatures.has(f)}
-                                     onChange={handleFeatureCheckboxChange}
-                                     className="mr-1.5 h-3 w-3 rounded border-gray-300 text-[var(--accent-primary)] focus:ring-[var(--accent-primary)] bg-transparent"
-                                     disabled={isAnyProcessRunning} // Disable during any operation
-                                 />
-                                 <label htmlFor={`feature-${f}`} className="text-xs select-none">{f}</label>
-                             </div>
+                <div 
+                    className="mb-4 p-3 flex flex-col" 
+                    data-augmented-ui="tl-clip br-clip border" 
+                    style={{ '--aug-border-bg': 'var(--foreground)', 
+                        '--aug-border-all': '1px', 
+                        '--aug-border-y': '2px' } as React.CSSProperties}
+                >
+                    <h3 className="text-lg font-semibold ml-2 mb-2 text-[var(--accent-primary)]">1. Feature Extraction</h3>
+                    {/* MODIFIED to use availableMirFeatures */}
+                    <div className="flex flex-wrap gap-x-1 gap-y-2 flex-grow mb-2 pr-1"> {/* REMOVED max-height and scroll */}
+                        {availableMirFeatures.map(feature => (
+                             <div key={feature.id} className="relative group flex items-center justify-between text-sm">
+                                 <button
+                                     onClick={() => handleFeatureToggle(feature.id)}
+                                     className={`text-sm pr-2 pl-2 py-1 cursor-pointer border border-gray-700 hover:border-[var(--accent-primary)]/50 data-[checked=true]:bg-[var(--accent-primary)]/20 data-[checked=true]:border-[var(--accent-primary)] text-[var(--text-primary)] disabled:opacity-[var(--disabled-opacity)] disabled:cursor-not-allowed`}
+                                     data-checked={selectedFeatures.has(feature.id)}
+                                     disabled={isAnyProcessRunning}
+                                     title={feature.name} // Use feature name for title
+                                 >
+                                     {feature.name} {/* Use feature name for display */}
+                                 </button>
+                                 {/* Optional: Add explanation button if needed 
+                                 <button 
+                                    onClick={() => onShowExplanation?.(feature.id)}
+                                    className="absolute right-0 top-1/2 -translate-y-1/2 px-1 py-0.5 text-xs bg-gray-700 hover:bg-gray-600 text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-blue-900/50 invisible group-hover:visible disabled:opacity-[var(--disabled-opacity)] disabled:cursor-not-allowed z-10"
+                                    title={`Explain ${feature.name}`}
+                                    disabled={isAnyProcessRunning}
+                                >
+                                ?
+                                </button> */}
+                            </div>
                         ))}
+                    </div>
+                     {/* ADDED Select All / Clear Buttons */} 
+                     <div className="flex gap-2 mt-2 mb-1">
+                         <Button
+                             onClick={() => {
+                                 // MODIFIED to use availableMirFeatures
+                                 const allFeatureIds = new Set(availableMirFeatures.map(f => f.id));
+                                 onSelectedFeaturesChange(allFeatureIds);
+                             }}
+                             disabled={isAnyProcessRunning}
+                             variant="secondary"
+                             className="px-4 py-0.5 text-sm"
+                             title="Select all available features"
+                         >
+                             All
+                         </Button>
+                         <Button
+                             onClick={() => onSelectedFeaturesChange(new Set())}
+                             disabled={isAnyProcessRunning || selectedFeatures.size === 0}
+                             variant="secondary"
+                             className="px-4 py-0.5 text-sm"
+                             title="Clear feature selection"
+                         >
+                             Clear
+                         </Button>
                     </div>
                     <Button
                         onClick={handleExtractClick}
                         disabled={isAnyProcessRunning || !essentiaWorkerReady || selectedFeatures.size === 0}
-                        className="w-full text-sm py-1"
+                        className="w-full text-base py-1 mt-2"
+                        variant="primary" // Match ControlsPanel button style
+                        enableTilt={true} // Match ControlsPanel button style
                     >
-                        Extract Features
+                        {isExtracting ? 'Processing...' : `Extract Features`}
                     </Button>
-                </section>
+                </div>
 
                 {/* --- Section 2: Data Processing --- */}
-                <section data-augmented-ui="tl-clip tr-clip br-clip bl-clip border" className="p-3">
-                    <h3 className="text-md font-semibold mb-2 border-b border-[var(--foreground)]/30 pb-1">2. Data Processing</h3>
+                <div 
+                    className="mb-4 p-3 flex flex-col" 
+                    data-augmented-ui="tl-clip br-clip border" 
+                    style={{ '--aug-border-bg': 'var(--foreground)', 
+                        '--aug-border-all': '1px', 
+                        '--aug-border-y': '2px' } as React.CSSProperties}
+                >
+                    <h3 className="text-lg font-semibold ml-2 mb-2 text-[var(--accent-primary)]">2. Data Processing</h3>
+                    {/* REPLACED dropdown with radio labels */}
                     <div className="mb-2">
-                        <label htmlFor="processingMethod" className="block text-xs mb-1">Scaling Method:</label>
-                        <select
-                            id="processingMethod"
-                            value={processingMethod}
-                            onChange={(e) => setProcessingMethod(e.target.value as ProcessingMethod)}
-                            disabled={isAnyProcessRunning || !dataProcessingWorkerReady || !canProcess}
-                            className="w-full bg-transparent border border-[var(--foreground)]/50 px-2 py-1 rounded focus:ring-1 focus:ring-[var(--accent-primary)] focus:outline-none text-xs"
-                        >
-                            <option value="standardize">Standardize</option>
-                            <option value="normalize">Normalize (0-1)</option>
-                            <option value="none">None</option>
-                        </select>
+                         <span className="text-sm block mb-1 text-[var(--text-secondary)]">Method:</span>
+                         <div className="flex gap-2 flex-wrap">
+                             {['standardize', 'normalize', 'none'].map(method => (
+                                 <div key={method} className="relative group flex items-center">
+                                     <label className="text-sm pl-1 py-1 cursor-pointer border border-gray-700 hover:border-[var(--accent-primary)]/50 data-[checked=true]:bg-[var(--accent-primary)]/20 data-[checked=true]:border-[var(--accent-primary)]" data-checked={processingMethod === method}>
+                                         <input
+                                             type="radio"
+                                             name="processingMethod"
+                                             value={method}
+                                             checked={processingMethod === method}
+                                             onChange={(e) => setProcessingMethod(e.target.value as ProcessingMethod)}
+                                             className="hidden"
+                                             disabled={isAnyProcessRunning || !dataProcessingWorkerReady || !canProcess}
+                                         />
+                                         {method === 'standardize' ? 'Standardize' : (method === 'normalize' ? 'Normalize (0-1)' : 'None')}
+                                     </label>
+                                     {/* Optional: Add explanation button */}
+                                 </div>
+                             ))}
+                         </div>
                     </div>
                     <Button
                         onClick={handleProcessClick}
                         disabled={isAnyProcessRunning || !dataProcessingWorkerReady || !canProcess}
-                        className="w-full text-sm py-1"
+                        className="w-full text-base py-1"
+                        variant="primary" // Match ControlsPanel button style
+                        enableTilt={true} // Match ControlsPanel button style
                     >
-                        Process Data
+                        {isProcessingData ? 'Processing...' : `Process Data`}
                     </Button>
-                </section>
+                </div>
 
                 {/* --- Section 3: Dimensionality Reduction --- */}
-                <section data-augmented-ui="tl-clip tr-clip br-clip bl-clip border" className="p-3">
-                    <h3 className="text-md font-semibold mb-1 border-b border-[var(--foreground)]/30 pb-1">3. Dim. Reduction</h3>
-                    <div className="flex items-center mb-2">
+                <div 
+                    className="mb-4 p-3 flex flex-col" 
+                    data-augmented-ui="tl-clip br-clip border" 
+                    style={{ '--aug-border-bg': 'var(--foreground)', 
+                        '--aug-border-all': '1px', 
+                        '--aug-border-y': '2px' } as React.CSSProperties}
+                >
+                    <h3 className="text-lg font-semibold ml-2 mb-2 text-[var(--accent-primary)]">3. Dim. Reduction</h3>
+                    <div className="flex items-center mb-2 text-sm">
                         <input
                             type="checkbox"
                             id="useDimReduction"
@@ -271,10 +347,10 @@ const ANNControlsPanel: React.FC<ANNControlsPanelProps> = ({
                             disabled={isAnyProcessRunning}
                             className="mr-2 h-4 w-4 rounded border-gray-300 text-[var(--accent-primary)] focus:ring-[var(--accent-primary)] bg-transparent"
                         />
-                        <label htmlFor="useDimReduction" className="text-xs">Use before training?</label>
+                        <label htmlFor="useDimReduction" className="text-sm">Use before training?</label>
                         <span
                             title="Apply dimensionality reduction (e.g., t-SNE) to the processed data before feeding it into the neural network."
-                            className="ml-1 cursor-help text-[var(--text-secondary)] hover:text-[var(--accent-primary)]"
+                            className="ml-1 cursor-help text-[var(--text-secondary)] hover:text-[var(--accent-primary)] text-sm"
                             onClick={() => onShowExplanation?.('ann-dim-reduction')}
                         >
                             (?) {/* Simple explanation trigger */}
@@ -283,13 +359,13 @@ const ANNControlsPanel: React.FC<ANNControlsPanelProps> = ({
                     {useDimensionalityReduction && (
                         <div className="space-y-2 pl-3 border-l border-[var(--foreground)]/30 ml-1">
                             <div>
-                                <label htmlFor="reductionMethod" className="block text-xs mb-1">Method:</label>
+                                <label htmlFor="reductionMethod" className="block text-sm mb-1">Method:</label>
                                 <select
                                     id="reductionMethod"
                                     value={reductionMethod}
                                     onChange={(e) => setReductionMethod(e.target.value as ReductionMethod)}
                                     disabled={isAnyProcessRunning || !druidWorkerReady || !canReduce}
-                                    className="w-full bg-transparent border border-[var(--foreground)]/50 px-2 py-1 rounded focus:ring-1 focus:ring-[var(--accent-primary)] focus:outline-none text-xs"
+                                    className="w-full bg-transparent border border-[var(--foreground)]/50 px-2 py-1 rounded focus:ring-1 focus:ring-[var(--accent-primary)] focus:outline-none text-sm"
                                 >
                                     <option value="tsne">t-SNE</option>
                                     <option value="umap">UMAP</option>
@@ -297,13 +373,13 @@ const ANNControlsPanel: React.FC<ANNControlsPanelProps> = ({
                                 </select>
                             </div>
                             <div>
-                                <label htmlFor="reductionDims" className="block text-xs mb-1">Dimensions:</label>
+                                <label htmlFor="reductionDims" className="block text-sm mb-1">Dimensions:</label>
                                 <select
                                     id="reductionDims"
                                     value={reductionDims}
                                     onChange={(e) => setReductionDims(parseInt(e.target.value, 10))}
                                     disabled={isAnyProcessRunning || !druidWorkerReady || !canReduce}
-                                    className="w-full bg-transparent border border-[var(--foreground)]/50 px-2 py-1 rounded focus:ring-1 focus:ring-[var(--accent-primary)] focus:outline-none text-xs"
+                                    className="w-full bg-transparent border border-[var(--foreground)]/50 px-2 py-1 rounded focus:ring-1 focus:ring-[var(--accent-primary)] focus:outline-none text-sm"
                                 >
                                     <option value={2}>2D</option>
                                     <option value={3}>3D</option>
@@ -312,43 +388,50 @@ const ANNControlsPanel: React.FC<ANNControlsPanelProps> = ({
                             <Button
                                 onClick={handleReduceClick}
                                 disabled={isAnyProcessRunning || !druidWorkerReady || !canReduce}
-                                className="w-full text-sm py-1 mt-1"
-                                variant="secondary"
+                                className="w-full text-base py-1 mt-1"
+                                variant="secondary" // Match ControlsPanel button style
+                                enableTilt={true} // Match ControlsPanel button style
                             >
                                 Reduce Dimensions
                             </Button>
                         </div>
                     )}
-                </section>
+                </div>
 
                 {/* --- Section 4: MLP Configuration --- */}
-                <section data-augmented-ui="tl-clip tr-clip br-clip bl-clip border" className="p-3">
-                    <h3 className="text-md font-semibold mb-2 border-b border-[var(--foreground)]/30 pb-1">4. MLP Configuration</h3>
-                    <div className="space-y-1.5">
+                <div 
+                    className="mb-4 p-3 flex flex-col" 
+                    data-augmented-ui="tl-clip br-clip border" 
+                    style={{ '--aug-border-bg': 'var(--foreground)', 
+                        '--aug-border-all': '1px', 
+                        '--aug-border-y': '2px' } as React.CSSProperties}
+                >
+                    <h3 className="text-lg font-semibold ml-2 mb-2 text-[var(--accent-primary)]">4. MLP Configuration</h3>
+                    <div className="space-y-1.5 text-sm">
                         {/* Row 1: Hidden Layers & Nodes */} 
                         <div className="grid grid-cols-2 gap-2">
                              <div>
-                                <label htmlFor="hiddenLayers" className="block text-xs mb-0.5">Hidden Layers:</label>
-                                <input type="number" id="hiddenLayers" value={localConfig.hiddenLayers} onChange={e => updateNetworkConfig('hiddenLayers', e.target.value)} min="0" step="1" className="w-full bg-transparent border border-[var(--foreground)]/50 px-2 py-0.5 rounded focus:ring-1 focus:ring-[var(--accent-primary)] focus:outline-none text-xs" disabled={isAnyProcessRunning}/>
+                                <label htmlFor="hiddenLayers" className="block text-sm mb-0.5">Hidden Layers:</label>
+                                <input type="number" id="hiddenLayers" value={localConfig.hiddenLayers} onChange={e => updateNetworkConfig('hiddenLayers', e.target.value)} min="0" step="1" className="w-full bg-transparent border border-[var(--foreground)]/50 px-2 py-0.5 rounded focus:ring-1 focus:ring-[var(--accent-primary)] focus:outline-none text-sm" disabled={isAnyProcessRunning}/>
                             </div>
                             <div>
-                                <label htmlFor="nodesPerLayer" className="block text-xs mb-0.5">Nodes (csv):</label>
-                                <input type="text" id="nodesPerLayer" value={localConfig.nodesPerLayer.join(', ')} onChange={e => updateNetworkConfig('nodesPerLayer', e.target.value)} placeholder="e.g., 16, 8" className="w-full bg-transparent border border-[var(--foreground)]/50 px-2 py-0.5 rounded focus:ring-1 focus:ring-[var(--accent-primary)] focus:outline-none text-xs" disabled={isAnyProcessRunning || localConfig.hiddenLayers === 0}/>
+                                <label htmlFor="nodesPerLayer" className="block text-sm mb-0.5">Nodes (csv):</label>
+                                <input type="text" id="nodesPerLayer" value={localConfig.nodesPerLayer.join(', ')} onChange={e => updateNetworkConfig('nodesPerLayer', e.target.value)} placeholder="e.g., 16, 8" className="w-full bg-transparent border border-[var(--foreground)]/50 px-2 py-0.5 rounded focus:ring-1 focus:ring-[var(--accent-primary)] focus:outline-none text-sm" disabled={isAnyProcessRunning || localConfig.hiddenLayers === 0}/>
                             </div>
                         </div>
                         {/* Row 2: Activation & Optimizer */} 
                         <div className="grid grid-cols-2 gap-2">
                              <div>
-                                <label htmlFor="activation" className="block text-xs mb-0.5">Activation:</label>
-                                <select id="activation" value={localConfig.activation} onChange={e => updateNetworkConfig('activation', e.target.value)} className="w-full bg-transparent border border-[var(--foreground)]/50 px-2 py-0.5 rounded focus:ring-1 focus:ring-[var(--accent-primary)] focus:outline-none text-xs" disabled={isAnyProcessRunning}>
+                                <label htmlFor="activation" className="block text-sm mb-0.5">Activation:</label>
+                                <select id="activation" value={localConfig.activation} onChange={e => updateNetworkConfig('activation', e.target.value)} className="w-full bg-transparent border border-[var(--foreground)]/50 px-2 py-0.5 rounded focus:ring-1 focus:ring-[var(--accent-primary)] focus:outline-none text-sm" disabled={isAnyProcessRunning}>
                                     <option value="relu">ReLU</option>
                                     <option value="sigmoid">Sigmoid</option>
                                     <option value="tanh">Tanh</option>
                                 </select>
                              </div>
                              <div>
-                                <label htmlFor="optimizer" className="block text-xs mb-0.5">Optimizer:</label>
-                                <select id="optimizer" value={localConfig.optimizer} onChange={e => updateNetworkConfig('optimizer', e.target.value)} className="w-full bg-transparent border border-[var(--foreground)]/50 px-2 py-0.5 rounded focus:ring-1 focus:ring-[var(--accent-primary)] focus:outline-none text-xs" disabled={isAnyProcessRunning}>
+                                <label htmlFor="optimizer" className="block text-sm mb-0.5">Optimizer:</label>
+                                <select id="optimizer" value={localConfig.optimizer} onChange={e => updateNetworkConfig('optimizer', e.target.value)} className="w-full bg-transparent border border-[var(--foreground)]/50 px-2 py-0.5 rounded focus:ring-1 focus:ring-[var(--accent-primary)] focus:outline-none text-sm" disabled={isAnyProcessRunning}>
                                      <option value="adam">Adam</option>
                                      <option value="sgd">SGD</option>
                                  </select>
@@ -357,23 +440,23 @@ const ANNControlsPanel: React.FC<ANNControlsPanelProps> = ({
                          {/* Row 3: Learning Rate & Epochs */} 
                         <div className="grid grid-cols-2 gap-2">
                              <div>
-                                <label htmlFor="learningRate" className="block text-xs mb-0.5">Learn Rate:</label>
-                                <input type="number" id="learningRate" value={localConfig.learningRate} onChange={e => updateNetworkConfig('learningRate', e.target.value)} step="0.0001" min="0.00001" className="w-full bg-transparent border border-[var(--foreground)]/50 px-2 py-0.5 rounded focus:ring-1 focus:ring-[var(--accent-primary)] focus:outline-none text-xs" disabled={isAnyProcessRunning}/>
+                                <label htmlFor="learningRate" className="block text-sm mb-0.5">Learn Rate:</label>
+                                <input type="number" id="learningRate" value={localConfig.learningRate} onChange={e => updateNetworkConfig('learningRate', e.target.value)} step="0.0001" min="0.00001" className="w-full bg-transparent border border-[var(--foreground)]/50 px-2 py-0.5 rounded focus:ring-1 focus:ring-[var(--accent-primary)] focus:outline-none text-sm" disabled={isAnyProcessRunning}/>
                             </div>
                              <div>
-                                <label htmlFor="epochs" className="block text-xs mb-0.5">Max Epochs:</label>
-                                <input type="number" id="epochs" value={localConfig.epochs} onChange={e => updateNetworkConfig('epochs', e.target.value)} min="1" step="1" className="w-full bg-transparent border border-[var(--foreground)]/50 px-2 py-0.5 rounded focus:ring-1 focus:ring-[var(--accent-primary)] focus:outline-none text-xs" disabled={isAnyProcessRunning}/>
+                                <label htmlFor="epochs" className="block text-sm mb-0.5">Max Epochs:</label>
+                                <input type="number" id="epochs" value={localConfig.epochs} onChange={e => updateNetworkConfig('epochs', e.target.value)} min="1" step="1" className="w-full bg-transparent border border-[var(--foreground)]/50 px-2 py-0.5 rounded focus:ring-1 focus:ring-[var(--accent-primary)] focus:outline-none text-sm" disabled={isAnyProcessRunning}/>
                             </div>
                         </div>
                         {/* Row 4: Split Ratio & Seed */} 
                         <div className="grid grid-cols-2 gap-2">
                              <div>
-                                <label htmlFor="splitRatio" className="block text-xs mb-0.5">Train Split (%):</label>
-                                <input type="number" id="splitRatio" value={localConfig.splitRatio * 100} onChange={e => updateNetworkConfig('splitRatio', parseFloat(e.target.value) / 100)} min="1" max="99" step="1" className="w-full bg-transparent border border-[var(--foreground)]/50 px-2 py-0.5 rounded focus:ring-1 focus:ring-[var(--accent-primary)] focus:outline-none text-xs" disabled={isAnyProcessRunning}/>
+                                <label htmlFor="splitRatio" className="block text-sm mb-0.5">Train Split (%):</label>
+                                <input type="number" id="splitRatio" value={localConfig.splitRatio * 100} onChange={e => updateNetworkConfig('splitRatio', parseFloat(e.target.value) / 100)} min="1" max="99" step="1" className="w-full bg-transparent border border-[var(--foreground)]/50 px-2 py-0.5 rounded focus:ring-1 focus:ring-[var(--accent-primary)] focus:outline-none text-sm" disabled={isAnyProcessRunning}/>
                             </div>
                             <div>
-                                <label htmlFor="randomSeed" className="block text-xs mb-0.5">Seed (opt.):</label>
-                                <input type="number" id="randomSeed" value={localConfig.randomSeed ?? ''} onChange={e => updateNetworkConfig('randomSeed', e.target.value === '' ? undefined : e.target.value)} placeholder="Optional" className="w-full bg-transparent border border-[var(--foreground)]/50 px-2 py-0.5 rounded focus:ring-1 focus:ring-[var(--accent-primary)] focus:outline-none text-xs" disabled={isAnyProcessRunning}/>
+                                <label htmlFor="randomSeed" className="block text-sm mb-0.5">Seed (opt.):</label>
+                                <input type="number" id="randomSeed" value={localConfig.randomSeed ?? ''} onChange={e => updateNetworkConfig('randomSeed', e.target.value === '' ? undefined : e.target.value)} placeholder="Optional" className="w-full bg-transparent border border-[var(--foreground)]/50 px-2 py-0.5 rounded focus:ring-1 focus:ring-[var(--accent-primary)] focus:outline-none text-sm" disabled={isAnyProcessRunning}/>
                             </div>
                         </div>
                         {/* Optional: Target Loss */} 
@@ -382,30 +465,38 @@ const ANNControlsPanel: React.FC<ANNControlsPanelProps> = ({
                              <input type="number" id="targetLoss" value={localConfig.targetLoss ?? ''} onChange={e => updateNetworkConfig('targetLoss', e.target.value === '' ? undefined : e.target.value)} step="0.001" placeholder="e.g., 0.05" className="w-full bg-transparent border border-[var(--foreground)]/50 px-2 py-0.5 rounded focus:ring-1 focus:ring-[var(--accent-primary)] focus:outline-none text-xs" disabled={isAnyProcessRunning}/>
                          </div> */} 
                     </div>
-                </section>
+                </div>
 
                 {/* --- Section 5: Train & Infer --- */}
-                <section data-augmented-ui="tl-clip tr-clip br-clip bl-clip border" className="p-3">
-                    <h3 className="text-md font-semibold mb-2 border-b border-[var(--foreground)]/30 pb-1">5. Train & Infer</h3>
+                <div 
+                    className="mb-4 p-3 flex flex-col" 
+                    data-augmented-ui="tl-clip br-clip border" 
+                    style={{ '--aug-border-bg': 'var(--foreground)', 
+                        '--aug-border-all': '1px', 
+                        '--aug-border-y': '2px' } as React.CSSProperties}
+                >
+                    <h3 className="text-lg font-semibold ml-2 mb-2 text-[var(--accent-primary)]">5. Train & Infer</h3>
                     <div className="space-y-2">
                          <Button
                             onClick={onTrain}
                             disabled={isAnyProcessRunning || !mlpWorkerReady || !canTrain}
-                            className="w-full font-semibold bg-green-600 hover:bg-green-500 disabled:bg-green-600/30 text-sm py-1.5"
+                            className="w-full font-semibold text-base py-1.5" // Ensured text-sm
                             variant="primary"
+                             enableTilt={true}
                         >
                             {isTraining ? 'Training...' : 'Train Network'}
                         </Button>
                          <Button
                             onClick={onInfer}
                             disabled={isAnyProcessRunning || !mlpWorkerReady || !canInfer}
-                            className="w-full font-semibold bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/30 text-sm py-1.5"
+                            className="w-full font-semibold text-base py-1.5" // Ensured text-sm
                             variant="primary"
+                             enableTilt={true}
                         >
                             {isInferring ? 'Inferring...' : 'Infer Labels'}
                         </Button>
                     </div>
-                </section>
+                </div>
 
             </div>
         </BasePanel>

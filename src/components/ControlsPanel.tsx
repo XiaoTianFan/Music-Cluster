@@ -156,7 +156,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
       data-augmented-ui="tl-clip tr-2-clip-x br-clip-x bl-clip border inlay"
       style={{ '--aug-border-x': '1px' } as React.CSSProperties}
     >
-      <h2 className="text-lg font-semibold mb-3 text-[var(--accent-secondary)] flex-shrink-0">Controls</h2>
+      <h2 className="text-lg font-semibold mb-3 text-[var(--accent-secondary)] flex-shrink-0 p-1">Controls</h2>
 
       {/* Scrollable area for controls */}
       <div className="flex-grow overflow-y-auto pr-1 hide-scrollbar">

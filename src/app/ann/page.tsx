@@ -916,60 +916,20 @@ export default function ANNPage() {
         });
     }, [namedLists, addLogMessage]);
 
-    const handleDropSong = useCallback((songId: string, targetListName: string | null) => {
+    const handleRemoveSongFromList = useCallback((songId: string, listName: string) => {
         setNamedLists(prev => {
-            const updated: Record<string, Set<string>> = {};
-            let sourceList: string | null = null;
-
-            // Deep copy sets and find source list
-            for (const listName in prev) {
-                updated[listName] = new Set(prev[listName]);
-                if (updated[listName].has(songId)) {
-                    sourceList = listName;
+            const updated = { ...prev };
+            if (updated[listName]) {
+                const currentSet = new Set(updated[listName]);
+                if (currentSet.delete(songId)) {
+                    updated[listName] = currentSet;
+                    addLogMessage(`Removed song ID ${songId} from list ${listName}`, 'info');
+                    return updated;
                 }
             }
-
-            // Remove from source list
-            if (sourceList) {
-                updated[sourceList].delete(songId);
-            }
-
-            // Add to target list if specified and exists
-            if (targetListName !== null) {
-                if (updated.hasOwnProperty(targetListName)) {
-                    updated[targetListName].add(songId);
-                    addLogMessage(`Moved song ${songId} from ${sourceList ?? 'Unassigned'} to ${targetListName}`, 'info');
-                } else {
-                    addLogMessage(`Error: Target list "${targetListName}" not found. Song remains in ${sourceList ?? 'Unassigned'}.`, 'error');
-                    // Re-add to source if target was invalid? Or leave unassigned? Let's leave unassigned.
-                    if (sourceList) updated[sourceList].delete(songId); // Ensure removal if target invalid
-                    // No need to return prev, updated reflects the (failed) move state
-                }
-            } else {
-                // Dropped onto unassigned area
-                if (sourceList) {
-                     addLogMessage(`Moved song ${songId} from ${sourceList} back to Unassigned`, 'info');
-                } // If sourceList is null, it was already unassigned.
-            }
-
-            return updated;
+            return prev; // Return original state if no change
         });
     }, [addLogMessage]);
-
-     const handleRemoveSongFromList = useCallback((songId: string, listName: string) => {
-         setNamedLists(prev => {
-             const updated = { ...prev };
-             if (updated[listName]) {
-                 const currentSet = new Set(updated[listName]);
-                 if (currentSet.delete(songId)) {
-                     updated[listName] = currentSet;
-                     addLogMessage(`Removed song ID ${songId} from list ${listName}`, 'info');
-                     return updated;
-                 }
-             }
-             return prev; // Return original state if no change
-         });
-     }, [addLogMessage]);
 
     // --- File Handling ---
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => { addLogMessage('TODO: Implement handleFileChange', 'info'); };
@@ -984,6 +944,12 @@ export default function ANNPage() {
     }, [songs, namedLists]);
     const canTrain = useMemo(() => allWorkersReady && labelMap.size >= 2 && !isTraining && (processedData !== null || Object.keys(reducedDataPoints).length > 0), [allWorkersReady, labelMap, isTraining, processedData, reducedDataPoints]);
     const canInfer = useMemo(() => allWorkersReady && isModelTrained && !isInferring && (processedData !== null || Object.keys(reducedDataPoints).length > 0), [allWorkersReady, isModelTrained, isInferring, processedData, reducedDataPoints]);
+
+    // NEW: Memoized variable for any running process
+    const isAnyProcessRunning = useMemo(() => 
+        isExtracting || isProcessingData || isReducing || isTraining || isInferring,
+        [isExtracting, isProcessingData, isReducing, isTraining, isInferring]
+    );
 
     // Get available feature keys for Visualization Panel
     const availableFeatureKeys = useMemo(() => {
@@ -1008,16 +974,56 @@ export default function ANNPage() {
 
     // --- Render ---
     return (
-        <div className="container mx-auto p-4 flex flex-col min-h-screen font-sans relative bg-background text-foreground">
-            {/* Header - Reuse or adapt from Dashboard */}
-            <header className="flex justify-between items-center mb-4 border-b pb-2 border-[var(--border-color)]">
-                <h1 className="text-2xl font-bold text-[var(--accent-color)]">Supervised Audio Classification (ANN)</h1>
-                <div>
-                    {/* <button onClick={handleUploadClick} className="btn mr-2">Upload Audio</button> */}
-                    <button onClick={handleToggleAboutDialog} className="btn-secondary">About</button>
+        <main className="flex flex-col min-h-screen p-4 bg-gray-950/30 bg-blur-md text-gray-100 font-[family-name:var(--font-geist-mono)] hide-scrollbar">
+            {/* Header - Replaced with styled div from page.tsx */}
+            <div
+                className="w-full h-16 mb-4 p-2 flex justify-between items-center"
+                data-augmented-ui="bl-clip-y tr-clip-y border inlay"
+                style={{'--aug-border-bg': 'var(--foreground)',
+                '--aug-border-opacity': '0.8',
+                '--aug-border-x': '1px',
+                '--aug-border-y': '3px',
+                '--aug-inlay-bg': 'var(--background)',
+                '--aug-inlay-opacity': '0.1',
+                filter: `drop-shadow(0 0 2px var(--accent-primary))`,
+                '--aug-tl': '10px',
+                '--aug-tr': '10px',
+                '--aug-br': '10px',
+                '--aug-bl': '10px',
+                } as React.CSSProperties}
+            >
+                <h1 className="px-4 text-xl font-bold text-[var(--accent-primary)] flex-shrink-0">Supervised Audio Classification (ANN)</h1>
+                {/* Audio Player Removed - Not applicable to ANN page state */}
+                {/* <AudioPlayer ... /> */}
+                <div className="flex items-center gap-4 flex-shrink-0"> {/* Wrapper for status and button */}
+                    <div className="text-sm text-[var(--accent-primary)]/80">
+                        {/* Status Text Adapted for ANN page */}
+                        {!allWorkersReady && <span className="text-yellow-400 animate-pulse">Initializing Workers...</span>}
+                        {allWorkersReady && isExtracting && <span className="animate-pulse">Extracting Features...</span>}
+                        {allWorkersReady && isProcessingData && <span className="animate-pulse">Processing Data...</span>}
+                        {allWorkersReady && isReducing && <span className="animate-pulse">Reducing Dimensions...</span>}
+                        {allWorkersReady && isTraining && <span className="animate-pulse">Training Network...</span>}
+                        {allWorkersReady && isInferring && <span className="animate-pulse">Inferring Labels...</span>}
+                        {allWorkersReady && !isAnyProcessRunning && <span className="text-green-400">Ready</span>}
+                        {/* Progress bar or detailed counts could be added here if needed */}
+                    </div>
+                     {/* About Text Link */}
+                    <span
+                        onClick={handleToggleAboutDialog}
+                        className="text-[var(--accent-primary)] hover:text-cyan-400 cursor-pointer text-sm whitespace-nowrap mr-4"
+                        role="button" // Accessibility
+                        tabIndex={0}  // Accessibility
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                                handleToggleAboutDialog();
+                            }
+                        }} // Accessibility
+                    >
+                        | About
+                    </span>
                 </div>
                 <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="audio/*" multiple style={{ display: 'none' }} />
-            </header>
+            </div>
 
             {!allWorkersReady && (
                 <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
@@ -1028,87 +1034,122 @@ export default function ANNPage() {
             </div>
             )}
 
-            <main className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-grow">
-                {/* Left Column (Scrollable) */}
-                <div className="md:col-span-2 flex flex-col gap-4 overflow-y-auto h-[calc(100vh-150px)] pr-2 scrollbar-thin scrollbar-thumb-[var(--accent-color)] scrollbar-track-[var(--panel-bg-alt)]">
-                    <LabelingPanel
-                        songs={songs}
-                        namedLists={namedLists}
-                        onCreateList={handleCreateList}
-                        onRenameList={handleRenameList}
-                        onRemoveSongFromList={handleRemoveSongFromList}
-                    />
-                    <LogPanel logs={logMessages} /> {/* Renamed prop */} 
-                </div>
+            {/* NEW: Added wrapping div with height constraint */}
+            <div className='h-[85vh]'>
+                 {/* MODIFIED: Applied grid styles from page.tsx */}
+                 <div className="px-2 py-2 grid grid-cols-[3fr_1fr] grid-rows-[3fr_1fr] min-h-full max-h-full gap-2 flex-grow">
+                     {/* Left Column (Scrollable) - MODIFIED col-span */}
+                     <div className="col-span-1 md:col-span-1 flex flex-col gap-4 overflow-y-auto h-[85vh] pr-2 scrollbar-thin scrollbar-thumb-[var(--accent-color)] scrollbar-track-[var(--panel-bg-alt)]">
+                         <LabelingPanel
+                             songs={songs}
+                             namedLists={namedLists}
+                             onCreateList={handleCreateList}
+                             onRenameList={handleRenameList}
+                             onRemoveSongFromList={handleRemoveSongFromList}
+                         />
+                         <ANNDataVisualizationPanel
+                             className="min-h-[400px] lg:min-h-[500px]"
+                             activeSongIds={new Set(songs.map(s => s.id))}
+                             songs={songs}
+                             songFeatures={songFeatures}
+                             unprocessedData={unprocessedData}
+                             processedData={processedData}
+                             reducedDataPoints={reducedDataPoints}
+                             reductionDimensions={reductionDimensions}
+                             trueLabels={Object.entries(namedLists).reduce((acc, [label, idSet]) => {
+                                 idSet.forEach(id => { acc[id] = label; });
+                                 return acc;
+                             }, {} as TrueLabelMap)}
+                             predictedLabels={inferenceResults}
+                             showPredictions={isModelTrained}
+                             availableFeatureKeys={availableFeatureKeys}
+                             visualizationDisplayStage={visualizationTargetStage}
+                             onStageSelect={setVisualizationTargetStage}
+                             latestSuccessfulStage={latestCompletedStage}
+                             kmeansAssignments={placeholderKmeansAssignments}
+                             kmeansCentroids={[]}
+                             kmeansIteration={0}
+                          />
+                         <NetworkVisualizationPanel
+                             networkConfig={networkConfig}
+                             inputDimension={inputDimension}
+                             outputDimension={outputDimension}
+                             labelNames={Array.from(labelMap.keys())}
+                         />
+                         <BasePanel title="Training Performance">
+                             {isTraining && <p className="p-4 text-sm text-[var(--text-secondary)]">Training in progress... Epoch {currentEpoch}</p>}
+                             {!isTraining && trainingHistory.loss.length === 0 && <p className="p-4 text-sm text-[var(--text-secondary)]">Train the network to see performance history.</p>}
+                         </BasePanel>
+                         <LogPanel 
+                            className="col-span-1 row-span-1 h-[30vh]" // Updated spans
+                            logs={logMessages} />
+                     </div>
 
-                {/* Right Column (Fixed) */}
-                <div className="md:col-span-1 flex flex-col gap-4">
-                    <ANNControlsPanel
-                        // Pass props expected by ANNControlsPanel
-                         essentiaWorkerReady={essentiaWorkerReady}
-                         dataProcessingWorkerReady={dataProcessingWorkerReady}
-                         druidWorkerReady={druidWorkerReady}
-                         mlpWorkerReady={mlpWorkerReady}
-                         isExtracting={isExtracting}
-                         isProcessingData={isProcessingData}
-                         isReducing={isReducing}
-                         isTraining={isTraining}
-                         isInferring={isInferring}
-                        canProcess={processedData === null && Object.values(featureStatus).some(s => s === 'complete')} 
-                        canReduce={processedData !== null}
-                         canTrain={canTrain}
-                         canInfer={canInfer}
-                         onExtractFeatures={handleExtractFeatures}
-                         onProcessData={handleProcessData}
-                         onReduceDimensions={handleReduceDimensions}
-                        networkConfig={networkConfig}
-                        setNetworkConfig={setNetworkConfig}
-                        useDimensionalityReduction={useDimensionalityReduction}
-                        setUseDimensionalityReduction={setUseDimensionalityReduction}
-                         onTrain={handleTrain}
-                         onInfer={handleInfer}
-                        // --- Pass selectedFeatures state and setter --- 
-                        selectedFeatures={selectedFeatures}
-                        onSelectedFeaturesChange={setSelectedFeatures}
-                    />
-                    {/* Network Visualization */}
-                    <NetworkVisualizationPanel
-                        networkConfig={networkConfig} 
-                        inputDimension={inputDimension}
-                        outputDimension={outputDimension}
-                        labelNames={Array.from(labelMap.keys())}
-                    />
-                    {/* Data Visualization - Pass props expected by VisualizationPanel */}
-                    <ANNDataVisualizationPanel
-                        className="min-h-[400px] lg:min-h-[500px] mt-4" // Add margin top
-                        activeSongIds={new Set(songs.map(s => s.id))} // Assuming all loaded songs are active initially
-                        songs={songs}
-                        songFeatures={songFeatures}
-                        unprocessedData={unprocessedData}
-                        processedData={processedData}
-                        reducedDataPoints={reducedDataPoints}
-                        reductionDimensions={reductionDimensions}
-                        // --- Pass ANN specific props ---
-                        trueLabels={Object.entries(namedLists).reduce((acc, [label, idSet]) => {
-                            idSet.forEach(id => { acc[id] = label; });
-                            return acc;
-                        }, {} as TrueLabelMap)}
-                        predictedLabels={inferenceResults}
-                        showPredictions={isModelTrained}
-                        // --- Other necessary props ---
-                        availableFeatureKeys={availableFeatureKeys} // Pass derived keys
-                        visualizationDisplayStage={visualizationTargetStage}
-                        onStageSelect={setVisualizationTargetStage} // Allow user override
-                        latestSuccessfulStage={latestCompletedStage}
-                        // --- Pass placeholder K-Means props if the underlying component still expects them due to copying ---
-                        kmeansAssignments={placeholderKmeansAssignments}
-                        kmeansCentroids={[]}
-                        kmeansIteration={0}
-                     />
-                </div>
-            </main>
+                     {/* Right Column (Fixed) - MODIFIED col-span */}
+                     <div className="col-span-1 md:col-span-1 flex flex-col">
+                         <ANNControlsPanel
+                             essentiaWorkerReady={essentiaWorkerReady}
+                             dataProcessingWorkerReady={dataProcessingWorkerReady}
+                             druidWorkerReady={druidWorkerReady}
+                             mlpWorkerReady={mlpWorkerReady}
+                             isExtracting={isExtracting}
+                             isProcessingData={isProcessingData}
+                             isReducing={isReducing}
+                             isTraining={isTraining}
+                             isInferring={isInferring}
+                             canProcess={processedData === null && Object.values(featureStatus).some(s => s === 'complete')} 
+                             canReduce={processedData !== null}
+                             canTrain={canTrain}
+                             canInfer={canInfer}
+                             onExtractFeatures={handleExtractFeatures}
+                             onProcessData={handleProcessData}
+                             onReduceDimensions={handleReduceDimensions}
+                             networkConfig={networkConfig}
+                             setNetworkConfig={setNetworkConfig}
+                             useDimensionalityReduction={useDimensionalityReduction}
+                             setUseDimensionalityReduction={setUseDimensionalityReduction}
+                             onTrain={handleTrain}
+                             onInfer={handleInfer}
+                             selectedFeatures={selectedFeatures}
+                             onSelectedFeaturesChange={setSelectedFeatures}
+                         />
+                     </div>
+                 </div>
+            </div>
+
+            {/* ADDED Footer from page.tsx */}
+            <footer
+                className="w-full h-10 mt-4 p-2 text-center text-xs text-gray-500 border-t border-gray-700 flex items-center justify-center gap-4"
+                 data-augmented-ui="tl-clip tr-clip border"
+                 style={{ '--aug-border-color': '#444', '--aug-border-bg': 'transparent' } as React.CSSProperties}
+              >
+                <span>Copyright (c) 2025 Xiaotian Fan, As33</span>
+                <span>|</span>
+                <a 
+                  href="https://github.com/XiaoTianFan/Music-Cluster" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="hover:text-gray-400 transition-colors"
+                >
+                  GitHub Repository
+                </a>
+                <span>|</span>
+                <span
+                  onClick={handleToggleAboutDialog}
+                  className="hover:text-gray-400 transition-colors cursor-pointer"
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      handleToggleAboutDialog();
+                    }
+                  }}
+                >
+                  About
+                </span>
+            </footer>
 
             <AboutDialog isOpen={isAboutDialogOpen} onClose={handleToggleAboutDialog} />
-        </div>
+         </main>
     );
 } 
