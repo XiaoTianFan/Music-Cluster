@@ -12,6 +12,7 @@ import ANNControlsPanel, { MLPConfig as ControlsMLPConfig, DEFAULT_MLP_CONFIG } 
 import LabelingPanel from '@/components/LabelingPanel';
 import NetworkVisualizationPanel from '@/components/NetworkVisualizationPanel';
 import ANNDataVisualizationPanel from '@/components/ANNDataVisualizationPanel';
+import AudioPlayer from '@/components/AudioPlayer'; // <-- NEW: Import AudioPlayer
 
 // Reusable types (consider moving to a shared types file, e.g., src/types.ts)
 export interface Song {
@@ -196,6 +197,11 @@ export default function ANNPage() {
     const [targetDimensions, setTargetDimensions] = useState<number>(2);
     const [latestCompletedStage, setLatestCompletedStage] = useState<ProcessingStage>(null);
     const [visualizationTargetStage, setVisualizationTargetStage] = useState<ProcessingStage>(null);
+
+    // --- NEW: Audio Player State ---
+    const [currentlyPlayingSongId, setCurrentlyPlayingSongId] = useState<string | null>(null);
+    const [isPlaying, setIsPlaying] = useState<boolean>(false);
+    // -----------------------------
 
     // --- Worker Refs ---
     const essentiaWorkerRef = useRef<Worker | null>(null);
@@ -971,6 +977,44 @@ export default function ANNPage() {
         setVisualizationDisplayStage(stage);
     }, [songFeatures, processedData, reducedDataPoints, featureStatus]);
 
+    // --- NEW: Audio Player Callbacks ---
+    // Helper to get song name by ID for logging
+    const getSongNameById = useCallback((id: string): string => {
+        return songs.find(s => s.id === id)?.name || id; // Return ID if name not found
+    }, [songs]);
+
+    const handlePlayRequest = useCallback((songId: string) => {
+        addLogMessage(`Play requested for song: ${getSongNameById(songId)}`, 'info');
+        setCurrentlyPlayingSongId(songId);
+        setIsPlaying(true);
+    }, [addLogMessage, getSongNameById]);
+
+    const handleTogglePlayPause = useCallback(() => {
+        if (currentlyPlayingSongId) {
+            setIsPlaying(prev => {
+                const newState = !prev;
+                addLogMessage(newState ? `Playing song: ${getSongNameById(currentlyPlayingSongId)}` : `Paused song: ${getSongNameById(currentlyPlayingSongId)}`, 'info');
+                return newState;
+            });
+        } else {
+            addLogMessage('Toggle play/pause requested but no song selected.', 'info');
+        }
+    }, [addLogMessage, currentlyPlayingSongId, getSongNameById]);
+
+    const handleSongEnd = useCallback(() => {
+        if (currentlyPlayingSongId) {
+            addLogMessage(`Song finished: ${getSongNameById(currentlyPlayingSongId)}`, 'complete');
+            setIsPlaying(false);
+            // Optionally clear the song or move to next:
+            // setCurrentlyPlayingSongId(null);
+        }
+    }, [addLogMessage, currentlyPlayingSongId, getSongNameById]);
+
+    // --- NEW: Memoize currently playing song object ---
+    const currentlyPlayingSong = useMemo(() => {
+        return songs.find(s => s.id === currentlyPlayingSongId) ?? null;
+    }, [currentlyPlayingSongId, songs]);
+    // -----------------------------------------------
 
     // --- Render ---
     return (
@@ -992,9 +1036,16 @@ export default function ANNPage() {
                 '--aug-bl': '10px',
                 } as React.CSSProperties}
             >
-                <h1 className="px-4 text-xl font-bold text-[var(--accent-primary)] flex-shrink-0">Supervised Audio Classification (ANN)</h1>
-                {/* Audio Player Removed - Not applicable to ANN page state */}
-                {/* <AudioPlayer ... /> */}
+                <h1 className="px-4 text-xl font-bold text-[var(--accent-primary)] flex-shrink-0">Music Classification (ANN)</h1>
+                {/* --- NEW: Added Audio Player (mirrors app/page.tsx) --- */}
+                <AudioPlayer
+                    song={currentlyPlayingSong}
+                    isPlaying={isPlaying}
+                    onTogglePlayPause={handleTogglePlayPause}
+                    onSongEnd={handleSongEnd}
+                    className="flex-grow flex justify-center items-center min-w-0 max-w-[40vw] px-4"
+                />
+                {/* ------------------------------------------------------- */}
                 <div className="flex items-center gap-4 flex-shrink-0"> {/* Wrapper for status and button */}
                     <div className="text-sm text-[var(--accent-primary)]/80">
                         {/* Status Text Adapted for ANN page */}
@@ -1039,7 +1090,7 @@ export default function ANNPage() {
                  {/* MODIFIED: Applied grid styles from page.tsx */}
                  <div className="px-2 py-2 grid grid-cols-[3fr_1fr] grid-rows-[3fr_1fr] min-h-full max-h-full gap-2 flex-grow">
                      {/* Left Column (Scrollable) - MODIFIED col-span */}
-                     <div className="col-span-1 md:col-span-1 flex flex-col gap-4 overflow-y-auto h-[85vh] pr-2 scrollbar-thin scrollbar-thumb-[var(--accent-color)] scrollbar-track-[var(--panel-bg-alt)]">
+                     <div className="col-span-1 md:col-span-1 flex flex-col gap-4 overflow-y-auto h-[85vh] pr-2 hide-scrollbar">
                          <LabelingPanel
                              songs={songs}
                              namedLists={namedLists}
