@@ -402,6 +402,143 @@ const prepareMatrix = (
     // MODIFIED Return Value:
     return { vectors: featureVectors, songIds: vectorSongIds, isOHEColumn: isOHEColumnDefinition };
 };
+
+// --- NEW: Helper to prepare matrix with fixed feature structure (for inference) ---
+const prepareMatrixWithFixedStructure = (
+    activeFeatures: { id: string; features: Features }[],
+    fixedFeatureKeys: Set<keyof Features>,
+    fixedKeyToIndex: Map<string, number> | null,
+    fixedScaleToIndex: Map<string, number> | null,
+    logFn: (msg: string, level: LogLevel) => void
+): { vectors: number[][], songIds: string[], isOHEColumn: boolean[] } | null => {
+    logFn('Preparing numerical matrix with fixed feature structure for inference...', 'info');
+
+    if (activeFeatures.length === 0) {
+        logFn('No active songs with features available for matrix preparation.', 'warn');
+        return null;
+    }
+
+    const numKeyDimensions = fixedKeyToIndex ? fixedKeyToIndex.size : 0;
+    const numScaleDimensions = fixedScaleToIndex ? fixedScaleToIndex.size : 0;
+
+    // Construct vectors using the fixed structure
+    const featureVectors: number[][] = [];
+    const vectorSongIds: string[] = [];
+    let isOHEColumnDefinition: boolean[] = [];
+    let isOHEColumnDefinitionFinalized = false;
+    let inconsistencyFound = false;
+
+    activeFeatures.forEach(({ id, features }, rowIndex) => {
+        const vec: number[] = [];
+        if (rowIndex === 0) {
+            isOHEColumnDefinition = [];
+        }
+
+        for (const key of canonicalFeatureOrder) {
+            if (!fixedFeatureKeys.has(key)) continue;
+            const value = features[key];
+
+            // Handle missing features - use default values
+            if (value === undefined || value === null) {
+                logFn(`Warning: Feature ${key} is missing for song ${id}. Using default values.`, 'warn');
+                // Use defaults based on feature type
+                if (key === 'key' && fixedKeyToIndex) {
+                    vec.push(...Array(numKeyDimensions).fill(0));
+                    if (rowIndex === 0) {
+                        isOHEColumnDefinition.push(...Array(numKeyDimensions).fill(true));
+                    }
+                } else if (key === 'keyScale' && fixedScaleToIndex) {
+                    vec.push(...Array(numScaleDimensions).fill(0));
+                    if (rowIndex === 0) {
+                        isOHEColumnDefinition.push(...Array(numScaleDimensions).fill(true));
+                    }
+                } else {
+                    // For other features, we need to know the expected length
+                    // This is a fallback - ideally all features should be present
+                    logFn(`Error: Cannot determine default for missing feature ${key}.`, 'error');
+                    inconsistencyFound = true;
+                }
+                continue;
+            }
+
+            if (key === 'key' && fixedKeyToIndex) {
+                const keyOneHot = Array(numKeyDimensions).fill(0);
+                const index = fixedKeyToIndex.get(value as string);
+                if (index !== undefined) {
+                    keyOneHot[index] = 1;
+                } else {
+                    // Unknown key - log warning but don't fail
+                    logFn(`Warning: Unknown key value "${value}" for song ${id}. Using zero vector.`, 'warn');
+                }
+                vec.push(...keyOneHot);
+                if (rowIndex === 0) {
+                    isOHEColumnDefinition.push(...Array(numKeyDimensions).fill(true));
+                }
+            } else if (key === 'keyScale' && fixedScaleToIndex) {
+                const scaleOneHot = Array(numScaleDimensions).fill(0);
+                const index = fixedScaleToIndex.get(value as string);
+                if (index !== undefined) {
+                    scaleOneHot[index] = 1;
+                } else {
+                    logFn(`Warning: Unknown scale value "${value}" for song ${id}. Using zero vector.`, 'warn');
+                }
+                vec.push(...scaleOneHot);
+                if (rowIndex === 0) {
+                    isOHEColumnDefinition.push(...Array(numScaleDimensions).fill(true));
+                }
+            } else if (Array.isArray(value)) {
+                const numericalArray = value as number[];
+                vec.push(...numericalArray);
+                if (rowIndex === 0) {
+                    isOHEColumnDefinition.push(...Array(numericalArray.length).fill(false));
+                }
+            } else if (typeof value === 'number') {
+                vec.push(value);
+                if (rowIndex === 0) {
+                    isOHEColumnDefinition.push(false);
+                }
+            }
+        }
+
+        if (rowIndex === 0) {
+            isOHEColumnDefinitionFinalized = true;
+        }
+
+        if (vec.length > 0 && !inconsistencyFound) {
+            if (isOHEColumnDefinitionFinalized && vec.length !== isOHEColumnDefinition.length) {
+                logFn(`Row ${rowIndex} for song ${id} has inconsistent vector length (${vec.length}) compared to definition (${isOHEColumnDefinition.length}). Aborting.`, 'error');
+                inconsistencyFound = true;
+            }
+            featureVectors.push(vec);
+            vectorSongIds.push(id);
+        } else if (!inconsistencyFound) {
+            logFn(`Song ${id} resulted in an empty vector.`, 'warn');
+        }
+    });
+
+    if (inconsistencyFound || !isOHEColumnDefinitionFinalized) {
+        logFn('Matrix preparation failed due to inconsistencies or lack of data.', 'error');
+        return null;
+    }
+
+    if (featureVectors.length > 0) {
+        const firstLen = featureVectors[0].length;
+        if (!featureVectors.every(v => v.length === firstLen)) {
+            logFn('Constructed feature vectors have inconsistent lengths.', 'error');
+            return null;
+        }
+        if (firstLen === 0) {
+            logFn('Constructed feature vectors are empty (length 0).', 'warn');
+            return null;
+        }
+        logFn(`Prepared ${featureVectors.length} vectors for inference, each with ${firstLen} dimensions.`, 'complete');
+    } else {
+        logFn('No valid feature vectors constructed for matrix prep.', 'warn');
+        return null;
+    }
+
+    return { vectors: featureVectors, songIds: vectorSongIds, isOHEColumn: isOHEColumnDefinition };
+};
 // --- End Helper ---
 
 export default function DashboardPage() {
@@ -483,6 +620,49 @@ export default function DashboardPage() {
   // --- NEW: State for Stored Cache Data ---
   const [cacheData, setCacheData] = useState<CacheData | null>(null);
   const [cacheStatus, setCacheStatus] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
+  // --- END NEW ---
+
+  // --- NEW: State for Training Pipeline Parameters (for inference) ---
+  interface ProcessingStats {
+    method: ProcessingMethod;
+    range?: [number, number];
+    means?: number[];
+    stdDevs?: number[];
+    mins?: number[];
+    maxs?: number[];
+    isOHEColumn: boolean[];
+  }
+  interface ReductionModelInfo {
+    method: ReductionMethod;
+    dimensions: number;
+    params?: Record<string, unknown>;
+    // For PCA, we'll store the transformation matrix after reduction
+    // For t-SNE/UMAP, we'll need to handle differently
+  }
+  const [trainingPipelineParams, setTrainingPipelineParams] = useState<{
+    selectedFeatures: Set<string> | null;
+    processingStats: ProcessingStats | null;
+    reductionModelInfo: ReductionModelInfo | null;
+    unprocessedDataForInference: UnprocessedDataType | null; // Store original unprocessed data for PCA transform
+    trainingFeatureKeys: Set<keyof Features> | null; // Store which feature keys were used in training matrix
+    trainingKeyToIndex: Map<string, number> | null; // Store key OHE mapping from training
+    trainingScaleToIndex: Map<string, number> | null; // Store scale OHE mapping from training
+  }>({
+    selectedFeatures: null,
+    processingStats: null,
+    reductionModelInfo: null,
+    unprocessedDataForInference: null,
+    trainingFeatureKeys: null,
+    trainingKeyToIndex: null,
+    trainingScaleToIndex: null,
+  });
+
+  // --- NEW: State for New Audio Inference ---
+  const [inferenceFile, setInferenceFile] = useState<File | null>(null);
+  const [inferenceSongId, setInferenceSongId] = useState<string | null>(null);
+  const [isProcessingInference, setIsProcessingInference] = useState<boolean>(false);
+  const [inferenceResult, setInferenceResult] = useState<{ cluster: number; songId: string } | null>(null);
+  const [inferenceError, setInferenceError] = useState<string | null>(null);
   // --- END NEW ---
 
   // --- Log Helper Function ---
@@ -568,6 +748,10 @@ export default function DashboardPage() {
             const { type, payload } = event.data;
             addLogMessage(`[Main] Received Druid worker message: ${type}`);
             switch(type) {
+                case 'druidWorkerReady':
+                    // Worker is ready
+                    addLogMessage('Druid worker ready.', 'complete');
+                    break;
                 case 'reductionComplete':
                      setIsReducing(false);
                      const newPoints: Record<string, number[]> = {};
@@ -575,12 +759,18 @@ export default function DashboardPage() {
                          newPoints[id] = payload.reducedData[index];
                      });
                      setReducedDataPoints(prev => ({ ...prev, ...newPoints }));
-                     if (payload.reducedData && payload.reducedData.length > 0 && payload.reducedData[0]) {
-                         setReductionDimensions(payload.reducedData[0].length);
+                     const reducedDim = payload.reducedData && payload.reducedData.length > 0 && payload.reducedData[0] 
+                         ? payload.reducedData[0].length 
+                         : 0;
+                     if (reducedDim > 0) {
+                         setReductionDimensions(reducedDim);
                      } else {
                          setReductionDimensions(0); // Reset if no data
                      }
                      addLogMessage(`Dimensionality reduction complete. ${payload.songIds.length} points updated.`, 'complete');
+                      // --- NEW: Store reduction model info for inference ---
+                      // Note: We'll need to get the method from the reduction handler
+                      // For now, we'll store it when reduction starts
                       // --- NEW: Reset K-Means as re-reduction invalidates it ---
                       handleResetKmeans();
                       // --- NEW: Update Latest Stage ---
@@ -690,10 +880,39 @@ export default function DashboardPage() {
             addLogMessage(`[Main] Received Data Processing worker message: ${type}`);
 
             switch (type) {
+                case 'transformComplete':
+                    // Handle transformComplete (used during inference)
+                    // This is handled by the inference promise, so we just log it
+                    addLogMessage(`[Data Processing] Transform complete for inference.`, 'info');
+                    break;
+                case 'transformError':
+                    // Handle transformError (used during inference)
+                    // This is handled by the inference promise, so we just log it
+                    addLogMessage(`[Data Processing] Transform error: ${payload?.error || 'Unknown error'}`, 'error');
+                    break;
                 case 'processingComplete':
                     // --- Update state on processing complete --- 
                     setProcessedData({ vectors: payload.processedVectors, songIds: payload.songIds });
                     addLogMessage(`Data processing complete. Stored ${payload.processedVectors?.length} processed vectors.`, 'complete');
+                    // --- NEW: Store processing statistics for inference ---
+                    if (payload.stats) {
+                        setTrainingPipelineParams(prev => {
+                            if (!prev.processingStats) {
+                                return prev; // Should not happen, but guard
+                            }
+                            return {
+                                ...prev,
+                                processingStats: {
+                                    ...prev.processingStats,
+                                    means: payload.stats?.means,
+                                    stdDevs: payload.stats?.stdDevs,
+                                    mins: payload.stats?.mins,
+                                    maxs: payload.stats?.maxs,
+                                }
+                            };
+                        });
+                        addLogMessage('Stored processing statistics for inference.', 'info');
+                    }
                     // --- NEW: Reset K-Means as reprocessing invalidates it ---
                     handleResetKmeans(); 
                     // ----------------------------------------------------------
@@ -1440,6 +1659,13 @@ export default function DashboardPage() {
     }
     // --- End Categorization & Application ---
 
+    // --- NEW: Store selected features for inference ---
+    setTrainingPipelineParams(prev => ({
+        ...prev,
+        selectedFeatures: new Set(selectedFeatures)
+    }));
+    addLogMessage(`[Pipeline] Stored selected features for inference: [${[...selectedFeatures].join(', ')}]`, 'info');
+
     // --- Conditional Worker Trigger ---
     if (songIdsToExtract.size > 0) {
         addLogMessage(`[Worker Start] Initializing worker process for ${songIdsToExtract.size} songs...`, 'info');
@@ -1509,6 +1735,7 @@ export default function DashboardPage() {
       addLogMessage, setAvailableFeatureKeys, setUnprocessedData, setProcessedData,
       setReducedDataPoints, handleResetKmeans, setReductionDimensions,
       setFeatureStatus, setSongFeatures, setIsProcessing, setProcessingSongIds,
+      setTrainingPipelineParams, // Add new setter dependency
       // Dependencies: Refs used
       workerRef,
       // Dependencies: Helper functions
@@ -1571,6 +1798,47 @@ export default function DashboardPage() {
     if (matrixResult) {
         // Store unprocessed data & clear downstream
         setUnprocessedData(matrixResult);
+        
+        // --- NEW: Extract and store feature structure for inference ---
+        // Determine common features (same logic as in prepareMatrix)
+        let commonFeatures = new Set<keyof Features>();
+        const firstFeatures = activeFeatures[0].features;
+        commonFeatures = new Set(canonicalFeatureOrder.filter(key =>
+            firstFeatures[key] !== undefined && firstFeatures[key] !== null
+        ));
+        for (let i = 1; i < activeFeatures.length; i++) {
+            const currentFeatures = activeFeatures[i].features;
+            commonFeatures.forEach(key => {
+                if (currentFeatures[key] === undefined || currentFeatures[key] === null) {
+                    commonFeatures.delete(key);
+                }
+            });
+        }
+        
+        // Extract OHE mappings
+        const uniqueKeys = new Set<string>();
+        const uniqueScales = new Set<string>();
+        let keyToIndex: Map<string, number> | null = null;
+        let scaleToIndex: Map<string, number> | null = null;
+        if (commonFeatures.has('key')) {
+            activeFeatures.forEach(({ features }) => { uniqueKeys.add(features.key!); });
+            const keyList = Array.from(uniqueKeys).sort();
+            keyToIndex = new Map(keyList.map((k, i) => [k, i]));
+        }
+        if (commonFeatures.has('keyScale')) {
+            activeFeatures.forEach(({ features }) => { uniqueScales.add(features.keyScale!); });
+            const scaleList = Array.from(uniqueScales).sort();
+            scaleToIndex = new Map(scaleList.map((s, i) => [s, i]));
+        }
+        
+        // --- NEW: Store unprocessed data for inference (needed for PCA transform) ---
+        setTrainingPipelineParams(prev => ({
+            ...prev,
+            unprocessedDataForInference: matrixResult,
+            trainingFeatureKeys: commonFeatures,
+            trainingKeyToIndex: keyToIndex,
+            trainingScaleToIndex: scaleToIndex
+        }));
         setProcessedData(null);
         setReducedDataPoints({});
         handleResetKmeans();
@@ -1578,6 +1846,17 @@ export default function DashboardPage() {
         // REMOVED: Incorrect reset here as well
         // setAvailableFeatureKeys(null); // REMOVED: This was incorrect
         addLogMessage('Stored unprocessed matrix. Cleared downstream results. Sending to worker...', 'info');
+
+        // --- NEW: Store processing method and range for inference ---
+        setTrainingPipelineParams(prev => ({
+            ...prev,
+            processingStats: {
+                ...prev.processingStats,
+                method: method,
+                range: range,
+                isOHEColumn: matrixResult.isOHEColumn,
+            } as ProcessingStats
+        }));
 
         // Set processing flag and send to worker
         setIsProcessingData(true);
@@ -1608,7 +1887,7 @@ export default function DashboardPage() {
     setUnprocessedData, setProcessedData, setReducedDataPoints, 
     setKmeansAssignments, setKmeansCentroids, setKmeansIteration, 
     setReductionDimensions, setIsProcessingData,
-    setAvailableFeatureKeys // Add new setter dependency
+    setAvailableFeatureKeys, setTrainingPipelineParams // Add new setter dependency
 ]);
 
   // --- MODIFIED Handler: Trigger dimensionality reduction ---
@@ -1646,6 +1925,16 @@ export default function DashboardPage() {
      // --- Preconditions Met ---
 
      addLogMessage(`Starting dimensionality reduction with method: ${reductionMethod}, dimensions: ${dimensions}`, 'info');
+     // --- NEW: Store reduction model info for inference ---
+     setTrainingPipelineParams(prev => ({
+         ...prev,
+         reductionModelInfo: {
+             method: reductionMethod,
+             dimensions: dimensions,
+             params: params,
+         }
+     }));
+     addLogMessage(`[Pipeline] Stored reduction model info for inference: ${reductionMethod} -> ${dimensions}D`, 'info');
      setIsReducing(true);
      // Clear previous reduced points for active songs and subsequent clustering results
      setReducedDataPoints(prev => {
@@ -1675,7 +1964,7 @@ export default function DashboardPage() {
      processedData, isProcessing, isProcessingData, isReducing, 
      addLogMessage, druidWorkerRef,
      setIsReducing, setReducedDataPoints, setKmeansAssignments, setKmeansCentroids, setKmeansIteration,
-     setAvailableFeatureKeys // Add new setter dependency
+     setAvailableFeatureKeys, setTrainingPipelineParams // Add new setter dependency
  ]);
 
   // --- Clustering Handler (handleRunClustering) ---
@@ -1877,6 +2166,286 @@ export default function DashboardPage() {
     setIsAboutDialogOpen(prev => !prev);
   };
 
+  // --- NEW: Handler for Uploading New Audio for Inference ---
+  const handleUploadInferenceFile = useCallback((file: File) => {
+    if (!file.type.startsWith('audio/')) {
+      setInferenceError('Please select an audio file.');
+      return;
+    }
+    setInferenceFile(file);
+    setInferenceError(null);
+    setInferenceResult(null);
+    // Generate a unique ID for this inference file
+    const fileId = `inference_${Date.now()}_${file.name}`;
+    setInferenceSongId(fileId);
+    addLogMessage(`[Inference] File uploaded: ${file.name}`, 'info');
+  }, [addLogMessage]);
+
+  // --- NEW: Handler for Processing New Audio Inference ---
+  const handleProcessNewAudioInference = useCallback(async () => {
+    if (!inferenceFile || !inferenceSongId) {
+      setInferenceError('No file uploaded.');
+      return;
+    }
+
+    // Check if pipeline is ready
+    if (!trainingPipelineParams.selectedFeatures || 
+        !trainingPipelineParams.processingStats || 
+        !trainingPipelineParams.reductionModelInfo ||
+        !trainingPipelineParams.unprocessedDataForInference ||
+        !trainingPipelineParams.trainingFeatureKeys ||
+        kmeansCentroids.length === 0) {
+      setInferenceError('Pipeline not ready. Please complete the training pipeline first (extract features, process data, reduce dimensions, and initialize clustering).');
+      return;
+    }
+
+    setIsProcessingInference(true);
+    setInferenceError(null);
+    setInferenceResult(null);
+    addLogMessage('[Inference] Starting inference pipeline...', 'info');
+
+    try {
+      // Step 1: Decode audio
+      if (!audioContextRef.current) {
+        throw new Error('Audio context not initialized.');
+      }
+      const arrayBuffer = await inferenceFile.arrayBuffer();
+      const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
+      const audioData = audioBuffer.getChannelData(0);
+      const audioVector = Array.from(audioData);
+      addLogMessage('[Inference] Audio decoded successfully.', 'info');
+
+      // Step 2: Extract features using the same features as training
+      if (!workerRef.current || !essentiaWorkerReady) {
+        throw new Error('Essentia worker not ready.');
+      }
+      const selectedFeaturesArray = trainingPipelineParams.selectedFeatures ? [...trainingPipelineParams.selectedFeatures] : [];
+      addLogMessage(`[Inference] Extracting features: [${selectedFeaturesArray.join(', ')}]...`, 'info');
+      
+      const currentWorkerRef = workerRef.current;
+      if (!currentWorkerRef) {
+        throw new Error('Worker ref is null.');
+      }
+      
+      const featureExtractionPromise = new Promise<Features>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Feature extraction timeout.'));
+        }, 60000); // 60 second timeout
+
+        const messageHandler = (event: MessageEvent) => {
+          if (event.data.type === 'featureExtractionComplete' && event.data.songId === inferenceSongId) {
+            clearTimeout(timeout);
+            currentWorkerRef.removeEventListener('message', messageHandler);
+            resolve(event.data.features);
+          } else if (event.data.type === 'featureExtractionError' && event.data.songId === inferenceSongId) {
+            clearTimeout(timeout);
+            currentWorkerRef.removeEventListener('message', messageHandler);
+            reject(new Error(event.data.error || 'Feature extraction failed.'));
+          }
+        };
+
+        currentWorkerRef.addEventListener('message', messageHandler);
+        currentWorkerRef.postMessage({
+          type: 'extractFeatures',
+          payload: {
+            songId: inferenceSongId,
+            audioVector: audioVector,
+            sampleRate: audioBuffer.sampleRate,
+            featuresToExtract: selectedFeaturesArray
+          }
+        });
+      });
+
+      const features = await featureExtractionPromise;
+      addLogMessage('[Inference] Features extracted successfully.', 'complete');
+
+      // Step 3: Prepare matrix (single row) using the same feature structure as training
+      const matrixResult = prepareMatrixWithFixedStructure(
+        [{ id: inferenceSongId, features }],
+        trainingPipelineParams.trainingFeatureKeys!,
+        trainingPipelineParams.trainingKeyToIndex,
+        trainingPipelineParams.trainingScaleToIndex,
+        addLogMessage
+      );
+      if (!matrixResult || matrixResult.vectors.length === 0) {
+        throw new Error('Failed to prepare feature matrix. Ensure all required features are extracted.');
+      }
+      const newFeatureVector = matrixResult.vectors[0];
+
+      // Validate dimension consistency
+      const trainingVectorDim = trainingPipelineParams.unprocessedDataForInference.vectors[0]?.length;
+      if (newFeatureVector.length !== trainingVectorDim) {
+        throw new Error(`Feature dimension mismatch: new audio has ${newFeatureVector.length} features, training data has ${trainingVectorDim} features.`);
+      }
+      addLogMessage('[Inference] Feature matrix prepared.', 'info');
+
+      // Step 4: Transform using stored processing stats
+      const processingStats = trainingPipelineParams.processingStats;
+      const currentDataProcessingWorkerRef = dataProcessingWorkerRef.current;
+      if (!currentDataProcessingWorkerRef) {
+        throw new Error('Data processing worker not ready.');
+      }
+      addLogMessage(`[Inference] Applying ${processingStats.method} transformation...`, 'info');
+
+      const transformPromise = new Promise<number[]>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Data transformation timeout.'));
+        }, 30000);
+
+        const messageHandler = (event: MessageEvent) => {
+          if (event.data.type === 'transformComplete') {
+            clearTimeout(timeout);
+            currentDataProcessingWorkerRef.removeEventListener('message', messageHandler);
+            if (event.data.payload.transformedVectors.length > 0) {
+              resolve(event.data.payload.transformedVectors[0]);
+            } else {
+              reject(new Error('No transformed vector returned.'));
+            }
+          } else if (event.data.type === 'transformError') {
+            clearTimeout(timeout);
+            currentDataProcessingWorkerRef.removeEventListener('message', messageHandler);
+            reject(new Error(event.data.payload.error || 'Transformation failed.'));
+          }
+        };
+
+        currentDataProcessingWorkerRef.addEventListener('message', messageHandler);
+        currentDataProcessingWorkerRef.postMessage({
+          type: 'transformData',
+          payload: {
+            vectors: [newFeatureVector],
+            songIds: [inferenceSongId],
+            isOHEColumn: processingStats.isOHEColumn,
+            method: processingStats.method,
+            range: processingStats.range,
+            means: processingStats.means,
+            stdDevs: processingStats.stdDevs,
+            mins: processingStats.mins,
+            maxs: processingStats.maxs,
+          }
+        });
+      });
+
+      const transformedVector = await transformPromise;
+      addLogMessage('[Inference] Data transformation complete.', 'complete');
+
+      // Step 5: Reduce dimensions
+      const reductionInfo = trainingPipelineParams.reductionModelInfo;
+      if (!druidWorkerRef.current) {
+        throw new Error('Druid worker not ready.');
+      }
+      addLogMessage(`[Inference] Reducing dimensions using ${reductionInfo.method}...`, 'info');
+
+      const currentDruidWorkerRef = druidWorkerRef.current;
+      if (!currentDruidWorkerRef) {
+        throw new Error('Druid worker ref is null.');
+      }
+
+      // For dimensionality reduction, we need to use processed training vectors
+      // These should match what was used during training
+      if (!processedData || processedData.vectors.length === 0) {
+        throw new Error('Processed training data not available. Cannot transform new data.');
+      }
+
+      const reductionPromise = new Promise<number[]>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Dimensionality reduction timeout.'));
+        }, 60000);
+
+        const messageHandler = (event: MessageEvent) => {
+          if (event.data.type === 'reductionComplete') {
+            clearTimeout(timeout);
+            currentDruidWorkerRef.removeEventListener('message', messageHandler);
+            if (event.data.payload.reducedData.length > 0) {
+              resolve(event.data.payload.reducedData[0]);
+            } else {
+              reject(new Error('No reduced vector returned.'));
+            }
+          } else if (event.data.type === 'reductionError') {
+            clearTimeout(timeout);
+            currentDruidWorkerRef.removeEventListener('message', messageHandler);
+            reject(new Error(event.data.payload.error || 'Dimensionality reduction failed.'));
+          }
+        };
+
+        currentDruidWorkerRef.addEventListener('message', messageHandler);
+        currentDruidWorkerRef.postMessage({
+          type: 'transformNewData',
+          payload: {
+            newVectors: [transformedVector],
+            songIds: [inferenceSongId],
+            method: reductionInfo.method,
+            dimensions: reductionInfo.dimensions,
+            trainingVectors: processedData.vectors, // Use processed training vectors
+            ...reductionInfo.params
+          }
+        });
+      });
+
+      const reducedVector = await reductionPromise;
+      addLogMessage('[Inference] Dimensionality reduction complete.', 'complete');
+
+      // Step 6: Assign to cluster
+      if (!kmeansWorkerRef.current) {
+        throw new Error('K-Means worker not ready.');
+      }
+      addLogMessage('[Inference] Assigning to cluster...', 'info');
+
+      const currentKmeansWorkerRef = kmeansWorkerRef.current;
+      if (!currentKmeansWorkerRef) {
+        throw new Error('K-Means worker ref is null.');
+      }
+
+      const assignmentPromise = new Promise<number>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Cluster assignment timeout.'));
+        }, 30000);
+
+        const messageHandler = (event: MessageEvent) => {
+          if (event.data.type === 'assignNewPointsComplete') {
+            clearTimeout(timeout);
+            currentKmeansWorkerRef.removeEventListener('message', messageHandler);
+            if (event.data.payload.assignments.length > 0) {
+              resolve(event.data.payload.assignments[0]);
+            } else {
+              reject(new Error('No assignment returned.'));
+            }
+          } else if (event.data.type === 'kmeansError') {
+            clearTimeout(timeout);
+            currentKmeansWorkerRef.removeEventListener('message', messageHandler);
+            reject(new Error(event.data.payload.error || 'Cluster assignment failed.'));
+          }
+        };
+
+        currentKmeansWorkerRef.addEventListener('message', messageHandler);
+        currentKmeansWorkerRef.postMessage({
+          type: 'assignNewPoints',
+          payload: {
+            newReducedData: [reducedVector],
+            songIds: [inferenceSongId],
+            centroids: kmeansCentroids
+          }
+        });
+      });
+
+      const clusterAssignment = await assignmentPromise;
+      addLogMessage(`[Inference] Assigned to cluster ${clusterAssignment}.`, 'complete');
+      
+      setInferenceResult({ cluster: clusterAssignment, songId: inferenceSongId });
+      setIsProcessingInference(false);
+
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setInferenceError(errorMessage);
+      setIsProcessingInference(false);
+      addLogMessage(`[Inference] Error: ${errorMessage}`, 'error');
+    }
+  }, [
+    inferenceFile, inferenceSongId, trainingPipelineParams, kmeansCentroids,
+    essentiaWorkerReady, addLogMessage, workerRef, dataProcessingWorkerRef,
+    druidWorkerRef, kmeansWorkerRef, audioContextRef, processedData
+  ]);
+  // --- END NEW ---
+
   // NEW: Handler for user selecting visualization stage
   const handleVisualizationStageSelect = useCallback((stage: ProcessingStage) => {
     addLogMessage(`User selected visualization stage: ${stage}`, 'info');
@@ -2062,14 +2631,18 @@ export default function DashboardPage() {
             isProcessingData={isProcessingData}
             hasProcessedData={hasProcessedData}
             onProcessData={handleStartDataProcessing}
-            // K-Means Step Control Props
+            onShowAlgoExplanation={handleShowAlgoExplanation}
             isKmeansInitialized={isKmeansInitialized}
             onNextStep={handleNextKmeansStep}
-            // Pass isClustering to potentially disable init button while clustering is active
             isClusteringActive={isClustering}
-            // --- NEW: Pass algo explanation handler ---
-            onShowAlgoExplanation={handleShowAlgoExplanation} 
-            // -----------------------------------------
+            // --- NEW Props for Audio Inference ---
+            hasKmeansCentroids={kmeansCentroids.length > 0}
+            inferenceFile={inferenceFile}
+            isProcessingInference={isProcessingInference}
+            inferenceResult={inferenceResult}
+            inferenceError={inferenceError}
+            onUploadInferenceFile={handleUploadInferenceFile}
+            onProcessInference={handleProcessNewAudioInference}
           />
 
           {/* Log Panel (Middle Column, Bottom Row) */}

@@ -33,6 +33,14 @@ interface ControlsPanelProps {
   isKmeansInitialized: boolean;
   onNextStep: () => void;
   isClusteringActive: boolean; // New flag specifically for K-Means activity state
+  // --- NEW Props for Audio Inference ---
+  hasKmeansCentroids: boolean; // True if clustering has centroids (ready for inference)
+  inferenceFile: File | null;
+  isProcessingInference: boolean;
+  inferenceResult: { cluster: number; songId: string } | null;
+  inferenceError: string | null;
+  onUploadInferenceFile: (file: File) => void;
+  onProcessInference: () => void;
 }
 
 // Placeholder for available MIR features
@@ -86,7 +94,15 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
   // --- NEW Props for Manual K-Means Control ---
   isKmeansInitialized,
   onNextStep,
-  isClusteringActive
+  isClusteringActive,
+  // --- NEW Props for Audio Inference ---
+  hasKmeansCentroids,
+  inferenceFile,
+  isProcessingInference,
+  inferenceResult,
+  inferenceError,
+  onUploadInferenceFile,
+  onProcessInference
 }) => {
   // State for selected controls
   const [selectedMirFeatures, setSelectedMirFeatures] = useState<Set<string>>(() => new Set(['mfcc'])); // Default MFCC
@@ -471,6 +487,74 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
           >
               Next Step
             </Button>
+        </div>
+
+        {/* === NEW: New Audio Inference === */}
+        <div 
+            className="mb-4 p-3"
+            data-augmented-ui="tl-clip br-clip border"
+            style={{ '--aug-border-bg': 'var(--foreground)',
+            '--aug-border-all': '1px',
+              '--aug-border-y': '2px' } as React.CSSProperties} >
+          <h3 className="text-md font-semibold ml-2 mb-2 text-[var(--accent-primary)]">New Audio Inference</h3>
+          
+          {/* File Upload */}
+          <div className="mb-2">
+            <input
+              type="file"
+              accept="audio/*"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  onUploadInferenceFile(file);
+                }
+              }}
+              disabled={isProcessingInference || !hasKmeansCentroids}
+              className="text-xs w-full p-1 bg-gray-400/10 border border-gray-400/50 disabled:opacity-[var(--disabled-opacity)] disabled:cursor-not-allowed"
+            />
+          </div>
+
+          {/* Uploaded File Display */}
+          {inferenceFile && (
+            <div className="mb-2 text-xs text-[var(--text-secondary)]">
+              File: {inferenceFile.name}
+            </div>
+          )}
+
+          {/* Error Display */}
+          {inferenceError && (
+            <div className="mb-2 text-xs text-red-400">
+              Error: {inferenceError}
+            </div>
+          )}
+
+          {/* Result Display */}
+          {inferenceResult && (
+            <div className="mb-2 p-2 bg-[var(--accent-primary)]/20 border border-[var(--accent-primary)]/50 text-xs">
+              <div className="font-semibold text-[var(--accent-primary)]">Cluster Assignment:</div>
+              <div className="mt-1">Cluster {inferenceResult.cluster}</div>
+            </div>
+          )}
+
+          {/* Process Button */}
+          <Button
+            variant="primary"
+            enableTilt={true}
+            onClick={onProcessInference}
+            disabled={!hasKmeansCentroids || !inferenceFile || isProcessingInference || isProcessing || isProcessingData || isReducing}
+            className="w-full text-sm"
+            title={
+              !hasKmeansCentroids ? "Initialize clustering first" :
+              !inferenceFile ? "Upload an audio file first" :
+              isProcessingInference ? "Processing inference..." :
+              isProcessing ? "MIR processing active..." :
+              isProcessingData ? "Data processing active..." :
+              isReducing ? "Reduction active..." :
+              "Process new audio and assign to cluster"
+            }
+          >
+            {isProcessingInference ? 'Processing...' : 'Process & Assign to Cluster'}
+          </Button>
         </div>
       </div>
 

@@ -7103,6 +7103,7 @@ __webpack_require__.r(__webpack_exports__);
 
 // Main message handler
 self.onmessage = async (event) => {
+    var _a;
     console.log("Druid worker received message EVENT:", event);
     // Add detailed log of the received data
     console.log("Druid worker received message DATA:", JSON.stringify(event.data, null, 2));
@@ -7182,6 +7183,126 @@ self.onmessage = async (event) => {
             console.error(`[Druid Worker] Error during dimensionality reduction (${method}):`, error);
             self.postMessage({ type: 'reductionError', payload: { error: errorMessage } });
         }
+        return;
+    }
+    if (type === 'transformNewData') {
+        const { newVectors, songIds, method, dimensions, trainingVectors, perplexity, neighbors, minDist } = payload;
+        console.log(`[Druid Worker] Transforming new data with method: ${method}, dimensions: ${dimensions}`);
+        console.log(`[Druid Worker] New vectors: ${newVectors.length}, Training vectors: ${trainingVectors.length}`);
+        if (!newVectors || newVectors.length === 0 || !newVectors[0] || newVectors[0].length === 0) {
+            self.postMessage({ type: 'reductionError', payload: { error: 'Received empty or invalid new vectors.' } });
+            return;
+        }
+        if (newVectors.length !== songIds.length) {
+            self.postMessage({ type: 'reductionError', payload: { error: 'Mismatch between number of new vectors and song IDs.' } });
+            return;
+        }
+        if (!trainingVectors || trainingVectors.length === 0) {
+            self.postMessage({ type: 'reductionError', payload: { error: 'Training vectors required for transformation.' } });
+            return;
+        }
+        // Validate dimension consistency
+        const newVectorDim = newVectors[0].length;
+        const trainingVectorDim = (_a = trainingVectors[0]) === null || _a === void 0 ? void 0 : _a.length;
+        if (newVectorDim !== trainingVectorDim) {
+            self.postMessage({
+                type: 'reductionError',
+                payload: { error: `Dimension mismatch: new vectors have ${newVectorDim} dimensions, training vectors have ${trainingVectorDim} dimensions.` }
+            });
+            return;
+        }
+        try {
+            // For PCA, we can fit on training data and transform new data
+            // For t-SNE/UMAP, this is more complex and may not work well
+            if (method === 'pca') {
+                console.log('[Druid Worker] Using PCA for transformation...');
+                // Create PCA model with training data and fit it
+                const trainingMatrix = _saehrimnir_druidjs__WEBPACK_IMPORTED_MODULE_0__.Matrix.from(trainingVectors);
+                const pcaModel = new _saehrimnir_druidjs__WEBPACK_IMPORTED_MODULE_0__.PCA(trainingMatrix, { d: dimensions });
+                // Fit the model on training data (transform training data to compute principal components)
+                pcaModel.transform(); // This computes the principal components from training data
+                // Transform new data using the fitted PCA model
+                // DruidJS PCA.transform() accepts a Matrix or number[][] as parameter to transform new data
+                const transformedResult = pcaModel.transform(newVectors);
+                // Convert result to array format
+                let transformedNewData;
+                if (Array.isArray(transformedResult)) {
+                    // Check if it's a 2D array or 1D array
+                    if (transformedResult.length > 0 && Array.isArray(transformedResult[0])) {
+                        transformedNewData = transformedResult;
+                    }
+                    else {
+                        // It's a 1D array, wrap it in an array to make it 2D
+                        transformedNewData = [transformedResult];
+                    }
+                }
+                else if (transformedResult instanceof _saehrimnir_druidjs__WEBPACK_IMPORTED_MODULE_0__.Matrix) {
+                    transformedNewData = transformedResult.to2dArray;
+                }
+                else {
+                    // Fallback: try to access as array property
+                    const fallbackArray = transformedResult.to2dArray || transformedResult.asArray || [];
+                    // Ensure it's 2D
+                    if (fallbackArray.length > 0 && Array.isArray(fallbackArray[0])) {
+                        transformedNewData = fallbackArray;
+                    }
+                    else {
+                        transformedNewData = [fallbackArray];
+                    }
+                }
+                console.log(`[Druid Worker] PCA transformation complete. Transformed ${transformedNewData.length} new points.`);
+                self.postMessage({
+                    type: 'reductionComplete',
+                    payload: {
+                        reducedData: transformedNewData,
+                        songIds: songIds
+                    }
+                });
+            }
+            else {
+                // t-SNE and UMAP don't support direct transformation of new points
+                // We need to re-fit with training + new data
+                console.log(`[Druid Worker] ${method} requires re-fitting with training + new data...`);
+                const combinedVectors = [...trainingVectors, ...newVectors];
+                const combinedMatrix = _saehrimnir_druidjs__WEBPACK_IMPORTED_MODULE_0__.Matrix.from(combinedVectors);
+                let drInstance;
+                switch (method) {
+                    case 'tsne':
+                        drInstance = new _saehrimnir_druidjs__WEBPACK_IMPORTED_MODULE_0__.TSNE(combinedMatrix, {
+                            d: dimensions,
+                            perplexity: perplexity !== null && perplexity !== void 0 ? perplexity : 30,
+                        });
+                        break;
+                    case 'umap':
+                        drInstance = new _saehrimnir_druidjs__WEBPACK_IMPORTED_MODULE_0__.UMAP(combinedMatrix, {
+                            d: dimensions,
+                            n_neighbors: neighbors !== null && neighbors !== void 0 ? neighbors : 5,
+                            min_dist: minDist !== null && minDist !== void 0 ? minDist : 0.1,
+                        });
+                        break;
+                    default:
+                        throw new Error(`Unsupported method for transformation: ${method}`);
+                }
+                const combinedReduced = drInstance.transform();
+                const combinedReducedArray = combinedReduced.to2dArray;
+                // Extract only the new data points
+                const transformedNewData = combinedReducedArray.slice(trainingVectors.length);
+                console.log(`[Druid Worker] ${method} transformation complete. Transformed ${transformedNewData.length} new points.`);
+                self.postMessage({
+                    type: 'reductionComplete',
+                    payload: {
+                        reducedData: transformedNewData,
+                        songIds: songIds
+                    }
+                });
+            }
+        }
+        catch (error) {
+            const errorMessage = (error instanceof Error) ? error.message : String(error);
+            console.error(`[Druid Worker] Error during transformation (${method}):`, error);
+            self.postMessage({ type: 'reductionError', payload: { error: errorMessage } });
+        }
+        return;
     }
 };
 // Generic error handler for the worker itself

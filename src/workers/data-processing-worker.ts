@@ -12,6 +12,19 @@ interface ProcessDataPayload {
     range?: NormalizationRange; // Only used for 'normalize'
 }
 
+interface TransformDataPayload {
+    vectors: number[][];
+    songIds: string[];
+    isOHEColumn: boolean[];
+    method: ProcessingMethod;
+    range?: NormalizationRange;
+    // Pre-computed statistics from training data
+    means?: number[];
+    stdDevs?: number[];
+    mins?: number[];
+    maxs?: number[];
+}
+
 // --- Helper Functions for Scaling ---
 
 // Calculates mean and standard deviation for each column
@@ -134,12 +147,15 @@ const normalize = (vectors: number[][], isOHEColumn: boolean[], range: Normaliza
 
 type WorkerRecvMessageData =
     | { type: 'processData', payload: ProcessDataPayload }
+    | { type: 'transformData', payload: TransformDataPayload }
     | { type: 'init', payload?: unknown }; // Init might not have a payload
 
 type WorkerSendMessageData =
-    | { type: 'processingComplete', payload: { processedVectors: number[][], songIds: string[] } }
+    | { type: 'processingComplete', payload: { processedVectors: number[][], songIds: string[], stats?: { means?: number[], stdDevs?: number[], mins?: number[], maxs?: number[] } } }
     | { type: 'processingError', payload: { error: string } }
-    | { type: 'dataProcessingWorkerReady', payload: boolean };
+    | { type: 'dataProcessingWorkerReady', payload: boolean }
+    | { type: 'transformComplete', payload: { transformedVectors: number[][], songIds: string[] } }
+    | { type: 'transformError', payload: { error: string } };
 
 // Helper to post messages with type safety (Optional but good practice)
 const postMsg = (message: WorkerSendMessageData) => {
@@ -172,15 +188,21 @@ self.onmessage = (event: MessageEvent<WorkerRecvMessageData>) => {
                 console.table(vectors);
                 // --- End Log ---
 
+                let stats: { means?: number[], stdDevs?: number[], mins?: number[], maxs?: number[] } | undefined = undefined;
+
                 switch (method) {
                     case 'standardize':
+                        const stdStats = getColumnStats(vectors);
                         processedVectors = standardize(vectors, isOHEColumn);
+                        stats = { means: stdStats.means, stdDevs: stdStats.stdDevs };
                         break;
                     case 'normalize':
                         if (!range) {
                             console.warn("[Data Processing Worker] Normalization range not provided, defaulting to [0, 1].");
                         }
+                        const normStats = getColumnMinMax(vectors);
                         processedVectors = normalize(vectors, isOHEColumn, range ?? [0, 1]);
+                        stats = { mins: normStats.mins, maxs: normStats.maxs };
                         break;
                     case 'none':
                     default: // Pass through if 'none' or unknown
@@ -195,10 +217,10 @@ self.onmessage = (event: MessageEvent<WorkerRecvMessageData>) => {
                 console.table(processedVectors);
                 // --- End Log ---
 
-                // Send processed data back to the main thread
+                // Send processed data back to the main thread with stats
                 postMsg({
                     type: 'processingComplete',
-                    payload: { processedVectors, songIds }
+                    payload: { processedVectors, songIds, stats }
                 });
 
             } catch (error: unknown) {
@@ -211,6 +233,103 @@ self.onmessage = (event: MessageEvent<WorkerRecvMessageData>) => {
                  }
                 postMsg({
                     type: 'processingError',
+                    payload: { error: errorMessage }
+                });
+            }
+            break;
+
+        case 'transformData':
+            try {
+                const transformPayload = payload as TransformDataPayload;
+                const { vectors, songIds, isOHEColumn, method, range, means, stdDevs, mins, maxs } = transformPayload;
+                let transformedVectors: number[][] = [];
+
+                if (!vectors || vectors.length === 0) {
+                    throw new Error("Received empty or invalid vectors for transformation.");
+                }
+
+                if (!isOHEColumn || isOHEColumn.length !== vectors[0]?.length) {
+                    throw new Error("Received invalid or mismatched OHE column definition.");
+                }
+
+                console.log(`[Data Processing Worker] Transforming data using stored statistics (Method: ${method})...`);
+
+                switch (method) {
+                    case 'standardize':
+                        if (!means || !stdDevs) {
+                            throw new Error("Standardization requires means and stdDevs to be provided.");
+                        }
+                        transformedVectors = [];
+                        const numCols = vectors[0]?.length ?? 0;
+                        for (let i = 0; i < vectors.length; i++) {
+                            const row: number[] = [];
+                            for (let j = 0; j < numCols; j++) {
+                                if (isOHEColumn[j]) {
+                                    row.push(vectors[i][j]);
+                                } else {
+                                    const stdDev = stdDevs[j];
+                                    const scaledValue = (stdDev === 0) ? 0 : (vectors[i][j] - means[j]) / stdDev;
+                                    row.push(scaledValue);
+                                }
+                            }
+                            transformedVectors.push(row);
+                        }
+                        break;
+                    case 'normalize':
+                        if (!mins || !maxs) {
+                            throw new Error("Normalization requires mins and maxs to be provided.");
+                        }
+                        if (!range) {
+                            console.warn("[Data Processing Worker] Normalization range not provided, defaulting to [0, 1].");
+                        }
+                        const [minRange, maxRange] = range ?? [0, 1];
+                        transformedVectors = [];
+                        const numColsNorm = vectors[0]?.length ?? 0;
+                        for (let i = 0; i < vectors.length; i++) {
+                            const row: number[] = [];
+                            for (let j = 0; j < numColsNorm; j++) {
+                                if (isOHEColumn[j]) {
+                                    row.push(vectors[i][j]);
+                                } else {
+                                    const minCol = mins[j];
+                                    const maxCol = maxs[j];
+                                    const rangeCol = maxCol - minCol;
+                                    let scaledValue: number;
+                                    if (rangeCol === 0) {
+                                        scaledValue = minRange;
+                                    } else {
+                                        scaledValue = minRange + ((vectors[i][j] - minCol) * (maxRange - minRange)) / rangeCol;
+                                    }
+                                    row.push(scaledValue);
+                                }
+                            }
+                            transformedVectors.push(row);
+                        }
+                        break;
+                    case 'none':
+                    default:
+                        console.log("[Data Processing Worker] Method is 'none', passing data through.");
+                        transformedVectors = vectors;
+                        break;
+                }
+
+                console.log(`[Data Processing Worker] Transformation complete. ${transformedVectors.length} vectors transformed.`);
+
+                postMsg({
+                    type: 'transformComplete',
+                    payload: { transformedVectors, songIds }
+                });
+
+            } catch (error: unknown) {
+                console.error("[Data Processing Worker] Error transforming data:", error);
+                let errorMessage = 'Unknown transformation error';
+                if (error instanceof Error) {
+                    errorMessage = error.message;
+                } else if (typeof error === 'string') {
+                    errorMessage = error;
+                }
+                postMsg({
+                    type: 'transformError',
                     payload: { error: errorMessage }
                 });
             }

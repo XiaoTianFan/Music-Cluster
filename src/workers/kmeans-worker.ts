@@ -25,6 +25,12 @@ interface InitializeTrainingPayload {
     k: number;
 }
 
+interface AssignNewPointsPayload {
+    newReducedData: number[][];
+    songIds: string[];
+    centroids: number[][];
+}
+
 interface StepCompletePayload {
     iteration: number;
     centroids: number[][];
@@ -41,21 +47,28 @@ interface InitializationCompletePayload {
 
 interface KMeansErrorPayload {
     error: string;
-    whileDoing?: 'init' | 'step' | 'reset' | 'conversion';
+    whileDoing?: 'init' | 'step' | 'reset' | 'conversion' | 'assignment';
 }
 
 // Define message types for receiving
 type WorkerRecvMessageData =
     | { type: 'initializeTraining', payload: InitializeTrainingPayload }
     | { type: 'runNextStep' }
-    | { type: 'resetTraining' };
+    | { type: 'resetTraining' }
+    | { type: 'assignNewPoints', payload: AssignNewPointsPayload };
+
+interface AssignNewPointsCompletePayload {
+    assignments: number[];
+    songIds: string[];
+}
 
 // Define message types for sending
 type WorkerSendMessageData =
     | { type: 'initializationComplete', payload: InitializationCompletePayload }
     | { type: 'stepComplete', payload: StepCompletePayload }
     | { type: 'resetComplete' }
-    | { type: 'kmeansError', payload: KMeansErrorPayload };
+    | { type: 'kmeansError', payload: KMeansErrorPayload }
+    | { type: 'assignNewPointsComplete', payload: AssignNewPointsCompletePayload };
 
 // Helper to post messages with type safety
 const postMsg = (message: WorkerSendMessageData) => {
@@ -363,6 +376,77 @@ self.onmessage = async (event: MessageEvent<WorkerRecvMessageData>) => {
 
             postMsg({ type: 'kmeansError', payload: { error: errorMessage, whileDoing: 'step' } });
             // Do not automatically reset, let the main thread decide
+        }
+        return;
+    }
+
+    // --- Assign New Points ---
+    if (type === 'assignNewPoints') {
+        const { payload } = event.data;
+        const { newReducedData, songIds, centroids } = payload as AssignNewPointsPayload;
+
+        console.log(`[KMeans Worker] Assigning ${newReducedData.length} new points to ${centroids.length} clusters...`);
+
+        try {
+            // Validate inputs
+            if (!newReducedData || newReducedData.length === 0) {
+                throw new Error('Received empty or invalid new reduced data.');
+            }
+            if (!centroids || centroids.length === 0) {
+                throw new Error('Received empty or invalid centroids.');
+            }
+            if (newReducedData.length !== songIds.length) {
+                throw new Error('Mismatch between number of data points and song IDs.');
+            }
+
+            // Check dimension consistency
+            // Ensure newReducedData is properly formatted as number[][]
+            const normalizedData: number[][] = newReducedData.map(item => 
+                Array.isArray(item) ? item : [item]
+            );
+            
+            const dataDim = normalizedData[0]?.length;
+            const centroidDim = centroids[0]?.length;
+            if (!dataDim || !centroidDim || dataDim !== centroidDim) {
+                throw new Error(`Dimension mismatch: new data has ${dataDim} dimensions, centroids have ${centroidDim} dimensions.`);
+            }
+
+            // Create tensors - ensure we flatten correctly
+            const flatData = normalizedData.flat();
+            if (flatData.length !== normalizedData.length * dataDim) {
+                throw new Error(`Data flattening error: expected ${normalizedData.length * dataDim} values, got ${flatData.length}`);
+            }
+            const newDataTensor = tf.tensor2d(flatData, [normalizedData.length, dataDim]);
+            const centroidsTensor = tf.tensor2d(centroids.flat(), [centroids.length, centroidDim]);
+
+            // Calculate assignments using existing function
+            const assignmentsTensor = calculateAssignments(newDataTensor, centroidsTensor);
+            const assignmentsArray = await assignmentsTensor.array() as number[];
+
+            // Cleanup tensors
+            tf.dispose(newDataTensor);
+            tf.dispose(centroidsTensor);
+            tf.dispose(assignmentsTensor);
+
+            console.log(`[KMeans Worker] Assignment complete. Assigned ${newReducedData.length} points.`);
+
+            postMsg({
+                type: 'assignNewPointsComplete',
+                payload: {
+                    assignments: assignmentsArray,
+                    songIds: songIds
+                }
+            });
+
+        } catch (assignError: unknown) {
+            console.error('[KMeans Worker] Error assigning new points:', assignError);
+            let errorMessage = 'Unknown error during assignment';
+            if (assignError instanceof Error) {
+                errorMessage = assignError.message;
+            } else if (typeof assignError === 'string') {
+                errorMessage = assignError;
+            }
+            postMsg({ type: 'kmeansError', payload: { error: errorMessage, whileDoing: 'assignment' } });
         }
         return;
     }

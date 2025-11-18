@@ -134539,7 +134539,7 @@ const updateCentroids = async (data, assignments, k, oldCentroids) => {
 };
 // --- Main Message Handler ---
 self.onmessage = async (event) => {
-    var _a;
+    var _a, _b, _c;
     console.log('[KMeans Worker] Received message:', event.data.type);
     const { type } = event.data;
     // --- Reset Training ---
@@ -134763,6 +134763,66 @@ self.onmessage = async (event) => {
             }
             postMsg({ type: 'kmeansError', payload: { error: errorMessage, whileDoing: 'step' } });
             // Do not automatically reset, let the main thread decide
+        }
+        return;
+    }
+    // --- Assign New Points ---
+    if (type === 'assignNewPoints') {
+        const { payload } = event.data;
+        const { newReducedData, songIds, centroids } = payload;
+        console.log(`[KMeans Worker] Assigning ${newReducedData.length} new points to ${centroids.length} clusters...`);
+        try {
+            // Validate inputs
+            if (!newReducedData || newReducedData.length === 0) {
+                throw new Error('Received empty or invalid new reduced data.');
+            }
+            if (!centroids || centroids.length === 0) {
+                throw new Error('Received empty or invalid centroids.');
+            }
+            if (newReducedData.length !== songIds.length) {
+                throw new Error('Mismatch between number of data points and song IDs.');
+            }
+            // Check dimension consistency
+            // Ensure newReducedData is properly formatted as number[][]
+            const normalizedData = newReducedData.map(item => Array.isArray(item) ? item : [item]);
+            const dataDim = (_b = normalizedData[0]) === null || _b === void 0 ? void 0 : _b.length;
+            const centroidDim = (_c = centroids[0]) === null || _c === void 0 ? void 0 : _c.length;
+            if (!dataDim || !centroidDim || dataDim !== centroidDim) {
+                throw new Error(`Dimension mismatch: new data has ${dataDim} dimensions, centroids have ${centroidDim} dimensions.`);
+            }
+            // Create tensors - ensure we flatten correctly
+            const flatData = normalizedData.flat();
+            if (flatData.length !== normalizedData.length * dataDim) {
+                throw new Error(`Data flattening error: expected ${normalizedData.length * dataDim} values, got ${flatData.length}`);
+            }
+            const newDataTensor = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.tensor2d(flatData, [normalizedData.length, dataDim]);
+            const centroidsTensor = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.tensor2d(centroids.flat(), [centroids.length, centroidDim]);
+            // Calculate assignments using existing function
+            const assignmentsTensor = calculateAssignments(newDataTensor, centroidsTensor);
+            const assignmentsArray = await assignmentsTensor.array();
+            // Cleanup tensors
+            _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.dispose(newDataTensor);
+            _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.dispose(centroidsTensor);
+            _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.dispose(assignmentsTensor);
+            console.log(`[KMeans Worker] Assignment complete. Assigned ${newReducedData.length} points.`);
+            postMsg({
+                type: 'assignNewPointsComplete',
+                payload: {
+                    assignments: assignmentsArray,
+                    songIds: songIds
+                }
+            });
+        }
+        catch (assignError) {
+            console.error('[KMeans Worker] Error assigning new points:', assignError);
+            let errorMessage = 'Unknown error during assignment';
+            if (assignError instanceof Error) {
+                errorMessage = assignError.message;
+            }
+            else if (typeof assignError === 'string') {
+                errorMessage = assignError;
+            }
+            postMsg({ type: 'kmeansError', payload: { error: errorMessage, whileDoing: 'assignment' } });
         }
         return;
     }

@@ -11,7 +11,7 @@ This web application demonstrates and visualizes the process of unsupervised k-m
 *   **K-Means Clustering:** Performs k-means clustering on the reduced data points using **TensorFlow.js** in a Web Worker.
 *   **Step-by-Step Visualization:** Interactively observe the k-means algorithm's progress: centroid initialization, data point assignment, and centroid updates.
 *   **Interactive Scatter Plot:** Visualize the final clusters in a 2D/3D scatter plot (using **Plotly.js**), with points colored by cluster, tooltips showing song titles, zooming, and panning.
-*   **New Song Classification (To be implemented):** Upload a new song after training a model to see how it's classified within the existing clusters.
+*   **New Song Classification:** Upload a new song after training a model to see how it's classified within the existing clusters.
 *   **Unique UI/UX:** Features a scifi aesthetic with neon and steam-ish elements, built with **Augmented UI**.
 
 ## ⚙️ Technology Stack
