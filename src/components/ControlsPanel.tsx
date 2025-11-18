@@ -41,6 +41,7 @@ interface ControlsPanelProps {
   inferenceError: string | null;
   onUploadInferenceFile: (file: File) => void;
   onProcessInference: () => void;
+  inferenceReductionMethod: ReductionMethod | null;
 }
 
 // Placeholder for available MIR features
@@ -102,7 +103,8 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
   inferenceResult,
   inferenceError,
   onUploadInferenceFile,
-  onProcessInference
+  onProcessInference,
+  inferenceReductionMethod
 }) => {
   // State for selected controls
   const [selectedMirFeatures, setSelectedMirFeatures] = useState<Set<string>>(() => new Set(['mfcc'])); // Default MFCC
@@ -114,6 +116,13 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
   const [selectedProcessingMethod, setSelectedProcessingMethod] = useState<ProcessingMethod>('standardize');
   const [selectedNormalizationRange, setSelectedNormalizationRange] = useState<'[0,1]' | '[-1,1]'>('[0,1]');
   // -------------------------------------------
+
+  const isTsneInference = inferenceReductionMethod === 'tsne';
+  const showTsneWarning = isTsneInference || selectedDimReducer === 'tsne';
+  const inferenceReductionLabel = (inferenceReductionMethod ?? selectedDimReducer)?.toUpperCase();
+  const inferenceLimitationMessage = showTsneWarning
+    ? 't-SNE embeddings cannot place unseen songs without re-fitting the entire dataset. Re-run dimensionality reduction with PCA or UMAP before running inference.'
+    : null;
 
   const handleMirFeatureToggle = (featureId: string) => {
     setSelectedMirFeatures(prev => {
@@ -491,12 +500,28 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
 
         {/* === NEW: New Audio Inference === */}
         <div 
-            className="mb-4 p-3"
+            className="mb-4 p-3 relative group"
             data-augmented-ui="tl-clip br-clip border"
             style={{ '--aug-border-bg': 'var(--foreground)',
             '--aug-border-all': '1px',
               '--aug-border-y': '2px' } as React.CSSProperties} >
           <h3 className="text-md font-semibold ml-2 mb-2 text-[var(--accent-primary)]">New Audio Inference</h3>
+          <button
+              onClick={() => onShowAlgoExplanation('reduction-inference')}
+              className="absolute top-1 right-1 px-1 py-0.5 text-xs bg-gray-700 hover:bg-gray-600 text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-blue-900/50 invisible group-hover:visible disabled:opacity-[var(--disabled-opacity)] disabled:cursor-not-allowed z-10"
+              title="Explain PCA vs. t-SNE vs. UMAP for inference"
+          >
+              ?
+          </button>
+
+          {inferenceLimitationMessage && (
+            <div className="mb-2 text-xs text-yellow-200 bg-yellow-900/30 border border-yellow-700/40 p-2">
+              <div className="font-semibold text-yellow-200/90 mb-1">Heads up: {inferenceReductionLabel} mode</div>
+              <p className="text-[var(--text-secondary)] text-[11px] leading-snug">
+                {inferenceLimitationMessage}
+              </p>
+            </div>
+          )}
           
           {/* File Upload */}
           <div className="mb-2">
@@ -541,9 +566,18 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
             variant="primary"
             enableTilt={true}
             onClick={onProcessInference}
-            disabled={!hasKmeansCentroids || !inferenceFile || isProcessingInference || isProcessing || isProcessingData || isReducing}
+            disabled={
+              !hasKmeansCentroids ||
+              !inferenceFile ||
+              isProcessingInference ||
+              isProcessing ||
+              isProcessingData ||
+              isReducing ||
+              isTsneInference
+            }
             className="w-full text-sm"
             title={
+              isTsneInference ? "t-SNE can't reuse the original embedding for new songs. Switch to PCA or UMAP before inference." :
               !hasKmeansCentroids ? "Initialize clustering first" :
               !inferenceFile ? "Upload an audio file first" :
               isProcessingInference ? "Processing inference..." :

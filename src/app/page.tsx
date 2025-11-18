@@ -2213,6 +2213,18 @@ export default function DashboardPage() {
       return;
     }
 
+    const reductionInfo = trainingPipelineParams.reductionModelInfo;
+    if (!reductionInfo) {
+      setInferenceError('Reduction model information missing. Re-run dimensionality reduction.');
+      return;
+    }
+    if (reductionInfo.method === 'tsne') {
+      const message = 't-SNE embeddings cannot ingest unseen songs without retraining the entire reduction. Re-run reduction with PCA or UMAP before inference.';
+      setInferenceError(message);
+      addLogMessage(`[Inference] ${message}`, 'warn');
+      return;
+    }
+
     setIsProcessingInference(true);
     setInferenceError(null);
     setInferenceResult(null);
@@ -2344,7 +2356,6 @@ export default function DashboardPage() {
       addLogMessage('[Inference] Data transformation complete.', 'complete');
 
       // Step 5: Reduce dimensions
-      const reductionInfo = trainingPipelineParams.reductionModelInfo;
       if (!druidWorkerRef.current) {
         throw new Error('Druid worker not ready.');
       }
@@ -2749,6 +2760,7 @@ export default function DashboardPage() {
             inferenceError={inferenceError}
             onUploadInferenceFile={handleUploadInferenceFile}
             onProcessInference={handleProcessNewAudioInference}
+            inferenceReductionMethod={trainingPipelineParams.reductionModelInfo?.method ?? null}
           />
 
           {/* Log Panel (Middle Column, Bottom Row) */}

@@ -19,6 +19,10 @@
     "name": "Uniform Manifold Approximation and Projection (UMAP)",
     "explanation": "A non-linear dimensionality reduction technique similar to t-SNE but often faster and potentially better at preserving the global structure of the data. It's based on manifold learning techniques and topological data analysis. It seeks to model the manifold on which the data is assumed to lie and builds a low-dimensional representation that preserves the essential topological structure. Good balance between local and global structure preservation."
   },
+  "reduction-inference": {
+    "name": "Dimensionality Reduction & Inference",
+    "explanation": "PCA learns an explicit linear projection matrix, so once it is fit we can directly multiply any new feature vector to land it in the same reduced space. UMAP builds a neighbor graph and exposes an approximate transform that lets us insert new samples by relating them to that graph, so inference works when we keep the fitted structure. t-SNE, however, is a non-parametric optimization: it rebuilds the entire low-dimensional layout every time, so a single new song would force all points to move. Because our clusters and centroids would no longer align, we disable inference when the training reduction used t-SNE."
+  },
   "kmeans": {
     "name": "K-Means Clustering",
     "explanation": "An iterative algorithm that partitions a dataset into 'k' distinct, non-overlapping clusters. It aims to minimize the within-cluster variance (sum of squared distances between points and their assigned cluster centroid). Steps: 1. Initialize 'k' centroids randomly. 2. Assign each data point to the nearest centroid. 3. Recalculate the centroid position as the mean of all points assigned to it. 4. Repeat steps 2-3 until centroids no longer move significantly or a maximum number of iterations is reached. Sensitive to initial centroid placement and assumes spherical clusters."

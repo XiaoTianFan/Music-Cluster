@@ -24,6 +24,14 @@ The primary goal is to provide an interactive and educational tool for visualizi
 *   **UI Styling:** augmented-ui, Tailwind CSS
 *   **Concurrency:** Web Workers (`essentia-worker.ts`, `data-processing-worker.ts`, `druid-worker.ts`, `kmeans-worker.ts`)
 
+## Dimensionality Reduction & Inference Caveats
+
+Not every dimensionality reduction technique behaves the same way once you try to embed a *new* song after training:
+
+* **PCA** is linear and yields an explicit projection matrix. We can multiply any new (processed) feature vector by that matrix and land it in the same coordinate system, so inference is deterministic and fast.
+* **UMAP** preserves a neighbor graph of the training data. Its implementation in DruidJS exposes an approximate `transform` that inserts new points by comparing them to that fixed graph, so inference is feasible as long as we keep the fitted structure around.
+* **t-SNE** optimizes all points jointly and does not learn a reusable transform. Adding even a single new song forces the entire layout to be recomputed, which would invalidate the saved clusters/centroids. In practice this manifests as new songs collapsing near the origin or drifting away from the trained clusters, so the UI blocks inference whenever the reduction step used t-SNE. Use PCA or UMAP (or retrain reduction + clustering with the new song included) when you need inference.
+
 ## Author
 
 [Xiaotian Fan](https://xiaotianfanx.com)
