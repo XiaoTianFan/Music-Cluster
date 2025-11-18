@@ -37,7 +37,7 @@ interface InferPayload {
 }
 
 // Make TypeScript happy about the global worker scope
-declare var self: DedicatedWorkerGlobalScope;
+declare const self: DedicatedWorkerGlobalScope;
 
 import * as tf from '@tensorflow/tfjs';
 
