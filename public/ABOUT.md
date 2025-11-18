@@ -26,6 +26,4 @@ The primary goal is to provide an interactive and educational tool for visualizi
 
 ## Author
 
-Xiaotian Fan, an As33 production.
-
-As33 is a group that follows their fundamental principles to donate 1/3 of their dispensible income to the community, focusing on developing human-centered AI applications. 
+[Xiaotian Fan](https://xiaotianfanx.com)
