@@ -71,8 +71,8 @@ const availableMirFeatures = [
 // Placeholder for available Dim Reduction algorithms
 const availableDimReducers = [
   { id: 'pca', name: 'PCA' },
-  { id: 'tsne', name: 't-SNE' },
   { id: 'umap', name: 'UMAP' },
+  { id: 'tsne', name: 't-SNE' },
 ];
 
 const ControlsPanel: React.FC<ControlsPanelProps> = ({ 
