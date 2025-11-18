@@ -774,6 +774,8 @@ export default function DashboardPage() {
                       // For now, we'll store it when reduction starts
                       // --- NEW: Reset K-Means as re-reduction invalidates it ---
                       handleResetKmeans();
+                      setInferencePlotPoint(null);
+                      setInferenceResult(null);
                       // --- NEW: Update Latest Stage ---
                       setLatestSuccessfulStage('reduced');
                       addLogMessage('Reduction complete. Updating latest stage to: reduced', 'info');
@@ -924,6 +926,8 @@ export default function DashboardPage() {
                     }
                     // --- NEW: Reset K-Means as reprocessing invalidates it ---
                     handleResetKmeans(); 
+                    setInferencePlotPoint(null);
+                    setInferenceResult(null);
                     // ----------------------------------------------------------
                     // --- NEW: Update Latest Stage ---
                     setLatestSuccessfulStage('processed');

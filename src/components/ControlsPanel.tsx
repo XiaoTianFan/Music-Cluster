@@ -106,7 +106,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
 }) => {
   // State for selected controls
   const [selectedMirFeatures, setSelectedMirFeatures] = useState<Set<string>>(() => new Set(['mfcc'])); // Default MFCC
-  const [selectedDimReducer, setSelectedDimReducer] = useState<ReductionMethod>('tsne'); // Default t-SNE
+  const [selectedDimReducer, setSelectedDimReducer] = useState<ReductionMethod>('umap'); // Default t-SNE
   const [targetDimensions, setTargetDimensions] = useState<number>(2); // Default 2D
   const [numClusters, setNumClusters] = useState<number>(3); // Default k=3
 

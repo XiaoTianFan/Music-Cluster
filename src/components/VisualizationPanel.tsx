@@ -780,8 +780,15 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
             `<b>${label}</b>`,
             `Song ID: ${inferencePoint!.songId}`,
           ];
+          let inferenceColor = '#f97316';
           if (selectedDataStage === 'clustering' && inferencePoint!.cluster !== undefined) {
             hoverLines.push(`Cluster: ${inferencePoint!.cluster}`);
+            const clusterName = `Cluster ${inferencePoint!.cluster}`;
+            if (categoryToColor[clusterName]) {
+              inferenceColor = categoryToColor[clusterName];
+            } else {
+              inferenceColor = plotlyColors[inferencePoint!.cluster % plotlyColors.length];
+            }
           }
           inferenceTrace = {
             x: [inferenceX],
@@ -792,7 +799,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
             marker: {
               symbol: 'triangle-up',
               size: 16,
-              color: '#f97316',
+              color: inferenceColor,
               line: { color: '#ffffff', width: 2 },
               opacity: 1,
             },
