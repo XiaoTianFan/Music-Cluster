@@ -134539,7 +134539,7 @@ const updateCentroids = async (data, assignments, k, oldCentroids) => {
 };
 // --- Main Message Handler ---
 self.onmessage = async (event) => {
-    var _a, _b, _c;
+    var _a, _b, _c, _d;
     console.log('[KMeans Worker] Received message:', event.data.type);
     const { type } = event.data;
     // --- Reset Training ---
@@ -134782,14 +134782,68 @@ self.onmessage = async (event) => {
             if (newReducedData.length !== songIds.length) {
                 throw new Error('Mismatch between number of data points and song IDs.');
             }
-            // Check dimension consistency
-            // Ensure newReducedData is properly formatted as number[][]
-            const normalizedData = newReducedData.map(item => Array.isArray(item) ? item : [item]);
-            const dataDim = (_b = normalizedData[0]) === null || _b === void 0 ? void 0 : _b.length;
-            const centroidDim = (_c = centroids[0]) === null || _c === void 0 ? void 0 : _c.length;
-            if (!dataDim || !centroidDim || dataDim !== centroidDim) {
-                throw new Error(`Dimension mismatch: new data has ${dataDim} dimensions, centroids have ${centroidDim} dimensions.`);
+            // Check dimension consistency with enhanced validation
+            console.log(`[KMeans Worker] Validating input data format...`);
+            console.log(`[KMeans Worker] newReducedData type: ${Array.isArray(newReducedData) ? 'array' : typeof newReducedData}, length: ${Array.isArray(newReducedData) ? newReducedData.length : 'N/A'}`);
+            if (newReducedData.length > 0) {
+                console.log(`[KMeans Worker] First item type: ${Array.isArray(newReducedData[0]) ? 'array' : typeof newReducedData[0]}, value: ${JSON.stringify(newReducedData[0])}`);
             }
+            console.log(`[KMeans Worker] Centroids count: ${centroids.length}, first centroid dimensions: ${((_b = centroids[0]) === null || _b === void 0 ? void 0 : _b.length) || 'N/A'}`);
+            // Ensure newReducedData is properly formatted as number[][]
+            const normalizedData = newReducedData.map((item, index) => {
+                // Handle scalar values
+                if (typeof item === 'number') {
+                    console.warn(`[KMeans Worker] Found scalar at index ${index}, wrapping as array`);
+                    return [item];
+                }
+                // Ensure item is an array
+                if (!Array.isArray(item)) {
+                    console.warn(`[KMeans Worker] Non-array item at index ${index}, attempting conversion`);
+                    return [item];
+                }
+                // Validate all elements are numbers
+                if (!item.every(el => typeof el === 'number')) {
+                    throw new Error(`Invalid data at index ${index}: all elements must be numbers.`);
+                }
+                return item;
+            });
+            // Validate normalizedData structure
+            if (normalizedData.length === 0) {
+                throw new Error('Normalized data is empty after processing.');
+            }
+            // Check dimensions of each data point
+            const dataDim = (_c = normalizedData[0]) === null || _c === void 0 ? void 0 : _c.length;
+            if (!dataDim || dataDim === 0) {
+                throw new Error(`Invalid data dimensions: first data point has ${dataDim || 0} dimensions.`);
+            }
+            // Validate all data points have the same dimensions
+            for (let i = 0; i < normalizedData.length; i++) {
+                if (!Array.isArray(normalizedData[i])) {
+                    throw new Error(`Data point at index ${i} is not an array after normalization.`);
+                }
+                if (normalizedData[i].length !== dataDim) {
+                    throw new Error(`Data point at index ${i} has ${normalizedData[i].length} dimensions, expected ${dataDim}.`);
+                }
+            }
+            // Validate centroids
+            const centroidDim = (_d = centroids[0]) === null || _d === void 0 ? void 0 : _d.length;
+            if (!centroidDim || centroidDim === 0) {
+                throw new Error(`Invalid centroid dimensions: first centroid has ${centroidDim || 0} dimensions.`);
+            }
+            // Validate all centroids have the same dimensions
+            for (let i = 0; i < centroids.length; i++) {
+                if (!Array.isArray(centroids[i])) {
+                    throw new Error(`Centroid at index ${i} is not an array.`);
+                }
+                if (centroids[i].length !== centroidDim) {
+                    throw new Error(`Centroid at index ${i} has ${centroids[i].length} dimensions, expected ${centroidDim}.`);
+                }
+            }
+            // Final dimension consistency check
+            if (dataDim !== centroidDim) {
+                throw new Error(`Dimension mismatch: new data has ${dataDim} dimensions, centroids have ${centroidDim} dimensions. Expected both to have ${centroidDim} dimensions.`);
+            }
+            console.log(`[KMeans Worker] Validation passed. Data dimensions: ${dataDim}, Centroid dimensions: ${centroidDim}`);
             // Create tensors - ensure we flatten correctly
             const flatData = normalizedData.flat();
             if (flatData.length !== normalizedData.length * dataDim) {

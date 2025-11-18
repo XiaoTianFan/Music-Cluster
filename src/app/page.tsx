@@ -662,6 +662,7 @@ export default function DashboardPage() {
   const [inferenceSongId, setInferenceSongId] = useState<string | null>(null);
   const [isProcessingInference, setIsProcessingInference] = useState<boolean>(false);
   const [inferenceResult, setInferenceResult] = useState<{ cluster: number; songId: string } | null>(null);
+  const [inferencePlotPoint, setInferencePlotPoint] = useState<{ songId: string; vector: number[]; cluster?: number; label?: string } | null>(null);
   const [inferenceError, setInferenceError] = useState<string | null>(null);
   // --- END NEW ---
 
@@ -779,6 +780,11 @@ export default function DashboardPage() {
                       // ----------------------------------
                       // -------------------------------------------------------
                       break;
+                case 'transformNewDataComplete':
+                     // This message is emitted when transforming a single vector for inference.
+                     // The inference pipeline attaches its own listener, so we simply log here.
+                     addLogMessage('[Druid Worker] Transform new data complete (inference context).', 'info');
+                     break;
                 case 'reductionError':
                      setIsReducing(false);
                      addLogMessage(`Druid Worker Error: ${payload.error}`, 'error');
@@ -847,6 +853,9 @@ export default function DashboardPage() {
                 case 'resetComplete':
                     addLogMessage('K-Means worker state reset confirmed.', 'info');
                     // State reset should happen on the main thread side when reset is requested
+                    break;
+                case 'assignNewPointsComplete':
+                    addLogMessage('K-Means worker assignNewPointsComplete (inference context).', 'info');
                     break;
                 case 'kmeansError':
                     setIsClustering(false);
@@ -2175,6 +2184,7 @@ export default function DashboardPage() {
     setInferenceFile(file);
     setInferenceError(null);
     setInferenceResult(null);
+    setInferencePlotPoint(null);
     // Generate a unique ID for this inference file
     const fileId = `inference_${Date.now()}_${file.name}`;
     setInferenceSongId(fileId);
@@ -2202,6 +2212,7 @@ export default function DashboardPage() {
     setIsProcessingInference(true);
     setInferenceError(null);
     setInferenceResult(null);
+    setInferencePlotPoint(null);
     addLogMessage('[Inference] Starting inference pipeline...', 'info');
 
     try {
@@ -2352,7 +2363,7 @@ export default function DashboardPage() {
         }, 60000);
 
         const messageHandler = (event: MessageEvent) => {
-          if (event.data.type === 'reductionComplete') {
+          if (event.data.type === 'transformNewDataComplete') {
             clearTimeout(timeout);
             currentDruidWorkerRef.removeEventListener('message', messageHandler);
             if (event.data.payload.reducedData.length > 0) {
@@ -2382,7 +2393,90 @@ export default function DashboardPage() {
       });
 
       const reducedVector = await reductionPromise;
-      addLogMessage('[Inference] Dimensionality reduction complete.', 'complete');
+      
+      // Validate reducedVector format before proceeding
+      if (typeof reducedVector === 'number') {
+        // Edge case: scalar returned when dimensions=1, wrap it
+        addLogMessage(`[Inference] Received scalar reduced value, wrapping as array.`, 'info');
+        const wrappedVector = [reducedVector];
+        if (wrappedVector.length !== reductionInfo.dimensions) {
+          throw new Error(`Dimension mismatch: wrapped scalar has ${wrappedVector.length} dimensions, expected ${reductionInfo.dimensions}.`);
+        }
+        addLogMessage(`[Inference] Dimensionality reduction complete. Reduced vector shape: [${wrappedVector.length}].`, 'complete');
+        
+        // Step 6: Assign to cluster
+        if (!kmeansWorkerRef.current) {
+          throw new Error('K-Means worker not ready.');
+        }
+        addLogMessage('[Inference] Assigning to cluster...', 'info');
+
+        const currentKmeansWorkerRef = kmeansWorkerRef.current;
+        if (!currentKmeansWorkerRef) {
+          throw new Error('K-Means worker ref is null.');
+        }
+
+        const assignmentPromise = new Promise<number>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error('Cluster assignment timeout.'));
+          }, 30000);
+
+          const messageHandler = (event: MessageEvent) => {
+            if (event.data.type === 'assignNewPointsComplete') {
+              clearTimeout(timeout);
+              currentKmeansWorkerRef.removeEventListener('message', messageHandler);
+              if (event.data.payload.assignments.length > 0) {
+                resolve(event.data.payload.assignments[0]);
+              } else {
+                reject(new Error('No assignment returned.'));
+              }
+            } else if (event.data.type === 'kmeansError') {
+              clearTimeout(timeout);
+              currentKmeansWorkerRef.removeEventListener('message', messageHandler);
+              reject(new Error(event.data.payload.error || 'Cluster assignment failed.'));
+            }
+          };
+
+          currentKmeansWorkerRef.addEventListener('message', messageHandler);
+          currentKmeansWorkerRef.postMessage({
+            type: 'assignNewPoints',
+            payload: {
+              newReducedData: [wrappedVector],
+              songIds: [inferenceSongId],
+              centroids: kmeansCentroids
+            }
+          });
+        });
+
+        const clusterAssignment = await assignmentPromise;
+        addLogMessage(`[Inference] Assigned to cluster ${clusterAssignment}.`, 'complete');
+        
+        setInferenceResult({ cluster: clusterAssignment, songId: inferenceSongId });
+        setInferencePlotPoint({
+          songId: inferenceSongId,
+          vector: wrappedVector,
+          cluster: clusterAssignment,
+          label: inferenceFile?.name ?? inferenceSongId,
+        });
+        setIsProcessingInference(false);
+        return;
+      }
+      
+      // Validate that reducedVector is an array
+      if (!Array.isArray(reducedVector)) {
+        throw new Error(`Invalid reduced vector format: expected array, got ${typeof reducedVector}.`);
+      }
+      
+      // Validate length matches expected dimensions
+      if (reducedVector.length !== reductionInfo.dimensions) {
+        throw new Error(`Dimension mismatch: reduced vector has ${reducedVector.length} dimensions, expected ${reductionInfo.dimensions}.`);
+      }
+      
+      // Validate all elements are numbers
+      if (!reducedVector.every(item => typeof item === 'number')) {
+        throw new Error(`Invalid reduced vector: all elements must be numbers.`);
+      }
+      
+      addLogMessage(`[Inference] Dimensionality reduction complete. Reduced vector shape: [${reducedVector.length}].`, 'complete');
 
       // Step 6: Assign to cluster
       if (!kmeansWorkerRef.current) {
@@ -2431,12 +2525,19 @@ export default function DashboardPage() {
       addLogMessage(`[Inference] Assigned to cluster ${clusterAssignment}.`, 'complete');
       
       setInferenceResult({ cluster: clusterAssignment, songId: inferenceSongId });
+      setInferencePlotPoint({
+        songId: inferenceSongId,
+        vector: reducedVector,
+        cluster: clusterAssignment,
+        label: inferenceFile?.name ?? inferenceSongId,
+      });
       setIsProcessingInference(false);
 
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       setInferenceError(errorMessage);
       setIsProcessingInference(false);
+      setInferencePlotPoint(null);
       addLogMessage(`[Inference] Error: ${errorMessage}`, 'error');
     }
   }, [
@@ -2612,6 +2713,7 @@ export default function DashboardPage() {
             visualizationDisplayStage={visualizationDisplayStage} // NEW: Pass user's selected stage
             onStageSelect={handleVisualizationStageSelect} // NEW: Pass handler for stage selection
             availableFeatureKeys={availableFeatureKeys} // <-- Pass new prop
+            inferencePoint={inferencePlotPoint}
           />
 
           {/* Controls Panel (Right Column, Full Height, Max Width)*/}
@@ -2659,7 +2761,14 @@ export default function DashboardPage() {
          data-augmented-ui="tl-clip tr-clip border"
          style={{ '--aug-border-color': '#444', '--aug-border-bg': 'transparent' } as React.CSSProperties}
       >
-        <span>Copyright (c) 2025 Xiaotian Fan, As33</span>
+        <span>
+          <a href="https://xiaotianfanx.com" 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="hover:text-gray-400 transition-colors">
+            Copyright (c) 2025 Xiaotian Fan, As33
+            </a>
+          </span>
         <span>|</span>
         <a 
           href="https://github.com/XiaoTianFan/Music-Cluster" 

@@ -1,5 +1,98 @@
 import * as druid from "@saehrimnir/druidjs";
 
+// --- Helper utilities for ensuring numeric arrays ---
+const isTypedNumericArray = (value: unknown): value is ArrayLike<number> => {
+    return (
+        typeof value === 'object' &&
+        value !== null &&
+        ArrayBuffer.isView(value as ArrayLike<unknown>) &&
+        !(value instanceof DataView)
+    );
+};
+
+const ensureNumericValue = (
+    value: unknown,
+    methodLabel: string,
+    rowIndex: number,
+    colIndex: number
+): number => {
+    if (typeof value === 'number') {
+        if (!Number.isFinite(value)) {
+            throw new Error(`[Druid Worker] [${methodLabel}] Value at row ${rowIndex}, col ${colIndex} is not finite.`);
+        }
+        return value;
+    }
+    if (typeof value === 'string' && value.trim() !== '' && !Number.isNaN(Number(value))) {
+        return Number(value);
+    }
+    throw new Error(
+        `[Druid Worker] [${methodLabel}] Value at row ${rowIndex}, col ${colIndex} is not numeric (received ${typeof value}).`
+    );
+};
+
+const convertRowLikeToNumberArray = (
+    value: unknown,
+    methodLabel: string,
+    rowIndex: number
+): number[] => {
+    if (Array.isArray(value)) {
+        return value.map((colValue, colIndex) => ensureNumericValue(colValue, methodLabel, rowIndex, colIndex));
+    }
+    if (isTypedNumericArray(value)) {
+        return Array.from(value as ArrayLike<number>).map((colValue, colIndex) =>
+            ensureNumericValue(colValue, methodLabel, rowIndex, colIndex)
+        );
+    }
+    if (typeof value === 'object' && value !== null) {
+        const numericKeys = Object.keys(value)
+            .filter(key => !Number.isNaN(Number(key)))
+            .sort((a, b) => Number(a) - Number(b));
+        if (numericKeys.length > 0) {
+            return numericKeys.map((key, index) =>
+                ensureNumericValue((value as Record<string, unknown>)[key], methodLabel, rowIndex, index)
+            );
+        }
+    }
+    if (typeof value === 'number') {
+        return [ensureNumericValue(value, methodLabel, rowIndex, 0)];
+    }
+    throw new Error(
+        `[Druid Worker] [${methodLabel}] Unable to convert row ${rowIndex} of type ${typeof value} to numeric array.`
+    );
+};
+
+const ensureRowContainers = (
+    data: unknown,
+    rowCount: number,
+    dimensions: number,
+    methodLabel: string
+): unknown[] => {
+    if (Array.isArray(data)) {
+        return data;
+    }
+    if (isTypedNumericArray(data)) {
+        const flat = Array.from(data as ArrayLike<number>);
+        if (rowCount === 1 && flat.length === dimensions) {
+            return [flat];
+        }
+        if (flat.length % dimensions === 0) {
+            const rows: number[][] = [];
+            for (let i = 0; i < flat.length; i += dimensions) {
+                rows.push(flat.slice(i, i + dimensions));
+            }
+            return rows;
+        }
+        console.warn(
+            `[Druid Worker] [${methodLabel}] Typed array length ${flat.length} not divisible by ${dimensions}. Wrapping as single row.`
+        );
+        return [flat];
+    }
+    if (typeof data === 'object' && data !== null) {
+        return [data];
+    }
+    return [data];
+};
+
 interface ReduceDimensionsPayload {
     featureVectors: number[][];
     songIds: string[];
@@ -191,8 +284,10 @@ self.onmessage = async (event: MessageEvent<WorkerMessageData>) => {
                 // DruidJS PCA.transform() accepts a Matrix or number[][] as parameter to transform new data
                 const transformedResult = pcaModel.transform(newVectors);
                 
-                // Convert result to array format
+                // Convert result to array format with robust validation
                 let transformedNewData: number[][];
+                
+                // Step 1: Convert to array format
                 if (Array.isArray(transformedResult)) {
                     // Check if it's a 2D array or 1D array
                     if (transformedResult.length > 0 && Array.isArray(transformedResult[0])) {
@@ -209,15 +304,59 @@ self.onmessage = async (event: MessageEvent<WorkerMessageData>) => {
                     // Ensure it's 2D
                     if (fallbackArray.length > 0 && Array.isArray(fallbackArray[0])) {
                         transformedNewData = fallbackArray;
+                    } else if (typeof fallbackArray === 'number') {
+                        // Edge case: scalar result when dimensions=1, wrap it
+                        transformedNewData = [[fallbackArray]];
                     } else {
                         transformedNewData = [fallbackArray];
                     }
                 }
                 
-                console.log(`[Druid Worker] PCA transformation complete. Transformed ${transformedNewData.length} new points.`);
+                // Step 2: Validate and normalize format
+                // Ensure transformedNewData is number[][] with correct dimensions
+                transformedNewData = transformedNewData.map((item, index) => {
+                    // Handle scalar values (edge case for dimensions=1)
+                    if (typeof item === 'number') {
+                        console.log(`[Druid Worker] Found scalar at index ${index}, wrapping as array`);
+                        return [item];
+                    }
+                    // Ensure item is an array
+                    if (!Array.isArray(item)) {
+                        console.warn(`[Druid Worker] Non-array item at index ${index}, attempting conversion`);
+                        return [item as number];
+                    }
+                    // Validate length matches expected dimensions
+                    if (item.length !== dimensions) {
+                        console.warn(`[Druid Worker] Vector at index ${index} has ${item.length} dimensions, expected ${dimensions}`);
+                        // Pad or truncate to match dimensions
+                        if (item.length < dimensions) {
+                            return [...item, ...Array(dimensions - item.length).fill(0)];
+                        } else {
+                            return item.slice(0, dimensions);
+                        }
+                    }
+                    return item;
+                });
+                
+                // Step 3: Final validation
+                if (transformedNewData.length !== newVectors.length) {
+                    throw new Error(`Transformed data length (${transformedNewData.length}) doesn't match input length (${newVectors.length})`);
+                }
+                
+                // Validate each vector has correct dimensions
+                for (let i = 0; i < transformedNewData.length; i++) {
+                    if (!Array.isArray(transformedNewData[i])) {
+                        throw new Error(`Transformed data at index ${i} is not an array`);
+                    }
+                    if (transformedNewData[i].length !== dimensions) {
+                        throw new Error(`Transformed data at index ${i} has ${transformedNewData[i].length} dimensions, expected ${dimensions}`);
+                    }
+                }
+                
+                console.log(`[Druid Worker] PCA transformation complete. Transformed ${transformedNewData.length} new points, each with ${dimensions} dimensions.`);
                 
                 self.postMessage({
-                    type: 'reductionComplete',
+                    type: 'transformNewDataComplete',
                     payload: {
                         reducedData: transformedNewData,
                         songIds: songIds
@@ -226,7 +365,8 @@ self.onmessage = async (event: MessageEvent<WorkerMessageData>) => {
             } else {
                 // t-SNE and UMAP don't support direct transformation of new points
                 // We need to re-fit with training + new data
-                console.log(`[Druid Worker] ${method} requires re-fitting with training + new data...`);
+                console.log(`[Druid Worker] ${method.toUpperCase()} requires re-fitting with training + new data...`);
+                console.log(`[Druid Worker] ${method.toUpperCase()} configuration: dimensions=${dimensions}, training vectors=${trainingVectors.length}, new vectors=${newVectors.length}`);
                 const combinedVectors = [...trainingVectors, ...newVectors];
                 const combinedMatrix = druid.Matrix.from(combinedVectors);
                 
@@ -237,6 +377,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessageData>) => {
                             d: dimensions,
                             perplexity: perplexity ?? 30,
                         });
+                        console.log(`[Druid Worker] t-SNE initialized with perplexity=${perplexity ?? 30}`);
                         break;
                     case 'umap':
                         drInstance = new druid.UMAP(combinedMatrix, {
@@ -244,21 +385,126 @@ self.onmessage = async (event: MessageEvent<WorkerMessageData>) => {
                             n_neighbors: neighbors ?? 5,
                             min_dist: minDist ?? 0.1,
                         });
+                        console.log(`[Druid Worker] UMAP initialized with n_neighbors=${neighbors ?? 5}, min_dist=${minDist ?? 0.1}`);
                         break;
                     default:
                         throw new Error(`Unsupported method for transformation: ${method}`);
                 }
                 
+                console.log(`[Druid Worker] Running ${method.toUpperCase()} transformation on combined data...`);
                 const combinedReduced = drInstance.transform();
                 const combinedReducedArray = combinedReduced.to2dArray;
                 
-                // Extract only the new data points
-                const transformedNewData = combinedReducedArray.slice(trainingVectors.length);
+                console.log(`[Druid Worker] [${method.toUpperCase()}] Combined reduced array type: ${Array.isArray(combinedReducedArray) ? 'array' : typeof combinedReducedArray}`);
+                console.log(`[Druid Worker] [${method.toUpperCase()}] Combined reduced array length: ${Array.isArray(combinedReducedArray) ? combinedReducedArray.length : 'N/A'}`);
+                if (Array.isArray(combinedReducedArray) && combinedReducedArray.length > 0) {
+                    console.log(`[Druid Worker] [${method.toUpperCase()}] First item type: ${Array.isArray(combinedReducedArray[0]) ? 'array' : typeof combinedReducedArray[0]}`);
+                    if (Array.isArray(combinedReducedArray[0])) {
+                        console.log(`[Druid Worker] [${method.toUpperCase()}] First item length: ${combinedReducedArray[0].length}`);
+                    }
+                }
                 
-                console.log(`[Druid Worker] ${method} transformation complete. Transformed ${transformedNewData.length} new points.`);
+                // Extract only the new data points
+                const extractedDataRaw = combinedReducedArray.slice(trainingVectors.length);
+                
+                console.log(
+                    `[Druid Worker] [${method.toUpperCase()}] Extracted data length: ${
+                        (extractedDataRaw as unknown[]).length ?? 'N/A'
+                    }`
+                );
+                console.log(
+                    `[Druid Worker] [${method.toUpperCase()}] Extracted data type: ${
+                        Array.isArray(extractedDataRaw) ? 'array' : typeof extractedDataRaw
+                    }`
+                );
+                
+                const rawRows = ensureRowContainers(
+                    extractedDataRaw,
+                    newVectors.length,
+                    dimensions,
+                    method.toUpperCase()
+                );
+                
+                if (rawRows.length > 0) {
+                    console.log(
+                        `[Druid Worker] [${method.toUpperCase()}] First extracted item type: ${
+                            Array.isArray(rawRows[0]) ? 'array' : typeof rawRows[0]
+                        }`
+                    );
+                }
+                
+                // Convert every row-like structure into a plain number[]
+                let transformedNewData: number[][] = rawRows.map((item, index) => {
+                    const numericRow = convertRowLikeToNumberArray(item, method.toUpperCase(), index);
+                    if (numericRow.length !== dimensions) {
+                        console.warn(
+                            `[Druid Worker] [${method.toUpperCase()}] Vector at index ${index} has ${numericRow.length} dimensions, expected ${dimensions}. Padding/truncating...`
+                        );
+                        if (numericRow.length < dimensions) {
+                            const padded = [
+                                ...numericRow,
+                                ...Array(dimensions - numericRow.length).fill(0)
+                            ];
+                            console.log(
+                                `[Druid Worker] [${method.toUpperCase()}] Padded vector at index ${index} from ${numericRow.length} to ${dimensions} dimensions`
+                            );
+                            return padded;
+                        } else {
+                            const truncated = numericRow.slice(0, dimensions);
+                            console.log(
+                                `[Druid Worker] [${method.toUpperCase()}] Truncated vector at index ${index} from ${numericRow.length} to ${dimensions} dimensions`
+                            );
+                            return truncated;
+                        }
+                    }
+                    return numericRow;
+                });
+                
+                // Final validation
+                if (transformedNewData.length !== newVectors.length) {
+                    throw new Error(`Transformed data length (${transformedNewData.length}) doesn't match input length (${newVectors.length})`);
+                }
+                
+                // Validate each vector has correct dimensions
+                // Double-check and fix any remaining dimension mismatches before final validation
+                // This ensures both t-SNE and UMAP outputs are properly formatted
+                for (let i = 0; i < transformedNewData.length; i++) {
+                    if (!Array.isArray(transformedNewData[i])) {
+                        console.error(`[Druid Worker] [${method.toUpperCase()}] Vector at index ${i} is not an array after normalization: ${typeof transformedNewData[i]}`);
+                        // Convert to array
+                        const value = transformedNewData[i] as unknown;
+                        transformedNewData[i] = typeof value === 'number' ? [value] : [value as number];
+                    }
+                    const currentLength = transformedNewData[i].length;
+                    if (currentLength !== dimensions) {
+                        console.warn(`[Druid Worker] [${method.toUpperCase()}] Vector at index ${i} still has ${currentLength} dimensions after normalization, fixing...`);
+                        if (currentLength < dimensions) {
+                            // Pad with zeros
+                            transformedNewData[i] = [...transformedNewData[i], ...Array(dimensions - currentLength).fill(0)];
+                            console.log(`[Druid Worker] [${method.toUpperCase()}] Padded vector at index ${i} to ${dimensions} dimensions`);
+                        } else {
+                            // Truncate
+                            transformedNewData[i] = transformedNewData[i].slice(0, dimensions);
+                            console.log(`[Druid Worker] [${method.toUpperCase()}] Truncated vector at index ${i} to ${dimensions} dimensions`);
+                        }
+                    }
+                }
+                
+                // Final validation - should all pass now
+                // This validation applies to both t-SNE and UMAP outputs
+                for (let i = 0; i < transformedNewData.length; i++) {
+                    if (!Array.isArray(transformedNewData[i])) {
+                        throw new Error(`[${method.toUpperCase()}] Transformed data at index ${i} is not an array after final normalization`);
+                    }
+                    if (transformedNewData[i].length !== dimensions) {
+                        throw new Error(`[${method.toUpperCase()}] Transformed data at index ${i} has ${transformedNewData[i].length} dimensions after normalization, expected ${dimensions}`);
+                    }
+                }
+                
+                console.log(`[Druid Worker] ${method.toUpperCase()} transformation complete. Transformed ${transformedNewData.length} new points, each with ${dimensions} dimensions.`);
                 
                 self.postMessage({
-                    type: 'reductionComplete',
+                    type: 'transformNewDataComplete',
                     payload: {
                         reducedData: transformedNewData,
                         songIds: songIds

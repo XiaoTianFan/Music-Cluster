@@ -39,6 +39,12 @@ interface VisualizationPanelProps {
   onStageSelect: (stage: ProcessingStage) => void; // Callback for when user changes stage
   // --- NEW: Add the missing prop type ---
   availableFeatureKeys: string[] | null;
+  inferencePoint?: {
+    songId: string;
+    vector: number[];
+    cluster?: number;
+    label?: string;
+  } | null;
 }
 
 // Define types for internal state
@@ -229,7 +235,8 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
   visualizationDisplayStage,
   onStageSelect,
   // --- NEW: Add the missing prop type ---
-  availableFeatureKeys
+  availableFeatureKeys,
+  inferencePoint
 }) => {
 
   // --- Internal State for Visualization Controls ---
@@ -756,6 +763,47 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
       });
      // console.log(`[Plot Memo] Generated ${Object.keys(groupedPoints).length} groups/traces.`);
 
+      // Prepare optional inference point trace (triangle marker)
+      let inferenceTrace: Partial<Plotly.PlotData> | null = null;
+      const shouldPlotInferencePoint =
+        inferencePoint &&
+        (selectedDataStage === 'reduction' || selectedDataStage === 'clustering');
+
+      if (shouldPlotInferencePoint) {
+        const vector = inferencePoint!.vector;
+        const label = inferencePoint!.label ?? 'New Audio';
+        if (vector && vector.length > maxRequiredDimIndex) {
+          const inferenceX = vector[xAxisIndex];
+          const inferenceY = vector[yAxisIndex];
+          const inferenceZ = selectedDimensions === 3 ? vector[zAxisIndex] : undefined;
+          const hoverLines = [
+            `<b>${label}</b>`,
+            `Song ID: ${inferencePoint!.songId}`,
+          ];
+          if (selectedDataStage === 'clustering' && inferencePoint!.cluster !== undefined) {
+            hoverLines.push(`Cluster: ${inferencePoint!.cluster}`);
+          }
+          inferenceTrace = {
+            x: [inferenceX],
+            y: [inferenceY],
+            z: selectedDimensions === 3 && inferenceZ !== undefined ? [inferenceZ] : undefined,
+            type: traceType,
+            mode: 'markers',
+            marker: {
+              symbol: 'triangle-up',
+              size: 16,
+              color: '#f97316',
+              line: { color: '#ffffff', width: 2 },
+              opacity: 1,
+            },
+            text: [hoverLines.join('<br>')],
+            hoverinfo: 'text',
+            name: `${label} (New Audio)`,
+            showlegend: true,
+          };
+        }
+      }
+
       // Generate Traces from Groups
       const plotData: Partial<Plotly.PlotData>[] = [];
       Object.entries(groupedPoints).forEach(([groupName, pointsInGroup]) => {
@@ -779,6 +827,10 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         plotData.push(trace);
       });
       
+      if (inferenceTrace) {
+        plotData.push(inferenceTrace);
+      }
+
       // Add Centroid Trace (ONLY if clustering)
       if (selectedDataStage === 'clustering' && kmeansCentroids.length > 0) {
         const centroidTrace: Partial<Plotly.PlotData> = {
@@ -837,7 +889,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
     selectedScaleY, selectedScaleZ, selectedColorBy, featureColumnsMap.numerical, 
     featureColumnsMap.categorical, categoryValueMap, getCategoricalValueForSong, 
     createDetailedHoverText, songFeatures, showLegend, 
-    isReducedDataAvailable, isClusteringDataAvailable
+    isReducedDataAvailable, isClusteringDataAvailable, inferencePoint
   ]);
 
   // --- Control Handlers (Basic Structure) ---
