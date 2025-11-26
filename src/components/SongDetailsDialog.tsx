@@ -4,7 +4,7 @@ import { Song, Features } from '../app/page';
 import BasePanel from './ui/BasePanel'; 
 import Button from './ui/Button';
 import WaveSurfer from 'wavesurfer.js';
-import Spectrogram from 'wavesurfer.js/dist/plugins/spectrogram.esm.js';
+import Spectrogram from 'wavesurfer.js/plugins/spectrogram';
 
 interface SongDetailsDialogProps {
   song: Song;
