@@ -47,7 +47,7 @@ const SongDetailsDialog: React.FC<SongDetailsDialogProps> = ({ song, features, o
         gainDB: 20,                // Brightness boost
         rangeDB: 90,               // Display range
         splitChannels: false,
-        useWebWorker: true
+        useWebWorker: false
       })
     );
 
