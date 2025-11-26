@@ -38,7 +38,7 @@ const SongDetailsDialog: React.FC<SongDetailsDialogProps> = ({ song, features, o
         container: spectrogramRef.current,
         labels: true,
         height: 256, 
-        fftSamples: 2048,           // FFT size (power of 2)
+        fftSamples: 512,           // FFT size (power of 2)
         windowFunc: 'hann',        // Window function
         scale: 'mel',              // Frequency scale (linear, mel, bark, erb)
         colorMap: 'roseus',        // Color palette (roseus, gray, igray)
