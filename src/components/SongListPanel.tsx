@@ -1,8 +1,8 @@
 import React, { useState, DragEvent, useCallback, useMemo } from 'react';
 import { PlayIcon, PauseIcon, TrashIcon, InformationCircleIcon, ArrowUpTrayIcon } from '@heroicons/react/24/solid';
 import Marquee from "react-fast-marquee";
-import BasePanel from './ui/BasePanel'; // <-- Import BasePanel
-import Button from './ui/Button'; // <-- Import Button
+import BasePanel from './ui/BasePanel'; 
+import Button from './ui/Button'; 
 
 // Re-import types from page.tsx or define locally/globally
 interface Song {
@@ -296,17 +296,15 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
                                        opacity-0 group-hover:opacity-100 transition-opacity duration-150 
                                        bg-gray-800/80 rounded px-1 py-0.5" // Background on the container
                         > 
-                            {/* Details Button */}
-                            {status === 'complete' && (
-                                <button 
-                                    onClick={() => onShowDetails(song.id)}
-                                    title="Show Features"
-                                    className="text-blue-400 hover:text-blue-300 disabled:opacity-50 p-0.5" 
-                                    disabled={isProcessing}
-                                >
-                                    <InformationCircleIcon className="h-4 w-4" />
-                                </button>
-                            )}
+                        {/* Details Button */}
+                        <button 
+                            onClick={() => onShowDetails(song.id)}
+                            title="Show Features & Audio"
+                            className="text-blue-400 hover:text-blue-300 disabled:opacity-50 p-0.5" 
+                            disabled={isProcessing}
+                        >
+                            <InformationCircleIcon className="h-4 w-4" />
+                        </button>
                             {/* Play Button */} 
                             <button 
                                 onClick={() => onPlayRequest(song.id)}

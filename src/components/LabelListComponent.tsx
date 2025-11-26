@@ -1,6 +1,6 @@
 // src/components/LabelListComponent.tsx
 import React from 'react';
-import Button from '@/components/ui/Button'; // Corrected import casing and assuming default export
+import Button from '@/components/ui/Button'; 
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 

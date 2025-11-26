@@ -1,7 +1,7 @@
 import React from 'react';
-import BasePanel from '@/components/ui/BasePanel'; // Corrected import path
-import LabelListComponent from './LabelListComponent'; // Assuming it's in the same directory
-import Button from '@/components/ui/Button'; // Corrected: Default import and Casing
+import BasePanel from '@/components/ui/BasePanel'; 
+import LabelListComponent from './LabelListComponent'; 
+import Button from '@/components/ui/Button'; 
 import { useDroppable } from '@dnd-kit/core';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
