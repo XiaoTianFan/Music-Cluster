@@ -12,6 +12,7 @@ This web application demonstrates and visualizes the process of unsupervised k-m
 *   **Step-by-Step Visualization:** Interactively observe the k-means algorithm's progress: centroid initialization, data point assignment, and centroid updates.
 *   **Interactive Scatter Plot:** Visualize the final clusters in a 2D/3D scatter plot (using **Plotly.js**), with points colored by cluster, tooltips showing song titles, zooming, and panning.
 *   **New Song Classification:** Upload a new song after training a model to see how it's classified within the existing clusters.
+*   **Audio Visualization:** Interactive waveform and spectrogram visualization for each song using **WaveSurfer.js**, with logarithmic frequency scale and playback controls.
 *   **Unique UI/UX:** Features a scifi aesthetic with neon and steam-ish elements, built with **Augmented UI**.
 
 ## ⚙️ Technology Stack
@@ -21,7 +22,7 @@ This web application demonstrates and visualizes the process of unsupervised k-m
 *   **MIR:** Essentia.js (@v0.1.3)
 *   **Dimensionality Reduction:** DruidJS
 *   **Clustering:** TensorFlow.js (@tensorflow/tfjs)
-*   **Visualization:** Plotly.js, 
+*   **Visualization:** Plotly.js, WaveSurfer.js
 *   **UI Styling:** Augmented UI, Tailwind CSS
 *   **Markdown Rendering:** react-markdown
 *   **Concurrency:** Web Workers for computationally intensive tasks (Essentia, DruidJS, TensorFlow.js)
