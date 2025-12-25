@@ -6,15 +6,15 @@ import BasePanel from './ui/BasePanel'; // <-- Import BasePanel
 // --- Helper Types (from page.tsx, ensure they are exported or redefine here) ---
 // Type for unprocessed data structure (including OHE info)
 interface UnprocessedDataType {
-    vectors: number[][];
-    songIds: string[];
-    isOHEColumn: boolean[];
+  vectors: number[][];
+  songIds: string[];
+  isOHEColumn: boolean[];
 }
 
 // Type for processed data structure
 interface ProcessedDataType {
-    vectors: number[][];
-    songIds: string[];
+  vectors: number[][];
+  songIds: string[];
 }
 // --- End Helper Types ---
 
@@ -178,7 +178,7 @@ interface CategoryValueMap {
 
 // Base layout configuration to ensure consistent styling even when no data is plotted
 const basePlotLayout: Partial<Plotly.Layout> = {
-  title: 'Visualization', // Generic initial title
+  title: { text: 'Visualization' }, // Generic initial title
   autosize: true,
   paper_bgcolor: 'rgba(0,0,0,0)',
   plot_bgcolor: 'rgba(0, 0, 0, 0)',
@@ -196,27 +196,27 @@ const basePlotLayout: Partial<Plotly.Layout> = {
   hovermode: 'closest',
   // Default axis styling (can be overridden later)
   xaxis: {
-    title: 'X',
+    title: { text: 'X' },
     color: '#cccccc',
     gridcolor: '#555555',
     zerolinecolor: '#777777'
   },
   yaxis: {
-    title: 'Y',
+    title: { text: 'Y' },
     color: '#cccccc',
     gridcolor: '#555555',
     zerolinecolor: '#777777'
   },
   scene: { // Default 3D scene styling
-    xaxis: { title: 'X', color: '#cccccc', gridcolor: '#555555', zerolinecolor: '#777777' },
-    yaxis: { title: 'Y', color: '#cccccc', gridcolor: '#555555', zerolinecolor: '#777777' },
-    zaxis: { title: 'Z', color: '#cccccc', gridcolor: '#555555', zerolinecolor: '#777777' },
+    xaxis: { title: { text: 'X' }, color: '#cccccc', gridcolor: '#555555', zerolinecolor: '#777777' },
+    yaxis: { title: { text: 'Y' }, color: '#cccccc', gridcolor: '#555555', zerolinecolor: '#777777' },
+    zaxis: { title: { text: 'Z' }, color: '#cccccc', gridcolor: '#555555', zerolinecolor: '#777777' },
     bgcolor: 'rgba(0,0,0,0)',
-    camera: { eye: { x: 1.25, y: 1.25, z: 1.25 } } 
+    camera: { eye: { x: 1.25, y: 1.25, z: 1.25 } }
   }
 };
 
-const VisualizationPanel: React.FC<VisualizationPanelProps> = ({ 
+const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
   className,
   activeSongIds,
   songs,
@@ -262,11 +262,11 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
   // --- Determine data availability for enabling/disabling controls (MOVED UP) ---
   const isUnprocessedDataAvailable = unprocessedData !== null;
   const isProcessedDataAvailable = processedData !== null;
-  const isReducedDataAvailable = reducedDataPoints && Object.keys(reducedDataPoints).length > 0; 
-  const isClusteringDataAvailable = isReducedDataAvailable && Object.keys(kmeansAssignments).length > 0 && reductionDimensions > 0; 
+  const isReducedDataAvailable = reducedDataPoints && Object.keys(reducedDataPoints).length > 0;
+  const isClusteringDataAvailable = isReducedDataAvailable && Object.keys(kmeansAssignments).length > 0 && reductionDimensions > 0;
   const canSelectRaw = isUnprocessedDataAvailable;
   const canSelectProcessed = isProcessedDataAvailable;
-  const canSelectReduction = isReducedDataAvailable; 
+  const canSelectReduction = isReducedDataAvailable;
   const canSelectClustering = isClusteringDataAvailable;
   // ----------------------------------------------------------------------
 
@@ -304,7 +304,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         if (isCategorical) {
           // Add to categorical list
           categorical.push(featureKey);
-          
+
           // Determine number of OHE columns for this feature (requires looking at actual data)
           let numOHEColumns = 0;
           if (unprocessedData?.isOHEColumn) {
@@ -319,19 +319,19 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
             const uniqueValues = new Set<string>();
             Object.values(songFeatures || {}).forEach(features => {
               if (features && features[featureKey] !== undefined && typeof features[featureKey] === 'string') {
-                 // @ts-ignore - We checked it's a string
-                 uniqueValues.add(features[featureKey]);
+                // @ts-ignore - We checked it's a string
+                uniqueValues.add(features[featureKey]);
               }
             });
             numOHEColumns = Math.max(1, uniqueValues.size); // Use size, at least 1 column
             // console.log(`[featureColumnsMap] Estimated ${numOHEColumns} OHE columns for ${featureKey}`);
           } else {
-             // console.warn(`[featureColumnsMap] Cannot determine OHE columns for ${featureKey} without unprocessedData.isOHEColumn`);
-             // Fallback if isOHEColumn info is missing (e.g., before data processing)
-             // This part of the logic might not be needed if we only use this map for 'raw'/'processed' stage plots
-             numOHEColumns = 1; // Default guess
+            // console.warn(`[featureColumnsMap] Cannot determine OHE columns for ${featureKey} without unprocessedData.isOHEColumn`);
+            // Fallback if isOHEColumn info is missing (e.g., before data processing)
+            // This part of the logic might not be needed if we only use this map for 'raw'/'processed' stage plots
+            numOHEColumns = 1; // Default guess
           }
-          
+
           // Increment index by the number of OHE columns
           currentColIndex += numOHEColumns;
 
@@ -339,28 +339,28 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
           // Determine array length from the first available song that has this feature
           let arrayLength = 0;
           for (const songId of Object.keys(songFeatures || {})) {
-              const features = songFeatures?.[songId];
-              // @ts-ignore - Accessing potentially non-existent key
-              const featureValue = features?.[featureKey];
-              if (featureValue && Array.isArray(featureValue)) {
-                  arrayLength = featureValue.length;
-                  break;
-              }
+            const features = songFeatures?.[songId];
+            // @ts-ignore - Accessing potentially non-existent key
+            const featureValue = features?.[featureKey];
+            if (featureValue && Array.isArray(featureValue)) {
+              arrayLength = featureValue.length;
+              break;
+            }
           }
           // console.log(`[featureColumnsMap] Determined array length ${arrayLength} for ${featureKey}`);
 
           if (arrayLength > 0) {
-              for (let i = 0; i < arrayLength; i++) {
-                  numerical.push({
-                      name: `${prefix} ${i + 1}`,
-                      columnIndex: currentColIndex,
-                      featureKey: featureKey,
-                      arrayIndex: i
-                  });
-                  currentColIndex++;
-              }
+            for (let i = 0; i < arrayLength; i++) {
+              numerical.push({
+                name: `${prefix} ${i + 1}`,
+                columnIndex: currentColIndex,
+                featureKey: featureKey,
+                arrayIndex: i
+              });
+              currentColIndex++;
+            }
           } else {
-             // console.warn(`[featureColumnsMap] Could not determine array length for ${featureKey}`);
+            // console.warn(`[featureColumnsMap] Could not determine array length for ${featureKey}`);
           }
 
         } else {
@@ -374,23 +374,23 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         }
       }
     });
-    
+
     // console.log('[featureColumnsMap] Result:', { numerical, categorical });
     return { numerical, categorical };
-  // --- MODIFIED: Add availableFeatureKeys to dependency array --- 
+    // --- MODIFIED: Add availableFeatureKeys to dependency array --- 
   }, [availableFeatureKeys, unprocessedData, songFeatures]);
 
   // Get the category value map (mapping from OHE indices to original values)
   const categoryValueMap = useMemo<CategoryValueMap>(() => {
     const result: CategoryValueMap = {};
-    
+
     if (!songFeatures) return result;
-    
+
     // For each known categorical feature
     featureColumnsMap.categorical.forEach(category => {
       // Get all unique values for this category across all songs
       const uniqueValues = new Set<string>();
-      
+
       Object.values(songFeatures).forEach(features => {
         if (features && features[category as keyof Features]) {
           const value = features[category as keyof Features];
@@ -399,13 +399,13 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
           }
         }
       });
-      
+
       // Sort values for consistent ordering
       result[category] = {
         values: Array.from(uniqueValues).sort()
       };
     });
-    
+
     return result;
   }, [songFeatures, featureColumnsMap.categorical]);
 
@@ -421,11 +421,11 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
     // --- MODIFICATION START ---
     // Check for string OR number, convert number to string
     if (typeof value === 'string') {
-        return value;
+      return value;
     } else if (typeof value === 'number') {
-        return value.toString(); // Convert number to string
+      return value.toString(); // Convert number to string
     } else {
-        return 'N/A'; // Return 'N/A' for other types or undefined/null
+      return 'N/A'; // Return 'N/A' for other types or undefined/null
     }
     // --- MODIFICATION END ---
   };
@@ -435,9 +435,9 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
     // --- RESTORED: Original implementation --- 
     let options = [{ value: 'cluster', label: 'Cluster Assignment' }];
     featureColumnsMap.categorical.forEach(category => {
-      options.push({ 
-        value: `feature:${category}`, 
-        label: `Feature: ${category.charAt(0).toUpperCase() + category.slice(1)}` 
+      options.push({
+        value: `feature:${category}`,
+        label: `Feature: ${category.charAt(0).toUpperCase() + category.slice(1)}`
       });
     });
     return options;
@@ -446,15 +446,15 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
   const getAvailableAxisFeatures = useMemo(() => {
     // --- RESTORED: Original implementation --- 
     let options: { value: string, label: string }[] = [];
-    if (selectedDataStage === 'reduction' || selectedDataStage === 'clustering') { 
+    if (selectedDataStage === 'reduction' || selectedDataStage === 'clustering') {
       options = [
-        { value: 'dim1', label: 'Dimension 1' }, 
+        { value: 'dim1', label: 'Dimension 1' },
         { value: 'dim2', label: 'Dimension 2' }
       ];
       if (reductionDimensions >= 3) {
         options.push({ value: 'dim3', label: 'Dimension 3' });
       }
-    } else { 
+    } else {
       options = featureColumnsMap.numerical.map(col => ({
         value: `col:${col.columnIndex}`,
         label: col.name
@@ -482,7 +482,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         setSelectedColorBy(null);
       }
     }
-    
+
     // Default axis selections
     if (selectedDataStage === 'reduction' || selectedDataStage === 'clustering') {
       setSelectedAxisX('dim1');
@@ -501,9 +501,9 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
       setSelectedAxisY(secondFeatureIndex);
       setSelectedAxisZ(thirdFeatureIndex);
     } else {
-       setSelectedAxisX(null);
-       setSelectedAxisY(null);
-       setSelectedAxisZ(null);
+      setSelectedAxisX(null);
+      setSelectedAxisY(null);
+      setSelectedAxisZ(null);
     }
   }, [selectedDataStage, featureColumnsMap.categorical, featureColumnsMap.numerical, selectedDimensions, isClusteringDataAvailable]);
 
@@ -519,40 +519,40 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
     else if (latestSuccessfulStage === 'kmeans') targetStage = 'clustering';
 
     if (targetStage && targetStage !== selectedDataStage) { // Compare with selectedDataStage
-        // Check if data for the target stage exists before switching
-        let dataExists = false;
-        if (targetStage === 'raw' && unprocessedData?.vectors && unprocessedData.vectors.length > 0) dataExists = true; 
-        else if (targetStage === 'processed' && processedData?.vectors && processedData.vectors.length > 0) dataExists = true;
-        else if (targetStage === 'reduction' && Object.keys(reducedDataPoints).length > 0) dataExists = true;
-        // UPDATED CHECK: Verify both reduced points and assignments exist for clustering stage
-        else if (targetStage === 'clustering' && Object.keys(reducedDataPoints).length > 0 && Object.keys(kmeansAssignments).length > 0) dataExists = true; 
+      // Check if data for the target stage exists before switching
+      let dataExists = false;
+      if (targetStage === 'raw' && unprocessedData?.vectors && unprocessedData.vectors.length > 0) dataExists = true;
+      else if (targetStage === 'processed' && processedData?.vectors && processedData.vectors.length > 0) dataExists = true;
+      else if (targetStage === 'reduction' && Object.keys(reducedDataPoints).length > 0) dataExists = true;
+      // UPDATED CHECK: Verify both reduced points and assignments exist for clustering stage
+      else if (targetStage === 'clustering' && Object.keys(reducedDataPoints).length > 0 && Object.keys(kmeansAssignments).length > 0) dataExists = true;
 
-        if (dataExists) {
-           // console.log(`[VizPanel] Auto-switching view from ${selectedDataStage} to ${targetStage}`);
-            setSelectedDataStage(targetStage); // <-- UPDATE: Set the correct state
-        } else {
-            // console.log(`[VizPanel] Auto-switch to ${targetStage} skipped: Data not available.`);
-        }
+      if (dataExists) {
+        // console.log(`[VizPanel] Auto-switching view from ${selectedDataStage} to ${targetStage}`);
+        setSelectedDataStage(targetStage); // <-- UPDATE: Set the correct state
+      } else {
+        // console.log(`[VizPanel] Auto-switch to ${targetStage} skipped: Data not available.`);
+      }
     } else {
-        // console.log(`[VizPanel] Auto-switch condition not met (target: ${targetStage}, current selected: ${selectedDataStage})`);
+      // console.log(`[VizPanel] Auto-switch condition not met (target: ${targetStage}, current selected: ${selectedDataStage})`);
     }
-  // UPDATED DEPENDENCIES: Added kmeansAssignments and setSelectedDataStage
-  }, [latestSuccessfulStage, songFeatures, unprocessedData, processedData, reducedDataPoints, kmeansAssignments, selectedDataStage, setSelectedDataStage]); 
+    // UPDATED DEPENDENCIES: Added kmeansAssignments and setSelectedDataStage
+  }, [latestSuccessfulStage, songFeatures, unprocessedData, processedData, reducedDataPoints, kmeansAssignments, selectedDataStage, setSelectedDataStage]);
 
   // Helper function to create detailed hover information
   const createDetailedHoverText = (songId: string, songName: string, stage: DataStage): string => {
     let hoverText = `<b>${songName}</b>`;
-    
+
     // Add cluster information if available (for any stage)
     if (kmeansAssignments[songId] !== undefined) {
       hoverText += `<br><b>Cluster:</b> ${kmeansAssignments[songId]}`;
     }
-    
+
     // Add all available MIR features for the song
     const features = songFeatures[songId];
     if (features) {
       hoverText += '<br><br><b>MIR Features:</b>';
-      
+
       // Add single numeric values
       if (features.energy !== undefined) hoverText += `<br>Energy: ${features.energy.toFixed(3)}`;
       if (features.entropy !== undefined) hoverText += `<br>Entropy: ${features.entropy.toFixed(3)}`;
@@ -561,11 +561,11 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
       if (features.rms !== undefined) hoverText += `<br>RMS: ${features.rms.toFixed(3)}`;
       if (features.keyStrength !== undefined) hoverText += `<br>Key Strength: ${features.keyStrength.toFixed(3)}`;
       if (features.tuningFrequency !== undefined) hoverText += `<br>Tuning Frequency: ${features.tuningFrequency.toFixed(2)} Hz`;
-      
+
       // Add categorical values
       if (features.key !== undefined) hoverText += `<br>Key: ${features.key}`;
       if (features.keyScale !== undefined) hoverText += `<br>Scale: ${features.keyScale}`;
-      
+
       // Add summary of array values (first 3 values if array is longer)
       if (features.mfccMeans && features.mfccMeans.length > 0) {
         const mfccPreview = features.mfccMeans.slice(0, 3).map(v => v.toFixed(3)).join(', ');
@@ -593,7 +593,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
       // Optional: Add vector features (MFCC, Contrast, Mel) summary if needed
       if (features.mfccMeans) hoverText += `<br>MFCC Means: [${features.mfccMeans.length} vals]`;
     }
-    
+
     return hoverText;
   };
 
@@ -603,19 +603,19 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
   };
 
   const plotDataAndLayout = useMemo(() => {
-    try { 
-     // console.log('[Plot Memo] Recalculating plot data...'); 
+    try {
+      // console.log('[Plot Memo] Recalculating plot data...'); 
       let dataPoints: Record<string, number[]> = {};
       let songIds: string[] = [];
       let dataTitle = '';
 
-     // console.log(`[Plot Memo] Selected Stage: ${selectedDataStage}`); 
+      // console.log(`[Plot Memo] Selected Stage: ${selectedDataStage}`); 
 
       switch (selectedDataStage) {
         case 'raw':
           if (!unprocessedData || unprocessedData.vectors.length === 0) {
-           // console.log('[Plot Memo] No raw data available.'); 
-            return { plotData: [], plotLayout: basePlotLayout }; 
+            // console.log('[Plot Memo] No raw data available.'); 
+            return { plotData: [], plotLayout: basePlotLayout };
           }
           dataTitle = 'Raw Features';
           songIds = unprocessedData.songIds;
@@ -626,7 +626,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
           break;
         case 'processed':
           if (!processedData || processedData.vectors.length === 0) {
-           // console.log('[Plot Memo] No processed data available.');
+            // console.log('[Plot Memo] No processed data available.');
             return { plotData: [], plotLayout: basePlotLayout };
           }
           dataTitle = 'Processed Data';
@@ -638,8 +638,8 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
           break;
         case 'reduction':
           if (!isReducedDataAvailable) {
-           // console.log('[Plot Memo] No reduced data points available.'); 
-            return { plotData: [], plotLayout: basePlotLayout }; 
+            // console.log('[Plot Memo] No reduced data points available.'); 
+            return { plotData: [], plotLayout: basePlotLayout };
           }
           dataTitle = 'Reduced Dimensions';
           dataPoints = reducedDataPoints;
@@ -648,31 +648,31 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         case 'clustering':
         default:
           if (!isClusteringDataAvailable) {
-           // console.log('[Plot Memo] No clustering data available.'); 
-            return { plotData: [], plotLayout: basePlotLayout }; 
+            // console.log('[Plot Memo] No clustering data available.'); 
+            return { plotData: [], plotLayout: basePlotLayout };
           }
           dataTitle = `K-Means Clustering - Iteration ${kmeansIteration}`;
           dataPoints = reducedDataPoints;
           songIds = Object.keys(reducedDataPoints);
           break;
       }
-      
+
       const filteredSongIds = songIds.filter(id => activeSongIds.has(id));
       if (filteredSongIds.length === 0) {
-       // console.log('[Plot Memo] No active songs for current stage/filter.'); 
-        return { plotData: [], plotLayout: basePlotLayout }; 
+        // console.log('[Plot Memo] No active songs for current stage/filter.'); 
+        return { plotData: [], plotLayout: basePlotLayout };
       }
-      
+
       let xAxisIndex = 0, yAxisIndex = 1, zAxisIndex = 2;
       let xAxisTitle = 'Dim 1', yAxisTitle = 'Dim 2', zAxisTitle = 'Dim 3';
-      const getColumnIndex = (sel: string | null): number | null => sel ? (sel.startsWith('dim') ? parseInt(sel.substring(3))-1 : (sel.startsWith('col:') ? parseInt(sel.substring(4)) : null)) : null;
+      const getColumnIndex = (sel: string | null): number | null => sel ? (sel.startsWith('dim') ? parseInt(sel.substring(3)) - 1 : (sel.startsWith('col:') ? parseInt(sel.substring(4)) : null)) : null;
       const getAxisTitle = (sel: string | null, defaultPrefix: string): string => {
         const colIdx = getColumnIndex(sel);
         if (colIdx === null) return defaultPrefix;
         // Use dimension prefix for reduction or clustering stages
-        if (selectedDataStage === 'reduction' || selectedDataStage === 'clustering') { 
+        if (selectedDataStage === 'reduction' || selectedDataStage === 'clustering') {
           return `${defaultPrefix} ${colIdx + 1}`;
-        } 
+        }
         // Otherwise, look up the feature name for raw/processed
         const feature = featureColumnsMap.numerical.find(f => f.columnIndex === colIdx);
         return feature ? feature.name : `${defaultPrefix} ${colIdx + 1}`; // Fallback if feature name not found
@@ -685,27 +685,27 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
       yAxisTitle = getAxisTitle(selectedAxisY, 'Dimension');
       zAxisTitle = getAxisTitle(selectedAxisZ, 'Dimension');
 
-     // console.log(`[Plot Memo] Axis Indices: X=${xAxisIndex}, Y=${yAxisIndex}, Z=${zAxisIndex}`); 
-     // console.log(`[Plot Memo] Axis Titles: X='${xAxisTitle}', Y='${yAxisTitle}', Z='${zAxisTitle}'`); 
-      
+      // console.log(`[Plot Memo] Axis Indices: X=${xAxisIndex}, Y=${yAxisIndex}, Z=${zAxisIndex}`); 
+      // console.log(`[Plot Memo] Axis Titles: X='${xAxisTitle}', Y='${yAxisTitle}', Z='${zAxisTitle}'`); 
+
       const traceType = selectedDimensions === 3 ? 'scatter3d' : 'scatter';
-      
+
       // Prepare intermediate point representation
-      const intermediatePoints: { 
-        x: number; y: number; z?: number; id: string; name: string; cluster?: number; colorCategory?: string; 
+      const intermediatePoints: {
+        x: number; y: number; z?: number; id: string; name: string; cluster?: number; colorCategory?: string;
       }[] = [];
-      
+
       // Determine max required dimension based on selected axes AND 2D/3D mode
       let maxRequiredDimIndex = Math.max(xAxisIndex, yAxisIndex);
       if (selectedDimensions === 3) {
         maxRequiredDimIndex = Math.max(maxRequiredDimIndex, zAxisIndex);
       }
-      
+
       filteredSongIds.forEach(id => {
         const point = dataPoints[id];
         const song = songMap.get(id);
         // Check if point exists and has enough dimensions for the selected axes
-        if (point && point.length > maxRequiredDimIndex && song) { 
+        if (point && point.length > maxRequiredDimIndex && song) {
           intermediatePoints.push({
             x: point[xAxisIndex],
             y: point[yAxisIndex],
@@ -717,18 +717,18 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
           });
         }
       });
-      
-     // console.log(`[Plot Memo] Generated ${intermediatePoints.length} intermediate points.`);
+
+      // console.log(`[Plot Memo] Generated ${intermediatePoints.length} intermediate points.`);
       if (intermediatePoints.length === 0) {
-       // console.log('[Plot Memo] No valid points generated after axis mapping.');
-        return { plotData: [], plotLayout: basePlotLayout }; 
+        // console.log('[Plot Memo] No valid points generated after axis mapping.');
+        return { plotData: [], plotLayout: basePlotLayout };
       }
-      
+
       // Determine coloring strategy & Group points
       const colorByCluster = selectedColorBy === 'cluster' && selectedDataStage === 'clustering';
       const colorByCategorical = selectedColorBy?.startsWith('feature:');
       const categoryKey = colorByCategorical ? selectedColorBy!.substring(8) : null;
-     // console.log(`[Plot Memo] Color Strategy: ${selectedColorBy ?? 'Default'}`);
+      // console.log(`[Plot Memo] Color Strategy: ${selectedColorBy ?? 'Default'}`);
 
       const groupedPoints: Record<string, typeof intermediatePoints> = {};
       const categoryToColor: Record<string, string> = {};
@@ -742,26 +742,26 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         if (colorByCluster && point.cluster !== undefined) {
           groupName = `Cluster ${point.cluster}`;
           if (!categoryToColor[groupName]) {
-             categoryToColor[groupName] = plotlyColors[point.cluster % plotlyColors.length];
+            categoryToColor[groupName] = plotlyColors[point.cluster % plotlyColors.length];
           }
         } else if (colorByCategorical && categoryKey && point.colorCategory && point.colorCategory !== 'N/A') {
           groupName = point.colorCategory;
           pointColorNeedsAssign = !categoryToColor[groupName];
-        } 
-        
+        }
+
         if (!groupedPoints[groupName]) {
           groupedPoints[groupName] = [];
           // Assign color if needed (either first time seeing category or default)
-          if (!categoryToColor[groupName]) { 
-             const assignedColor = pointColorNeedsAssign 
-               ? plotlyColors[colorIndexCounter++ % plotlyColors.length] 
-               : plotlyColors[0]; // Default color for 'Songs' group
-             categoryToColor[groupName] = assignedColor;
+          if (!categoryToColor[groupName]) {
+            const assignedColor = pointColorNeedsAssign
+              ? plotlyColors[colorIndexCounter++ % plotlyColors.length]
+              : plotlyColors[0]; // Default color for 'Songs' group
+            categoryToColor[groupName] = assignedColor;
           }
         }
         groupedPoints[groupName].push(point);
       });
-     // console.log(`[Plot Memo] Generated ${Object.keys(groupedPoints).length} groups/traces.`);
+      // console.log(`[Plot Memo] Generated ${Object.keys(groupedPoints).length} groups/traces.`);
 
       // Prepare optional inference point trace (triangle marker)
       let inferenceTrace: Partial<Plotly.PlotData> | null = null;
@@ -816,7 +816,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
       Object.entries(groupedPoints).forEach(([groupName, pointsInGroup]) => {
         if (pointsInGroup.length === 0) return;
         const traceColor = categoryToColor[groupName];
-        
+
         const trace: Partial<Plotly.PlotData> = {
           x: pointsInGroup.map(p => p.x),
           y: pointsInGroup.map(p => p.y),
@@ -825,15 +825,15 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
           marker: { color: traceColor, size: 8, opacity: 0.8 },
           text: pointsInGroup.map(p => createDetailedHoverText(p.id, p.name, selectedDataStage)),
           hoverinfo: 'text',
-          name: groupName, 
-          showlegend: true 
+          name: groupName,
+          showlegend: true
         };
         if (selectedDimensions === 3) {
           trace.z = pointsInGroup.map(p => p.z).filter((z): z is number => z !== undefined);
         }
         plotData.push(trace);
       });
-      
+
       if (inferenceTrace) {
         plotData.push(inferenceTrace);
       }
@@ -847,55 +847,55 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
           type: traceType,
           mode: 'markers',
           marker: {
-            color: kmeansCentroids.map((c, i) => plotlyColors[i % plotlyColors.length]), 
+            color: kmeansCentroids.map((c, i) => plotlyColors[i % plotlyColors.length]),
             size: 14, symbol: 'diamond', opacity: 1, line: { color: '#000000', width: 1 }
           },
           text: kmeansCentroids.map((c, i) => `Centroid ${i}`),
           hoverinfo: 'text',
-          name: 'Centroids', 
-          showlegend: true 
+          name: 'Centroids',
+          showlegend: true
         };
         plotData.push(centroidTrace);
       }
-      
+
       // Configure Layout
-      const xAxisConfig = { title: xAxisTitle, type: selectedScaleX, color: '#cccccc', gridcolor: '#555555', zerolinecolor: '#777777' };
-      const yAxisConfig = { title: yAxisTitle, type: selectedScaleY, color: '#cccccc', gridcolor: '#555555', zerolinecolor: '#777777' };
-      const zAxisConfig = selectedDimensions === 3 ? { title: zAxisTitle, type: selectedScaleZ, color: '#cccccc', gridcolor: '#555555', zerolinecolor: '#777777' } : undefined;
+      const xAxisConfig = { title: { text: xAxisTitle }, type: selectedScaleX, color: '#cccccc', gridcolor: '#555555', zerolinecolor: '#777777' };
+      const yAxisConfig = { title: { text: yAxisTitle }, type: selectedScaleY, color: '#cccccc', gridcolor: '#555555', zerolinecolor: '#777777' };
+      const zAxisConfig = selectedDimensions === 3 ? { title: { text: zAxisTitle }, type: selectedScaleZ, color: '#cccccc', gridcolor: '#555555', zerolinecolor: '#777777' } : undefined;
 
       const plotLayout: Partial<Plotly.Layout> = {
-        ...basePlotLayout, 
-        title: dataTitle, 
-        showlegend: showLegend, 
+        ...basePlotLayout,
+        title: { text: dataTitle },
+        showlegend: showLegend,
         // colorway removed - colors set per trace
-        legend: { ...basePlotLayout.legend, traceorder: 'normal' } 
+        legend: { ...basePlotLayout.legend, traceorder: 'normal' }
       };
-      
+
       if (selectedDimensions === 3) {
         plotLayout.scene = { ...(basePlotLayout.scene || {}), xaxis: xAxisConfig as any, yaxis: yAxisConfig as any, zaxis: zAxisConfig as any };
         delete plotLayout.xaxis; delete plotLayout.yaxis;
       } else {
-        plotLayout.xaxis = xAxisConfig as any; 
+        plotLayout.xaxis = xAxisConfig as any;
         plotLayout.yaxis = yAxisConfig as any;
         delete plotLayout.scene;
       }
-      
-     // console.log('[Plot Memo] Final Plot Data Length:', plotData.length); 
-     // console.log('[Plot Memo] Final Plot Layout Title:', plotLayout.title);
-     // console.log('[Plot Memo] Final Plot Layout BgColor:', plotLayout.paper_bgcolor, plotLayout.plot_bgcolor);
-      
+
+      // console.log('[Plot Memo] Final Plot Data Length:', plotData.length); 
+      // console.log('[Plot Memo] Final Plot Layout Title:', plotLayout.title);
+      // console.log('[Plot Memo] Final Plot Layout BgColor:', plotLayout.paper_bgcolor, plotLayout.plot_bgcolor);
+
       return { plotData, plotLayout };
-    } catch (error) { 
-      console.error('[Plot Memo] Error calculating plot data:', error); 
-      return { plotData: [], plotLayout: { ...basePlotLayout, showlegend: showLegend } }; 
+    } catch (error) {
+      console.error('[Plot Memo] Error calculating plot data:', error);
+      return { plotData: [], plotLayout: { ...basePlotLayout, showlegend: showLegend } };
     }
   }, [
-    selectedDataStage, unprocessedData, processedData, reducedDataPoints, kmeansAssignments, 
-    kmeansCentroids, reductionDimensions, kmeansIteration, activeSongIds, songMap, 
-    selectedDimensions, selectedAxisX, selectedAxisY, selectedAxisZ, selectedScaleX, 
-    selectedScaleY, selectedScaleZ, selectedColorBy, featureColumnsMap.numerical, 
-    featureColumnsMap.categorical, categoryValueMap, getCategoricalValueForSong, 
-    createDetailedHoverText, songFeatures, showLegend, 
+    selectedDataStage, unprocessedData, processedData, reducedDataPoints, kmeansAssignments,
+    kmeansCentroids, reductionDimensions, kmeansIteration, activeSongIds, songMap,
+    selectedDimensions, selectedAxisX, selectedAxisY, selectedAxisZ, selectedScaleX,
+    selectedScaleY, selectedScaleZ, selectedColorBy, featureColumnsMap.numerical,
+    featureColumnsMap.categorical, categoryValueMap, getCategoricalValueForSong,
+    createDetailedHoverText, songFeatures, showLegend,
     isReducedDataAvailable, isClusteringDataAvailable, inferencePoint
   ]);
 
@@ -903,7 +903,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
   const handleStageChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const newDataStage = event.target.value as DataStage;
     setSelectedDataStage(newDataStage);
-    
+
     // NEW: Map DataStage to ProcessingStage and call onStageSelect
     let processingStage: ProcessingStage = null;
     switch (newDataStage) {
@@ -920,7 +920,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         processingStage = 'kmeans';
         break;
     }
-    
+
     // Call parent's callback function to update the user-selected stage
     if (processingStage) {
       onStageSelect(processingStage);
@@ -929,10 +929,10 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
   const handleDimensionChange = (dim: DimensionSelection) => {
     setSelectedDimensions(dim);
-     // Reset Z-axis selection if switching to 2D
+    // Reset Z-axis selection if switching to 2D
     if (dim === 2) {
-        setSelectedAxisZ(null);
-        setSelectedScaleZ('linear');
+      setSelectedAxisZ(null);
+      setSelectedScaleZ('linear');
     }
     // TODO: Potentially update default axis selections in Phase 3
   };
@@ -984,209 +984,210 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
     >
       {/* Plot Area (Takes up most space) */}
       <div className="w-full h-full flex-grow mb-2 min-h-0 bg-[var(--background)]/60"
-      style={{ backdropFilter: 'blur(2px)' }}
+        style={{ backdropFilter: 'blur(2px)' }}
       >
-          <BasePanel
-            className="w-full h-full min-h-0 justify-center items-center"
-            data-augmented-ui="tl-2-clip-x tr-2-clip-x br-2-clip-x bl-2-clip-x border"
-            style={{ '--aug-border-bg': 'var(--foreground)', 
-              '--aug-border-all': '1px', 
-              '--aug-border-y': '2px'
-            } as React.CSSProperties}
-          >
-              <Plot
-                  data={plotDataAndLayout.plotData as Plotly.Data[]}
-                  layout={plotDataAndLayout.plotLayout}
-                  useResizeHandler={true}
-                  style={{ width: '100%', height: '100%' }}
-                  config={{ responsive: true, displaylogo: false }}
-                  className="w-full h-full"
-              />
-          </BasePanel>
+        <BasePanel
+          className="w-full h-full min-h-0 justify-center items-center"
+          data-augmented-ui="tl-2-clip-x tr-2-clip-x br-2-clip-x bl-2-clip-x border"
+          style={{
+            '--aug-border-bg': 'var(--foreground)',
+            '--aug-border-all': '1px',
+            '--aug-border-y': '2px'
+          } as React.CSSProperties}
+        >
+          <Plot
+            data={plotDataAndLayout.plotData as Plotly.Data[]}
+            layout={plotDataAndLayout.plotLayout}
+            useResizeHandler={true}
+            style={{ width: '100%', height: '100%' }}
+            config={{ responsive: true, displaylogo: false }}
+            className="w-full h-full"
+          />
+        </BasePanel>
       </div>
 
       {/* Controls Container (Fixed height at the bottom) */}
-      <div 
+      <div
         className="w-full flex-shrink-0 p-2 mt-2 border-t border-b border-[var(--accent-secondary)]/50 bg-gray-950/10"
         style={{ backdropFilter: 'blur(2px)' }} // Optional: Add blur for better separation
-        >
-          {/* Control Row 1: ALWAYS contains Data Stage, Dimensionality, and Color selection */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs mb-2">
-              {/* 1. Data Stage */}
-              <div className="flex items-center gap-1">
-                  <label htmlFor="data-stage-select" className="text-gray-400">Stage:</label>
-                  <select 
-                      id="data-stage-select"
-                      value={selectedDataStage}
-                      onChange={handleStageChange}
-                      className="bg-gray-800/40 border border-gray-600 px-1 py-0.5 text-xs focus:outline-none focus:border-[var(--accent-secondary)]"
-                  >
-                      <option value="raw" disabled={!canSelectRaw}>Raw Features</option>
-                      <option value="processed" disabled={!canSelectProcessed}>Processed Data</option>
-                      <option value="reduction" disabled={!canSelectReduction}>Reduced Data</option>
-                      <option value="clustering" disabled={!canSelectClustering}>Clustering Results</option>
-                  </select>
-              </div>
-
-              {/* 2. Dimensionality */}
-              <div className="flex items-center gap-1">
-                  <span className="text-gray-400">Dim:</span>
-                  <button 
-                    onClick={() => handleDimensionChange(2)}
-                    disabled={selectedDimensions === 2}
-                    className={`px-2 py-0.5 ${selectedDimensions === 2 ? 'bg-[var(--accent-secondary-active)] text-white cursor-default' : 'bg-gray-800/40 hover:bg-gray-500 text-gray-300'} disabled:opacity-50 disabled:cursor-not-allowed`}
-                    >2D</button>
-                  <button 
-                    onClick={() => handleDimensionChange(3)}
-                    disabled={selectedDimensions === 3}
-                    className={`px-2 py-0.5 ${selectedDimensions === 3 ? 'bg-[var(--accent-secondary-active)] text-white cursor-default' : 'bg-gray-800/40 hover:bg-gray-500 text-gray-300'} disabled:opacity-50 disabled:cursor-not-allowed`}
-                  >3D</button>
-              </div>
-
-              {/* 3. Color By */}
-              <div className="flex items-center gap-1">
-                  <label htmlFor="color-by-select" className="text-gray-400">Color:</label>
-                  <select 
-                      id="color-by-select"
-                      value={selectedColorBy ?? ''}
-                      onChange={handleColorByChange}
-                      className="bg-gray-800/40 border border-gray-600 px-1 py-0.5 text-xs focus:outline-none focus:border-[var(--accent-secondary)] min-w-[100px]"
-                      disabled={selectedDataStage === 'clustering' ? !canSelectClustering : (!canSelectRaw && !canSelectProcessed)}
-                  >
-                      <option value="" disabled>Select...</option>
-                      {getAvailableColorOptions.map((opt: { value: string, label: string }) => (
-                        <option 
-                          key={opt.value} 
-                          value={opt.value} 
-                          disabled={selectedDataStage !== 'clustering' && opt.value === 'cluster'}
-                        >
-                          {opt.label}
-                        </option>
-                      ))}
-                  </select>
-              </div>
-
-              {/* 4. Show Legend Toggle */}
-              <div className="flex items-center gap-1">
-                  <input
-                      type="checkbox"
-                      id="show-legend-toggle"
-                      checked={showLegend}
-                      onChange={handleToggleLegend}
-                      className="form-checkbox h-3 w-3 text-[var(--accent-secondary)] bg-gray-800 border-gray-600 focus:ring-[var(--accent-secondary)]/50"
-                  />
-                  <label htmlFor="show-legend-toggle" className="text-gray-400 select-none">Legend</label>
-              </div>
+      >
+        {/* Control Row 1: ALWAYS contains Data Stage, Dimensionality, and Color selection */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs mb-2">
+          {/* 1. Data Stage */}
+          <div className="flex items-center gap-1">
+            <label htmlFor="data-stage-select" className="text-gray-400">Stage:</label>
+            <select
+              id="data-stage-select"
+              value={selectedDataStage}
+              onChange={handleStageChange}
+              className="bg-gray-800/40 border border-gray-600 px-1 py-0.5 text-xs focus:outline-none focus:border-[var(--accent-secondary)]"
+            >
+              <option value="raw" disabled={!canSelectRaw}>Raw Features</option>
+              <option value="processed" disabled={!canSelectProcessed}>Processed Data</option>
+              <option value="reduction" disabled={!canSelectReduction}>Reduced Data</option>
+              <option value="clustering" disabled={!canSelectClustering}>Clustering Results</option>
+            </select>
           </div>
 
-          {/* Control Row 2: ALWAYS contains axis controls, conditionally shows Z-axis based on dimension */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
-              {/* X-Axis Feature */}
-              <div className="flex items-center gap-1">
-                  <label htmlFor="axis-x-select" className="text-gray-400">X:</label>
-                  <select
-                      id="axis-x-select"
-                      value={selectedAxisX ?? ''}
-                      onChange={(e) => handleAxisChange('X', e.target.value || null)}
-                      className="bg-gray-800/40 border border-gray-600 px-1 py-0.5 text-xs focus:outline-none focus:border-[var(--accent-secondary)] min-w-[100px] hide-scrollbar"
-                      disabled={(selectedDataStage === 'raw' && !canSelectRaw) || 
-                                (selectedDataStage === 'processed' && !canSelectProcessed) || 
-                                (selectedDataStage === 'clustering' && !canSelectClustering)}
-                  >
-                      <option value="" disabled>Select...</option>
-                      {getAvailableAxisFeatures.map((opt: { value: string, label: string }) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                  </select>
-              </div>
-              
-              {/* X-Axis Scale */}
-              <div className="flex items-center gap-1">
-                  <label htmlFor="scale-x-select" className="text-gray-400">Scale:</label>
-                  <select
-                      id="scale-x-select"
-                      value={selectedScaleX}
-                      onChange={(e) => handleScaleChange('X', e.target.value as AxisScale)}
-                      className="bg-gray-800/40 border border-gray-600 px-1 py-0.5 text-xs focus:outline-none focus:border-[var(--accent-secondary)]"
-                      disabled={!selectedAxisX}
-                  >
-                      <option value="linear">Linear</option>
-                      <option value="log">Log</option>
-                  </select>
-              </div>
-              
-              {/* Y-Axis Feature */}
-              <div className="flex items-center gap-1">
-                  <label htmlFor="axis-y-select" className="text-gray-400">Y:</label>
-                  <select
-                      id="axis-y-select"
-                      value={selectedAxisY ?? ''}
-                      onChange={(e) => handleAxisChange('Y', e.target.value || null)}
-                      className="bg-gray-800/40 border border-gray-600 px-1 py-0.5 text-xs focus:outline-none focus:border-[var(--accent-secondary)] min-w-[100px] hide-scrollbar"
-                      disabled={(selectedDataStage === 'raw' && !canSelectRaw) || 
-                               (selectedDataStage === 'processed' && !canSelectProcessed) || 
-                               (selectedDataStage === 'clustering' && !canSelectClustering)}
-                  >
-                      <option value="" disabled>Select...</option>
-                      {getAvailableAxisFeatures.map((opt: { value: string, label: string }) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                  </select>
-              </div>
-              
-              {/* Y-Axis Scale */}
-              <div className="flex items-center gap-1">
-                  <label htmlFor="scale-y-select" className="text-gray-400">Scale:</label>
-                  <select
-                      id="scale-y-select"
-                      value={selectedScaleY}
-                      onChange={(e) => handleScaleChange('Y', e.target.value as AxisScale)}
-                      className="bg-gray-800/40 border border-gray-600 px-1 py-0.5 text-xs focus:outline-none focus:border-[var(--accent-secondary)]"
-                      disabled={!selectedAxisY}
-                  >
-                      <option value="linear">Linear</option>
-                      <option value="log">Log</option>
-                  </select>
-              </div>
-              
-              {/* Z-Axis Feature - Only shown in 3D mode */}
-              {selectedDimensions === 3 && (
-                <div className="flex items-center gap-1">
-                    <label htmlFor="axis-z-select" className="text-gray-400">Z:</label>
-                    <select
-                        id="axis-z-select"
-                        value={selectedAxisZ ?? ''}
-                        onChange={(e) => handleAxisChange('Z', e.target.value || null)}
-                        className="bg-gray-800/40 border border-gray-600 px-1 py-0.5 text-xs focus:outline-none focus:border-[var(--accent-secondary)] min-w-[100px] hide-scrollbar"
-                        disabled={(selectedDataStage === 'raw' && !canSelectRaw) || 
-                                 (selectedDataStage === 'processed' && !canSelectProcessed) || 
-                                 (selectedDataStage === 'clustering' && !canSelectClustering)}
-                    >
-                        <option value="" disabled>Select...</option>
-                        {getAvailableAxisFeatures.map((opt: { value: string, label: string }) => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                    </select>
-                </div>
-              )}
-              
-              {/* Z-Axis Scale - Only shown in 3D mode */}
-              {selectedDimensions === 3 && (
-                <div className="flex items-center gap-1">
-                    <label htmlFor="scale-z-select" className="text-gray-400">Scale:</label>
-                    <select
-                        id="scale-z-select"
-                        value={selectedScaleZ}
-                        onChange={(e) => handleScaleChange('Z', e.target.value as AxisScale)}
-                        className="bg-gray-800/40 border border-gray-600 px-1 py-0.5 text-xs focus:outline-none focus:border-[var(--accent-secondary)]"
-                        disabled={!selectedAxisZ}
-                    >
-                        <option value="linear">Linear</option>
-                        <option value="log">Log</option>
-                    </select>
-                </div>
-              )}
+          {/* 2. Dimensionality */}
+          <div className="flex items-center gap-1">
+            <span className="text-gray-400">Dim:</span>
+            <button
+              onClick={() => handleDimensionChange(2)}
+              disabled={selectedDimensions === 2}
+              className={`px-2 py-0.5 ${selectedDimensions === 2 ? 'bg-[var(--accent-secondary-active)] text-white cursor-default' : 'bg-gray-800/40 hover:bg-gray-500 text-gray-300'} disabled:opacity-50 disabled:cursor-not-allowed`}
+            >2D</button>
+            <button
+              onClick={() => handleDimensionChange(3)}
+              disabled={selectedDimensions === 3}
+              className={`px-2 py-0.5 ${selectedDimensions === 3 ? 'bg-[var(--accent-secondary-active)] text-white cursor-default' : 'bg-gray-800/40 hover:bg-gray-500 text-gray-300'} disabled:opacity-50 disabled:cursor-not-allowed`}
+            >3D</button>
           </div>
+
+          {/* 3. Color By */}
+          <div className="flex items-center gap-1">
+            <label htmlFor="color-by-select" className="text-gray-400">Color:</label>
+            <select
+              id="color-by-select"
+              value={selectedColorBy ?? ''}
+              onChange={handleColorByChange}
+              className="bg-gray-800/40 border border-gray-600 px-1 py-0.5 text-xs focus:outline-none focus:border-[var(--accent-secondary)] min-w-[100px]"
+              disabled={selectedDataStage === 'clustering' ? !canSelectClustering : (!canSelectRaw && !canSelectProcessed)}
+            >
+              <option value="" disabled>Select...</option>
+              {getAvailableColorOptions.map((opt: { value: string, label: string }) => (
+                <option
+                  key={opt.value}
+                  value={opt.value}
+                  disabled={selectedDataStage !== 'clustering' && opt.value === 'cluster'}
+                >
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* 4. Show Legend Toggle */}
+          <div className="flex items-center gap-1">
+            <input
+              type="checkbox"
+              id="show-legend-toggle"
+              checked={showLegend}
+              onChange={handleToggleLegend}
+              className="form-checkbox h-3 w-3 text-[var(--accent-secondary)] bg-gray-800 border-gray-600 focus:ring-[var(--accent-secondary)]/50"
+            />
+            <label htmlFor="show-legend-toggle" className="text-gray-400 select-none">Legend</label>
+          </div>
+        </div>
+
+        {/* Control Row 2: ALWAYS contains axis controls, conditionally shows Z-axis based on dimension */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+          {/* X-Axis Feature */}
+          <div className="flex items-center gap-1">
+            <label htmlFor="axis-x-select" className="text-gray-400">X:</label>
+            <select
+              id="axis-x-select"
+              value={selectedAxisX ?? ''}
+              onChange={(e) => handleAxisChange('X', e.target.value || null)}
+              className="bg-gray-800/40 border border-gray-600 px-1 py-0.5 text-xs focus:outline-none focus:border-[var(--accent-secondary)] min-w-[100px] hide-scrollbar"
+              disabled={(selectedDataStage === 'raw' && !canSelectRaw) ||
+                (selectedDataStage === 'processed' && !canSelectProcessed) ||
+                (selectedDataStage === 'clustering' && !canSelectClustering)}
+            >
+              <option value="" disabled>Select...</option>
+              {getAvailableAxisFeatures.map((opt: { value: string, label: string }) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* X-Axis Scale */}
+          <div className="flex items-center gap-1">
+            <label htmlFor="scale-x-select" className="text-gray-400">Scale:</label>
+            <select
+              id="scale-x-select"
+              value={selectedScaleX}
+              onChange={(e) => handleScaleChange('X', e.target.value as AxisScale)}
+              className="bg-gray-800/40 border border-gray-600 px-1 py-0.5 text-xs focus:outline-none focus:border-[var(--accent-secondary)]"
+              disabled={!selectedAxisX}
+            >
+              <option value="linear">Linear</option>
+              <option value="log">Log</option>
+            </select>
+          </div>
+
+          {/* Y-Axis Feature */}
+          <div className="flex items-center gap-1">
+            <label htmlFor="axis-y-select" className="text-gray-400">Y:</label>
+            <select
+              id="axis-y-select"
+              value={selectedAxisY ?? ''}
+              onChange={(e) => handleAxisChange('Y', e.target.value || null)}
+              className="bg-gray-800/40 border border-gray-600 px-1 py-0.5 text-xs focus:outline-none focus:border-[var(--accent-secondary)] min-w-[100px] hide-scrollbar"
+              disabled={(selectedDataStage === 'raw' && !canSelectRaw) ||
+                (selectedDataStage === 'processed' && !canSelectProcessed) ||
+                (selectedDataStage === 'clustering' && !canSelectClustering)}
+            >
+              <option value="" disabled>Select...</option>
+              {getAvailableAxisFeatures.map((opt: { value: string, label: string }) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Y-Axis Scale */}
+          <div className="flex items-center gap-1">
+            <label htmlFor="scale-y-select" className="text-gray-400">Scale:</label>
+            <select
+              id="scale-y-select"
+              value={selectedScaleY}
+              onChange={(e) => handleScaleChange('Y', e.target.value as AxisScale)}
+              className="bg-gray-800/40 border border-gray-600 px-1 py-0.5 text-xs focus:outline-none focus:border-[var(--accent-secondary)]"
+              disabled={!selectedAxisY}
+            >
+              <option value="linear">Linear</option>
+              <option value="log">Log</option>
+            </select>
+          </div>
+
+          {/* Z-Axis Feature - Only shown in 3D mode */}
+          {selectedDimensions === 3 && (
+            <div className="flex items-center gap-1">
+              <label htmlFor="axis-z-select" className="text-gray-400">Z:</label>
+              <select
+                id="axis-z-select"
+                value={selectedAxisZ ?? ''}
+                onChange={(e) => handleAxisChange('Z', e.target.value || null)}
+                className="bg-gray-800/40 border border-gray-600 px-1 py-0.5 text-xs focus:outline-none focus:border-[var(--accent-secondary)] min-w-[100px] hide-scrollbar"
+                disabled={(selectedDataStage === 'raw' && !canSelectRaw) ||
+                  (selectedDataStage === 'processed' && !canSelectProcessed) ||
+                  (selectedDataStage === 'clustering' && !canSelectClustering)}
+              >
+                <option value="" disabled>Select...</option>
+                {getAvailableAxisFeatures.map((opt: { value: string, label: string }) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Z-Axis Scale - Only shown in 3D mode */}
+          {selectedDimensions === 3 && (
+            <div className="flex items-center gap-1">
+              <label htmlFor="scale-z-select" className="text-gray-400">Scale:</label>
+              <select
+                id="scale-z-select"
+                value={selectedScaleZ}
+                onChange={(e) => handleScaleChange('Z', e.target.value as AxisScale)}
+                className="bg-gray-800/40 border border-gray-600 px-1 py-0.5 text-xs focus:outline-none focus:border-[var(--accent-secondary)]"
+                disabled={!selectedAxisZ}
+              >
+                <option value="linear">Linear</option>
+                <option value="log">Log</option>
+              </select>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
