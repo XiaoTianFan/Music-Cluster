@@ -8,11 +8,13 @@ import * as tfvis from '@tensorflow/tfjs-vis'; // Import tfjs-vis
 import LogPanel from '@/components/LogPanel';
 import BasePanel from '@/components/ui/BasePanel';
 import AboutDialog from '@/components/AboutDialog';
+import ExportRawFeaturesDialog from '@/components/ExportRawFeaturesDialog';
 import ANNControlsPanel, { MLPConfig as ControlsMLPConfig, DEFAULT_MLP_CONFIG } from '@/components/ANNControlsPanel';
 import LabelingPanel from '@/components/LabelingPanel';
 import NetworkVisualizationPanel from '@/components/NetworkVisualizationPanel';
 import ANNDataVisualizationPanel from '@/components/ANNDataVisualizationPanel';
 import AudioPlayer from '@/components/AudioPlayer'; // <-- NEW: Import AudioPlayer
+import { downloadRawFeatureMatrixExport, type ExportFormat } from '@/lib/exportRawFeatureMatrix';
 
 // Reusable types (consider moving to a shared types file, e.g., src/types.ts)
 export interface Song {
@@ -161,6 +163,7 @@ export default function ANNPage() {
     const [isExtracting, setIsExtracting] = useState<boolean>(false);
     const [logMessages, setLogMessages] = useState<LogMessage[]>([]);
     const [isAboutDialogOpen, setIsAboutDialogOpen] = useState<boolean>(false);
+    const [isExportRawModalOpen, setIsExportRawModalOpen] = useState<boolean>(false);
     // Worker Ready Flags
     const [essentiaWorkerReady, setEssentiaWorkerReady] = useState<boolean>(false);
     const [dataProcessingWorkerReady, setDataProcessingWorkerReady] = useState<boolean>(false);
@@ -982,6 +985,30 @@ export default function ANNPage() {
         return features ? Object.keys(features) : null;
     }, [songs, songFeatures]);
 
+    const canExportRawFeatures = useMemo(() => {
+        if (!unprocessedData) return false;
+        const { vectors, columnLabels, isOHEColumn } = unprocessedData;
+        if (vectors.length === 0 || !vectors[0]?.length) return false;
+        const n = vectors[0].length;
+        return columnLabels.length === n && isOHEColumn.length === n;
+    }, [unprocessedData]);
+
+    const exportColumnLabels = useMemo(() => unprocessedData?.columnLabels ?? [], [unprocessedData]);
+
+    const handleExportRawFeatures = useCallback((selectedIndices: number[], format: ExportFormat) => {
+        if (!unprocessedData) return;
+        downloadRawFeatureMatrixExport({
+            songs,
+            songIds: unprocessedData.songIds,
+            vectors: unprocessedData.vectors,
+            columnLabels: unprocessedData.columnLabels,
+            selectedIndices,
+            format,
+            filenameBase: 'musiccluster-ann-raw-features',
+        });
+        addLogMessage(`Exported raw features (${format.toUpperCase()}).`, 'complete');
+    }, [unprocessedData, songs, addLogMessage]);
+
     // Determine the stage to show in the visualization panel
     const [visualizationDisplayStage, setVisualizationDisplayStage] = useState<ProcessingStage | null>(null);
 
@@ -1180,6 +1207,8 @@ export default function ANNPage() {
                              onInfer={handleInfer}
                              selectedFeatures={selectedFeatures}
                              onSelectedFeaturesChange={setSelectedFeatures}
+                             canExportRawFeatures={canExportRawFeatures}
+                             onOpenExportRawFeatures={() => setIsExportRawModalOpen(true)}
                          />
                      </div>
                  </div>
@@ -1217,6 +1246,12 @@ export default function ANNPage() {
                 </span>
             </footer>
 
+            <ExportRawFeaturesDialog
+                isOpen={isExportRawModalOpen}
+                columnLabels={exportColumnLabels}
+                onClose={() => setIsExportRawModalOpen(false)}
+                onConfirm={handleExportRawFeatures}
+            />
             <AboutDialog isOpen={isAboutDialogOpen} onClose={handleToggleAboutDialog} />
          </main>
     );

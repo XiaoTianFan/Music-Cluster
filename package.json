@@ -7,7 +7,8 @@
     "build:worker": "webpack --config webpack.worker.config.js",
     "build": "npm run build:worker && next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "regenerate-default-features": "node scripts/regenerate-default-features.cjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -49,6 +50,7 @@
     "crypto-browserify": "^3.12.1",
     "eslint": "^9",
     "eslint-config-next": "^15.2.6",
+    "ffmpeg-static": "^5.2.0",
     "path-browserify": "^1.0.1",
     "stream-browserify": "^3.0.0",
     "tailwindcss": "^4",

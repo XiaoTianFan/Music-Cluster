@@ -11,6 +11,7 @@ import SongDetailsDialog from '../components/SongDetailsDialog'; // Import the n
 import FeatureExplanationDialog from '../components/FeatureExplanationDialog'; // Import the explanation dialog
 import AboutDialog from '../components/AboutDialog'; // Import the About dialog
 import ExplanationDialog from '../components/ExplanationDialog'; // <-- Import the new generic dialog
+import ExportRawFeaturesDialog from '../components/ExportRawFeaturesDialog';
 import AudioPlayer from '../components/AudioPlayer'; // <-- NEW: Import AudioPlayer
 import { downloadRawFeatureMatrixExport, type ExportFormat } from '@/lib/exportRawFeatureMatrix';
 // Remove the static import of VisualizationPanel
@@ -233,7 +234,7 @@ const featureIdToDataKeysMap: Map<string, (keyof Features)[]> = new Map([
   ['rms', ['rms']],
   // Example: Grouping Rhythm features under 'bpm' user-selectable option
   ['rhythm', ['bpm']],
-  // ['onsetRate', ['onsetRate']],
+  ['onsetRate', ['onsetRate']],
   ['danceability', ['danceability']],
   ['intensity', ['intensity']], // Note: Intensity is categorical
   ['spectralCentroidTime', ['spectralCentroidTimeMean', 'spectralCentroidTimeStdDev']],
@@ -636,6 +637,8 @@ export default function DashboardPage() {
 
   // --- State for About Dialog ---
   const [isAboutDialogOpen, setIsAboutDialogOpen] = useState<boolean>(false);
+
+  const [isExportRawModalOpen, setIsExportRawModalOpen] = useState<boolean>(false);
 
   // --- State to track songs in the current processing batch ---
   const [processingSongIds, setProcessingSongIds] = useState<Set<string>>(new Set());
@@ -2836,6 +2839,8 @@ export default function DashboardPage() {
             onUploadInferenceFile={handleUploadInferenceFile}
             onProcessInference={handleProcessNewAudioInference}
             inferenceReductionMethod={trainingPipelineParams.reductionModelInfo?.method ?? null}
+            canExportRawFeatures={canExportRawFeatures}
+            onOpenExportRawFeatures={() => setIsExportRawModalOpen(true)}
           />
 
           {/* Log Panel (Middle Column, Bottom Row) */}
@@ -2915,6 +2920,13 @@ export default function DashboardPage() {
           onClose={handleCloseAlgoExplanation}
         />
       )}
+
+      <ExportRawFeaturesDialog
+        isOpen={isExportRawModalOpen}
+        columnLabels={exportColumnLabels}
+        onClose={() => setIsExportRawModalOpen(false)}
+        onConfirm={handleExportRawFeatures}
+      />
 
       {/* About Dialog (Conditionally Rendered) */}
       <AboutDialog

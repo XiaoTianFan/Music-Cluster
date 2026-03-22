@@ -2,8 +2,6 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { CogIcon, InformationCircleIcon, BeakerIcon, PlayIcon, StopIcon, ArrowPathIcon, SparklesIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/solid';
 import BasePanel from '@/components/ui/BasePanel';
 import Button from '@/components/ui/Button';
-import ExportRawFeaturesDialog from '@/components/ExportRawFeaturesDialog';
-import type { ExportFormat } from '@/lib/exportRawFeatureMatrix';
 
 // Type for reduction method (assuming it's defined elsewhere or should be here)
 type ReductionMethod = 'pca' | 'tsne' | 'umap';
@@ -45,8 +43,7 @@ interface ControlsPanelProps {
   onProcessInference: () => void;
   inferenceReductionMethod: ReductionMethod | null;
   canExportRawFeatures: boolean;
-  exportColumnLabels: string[];
-  onExportRawFeatures: (selectedIndices: number[], format: ExportFormat) => void;
+  onOpenExportRawFeatures: () => void;
 }
 
 // Placeholder for available MIR features
@@ -60,7 +57,7 @@ const availableMirFeatures = [
   { id: 'tuningFrequency', name: 'Tuning Frequency' }, // Represents tuningFrequency
   // --- NEW FEATURES --- Based on worker capabilities ---
   { id: 'rhythm', name: 'BPM'}, // Represents bpm, rhythmConfidence
-  // { id: 'onsetRate', name: 'Onset Rate'},
+  { id: 'onsetRate', name: 'Onset Rate'},
   { id: 'danceability', name: 'Danceability'},
   { id: 'intensity', name: 'Intensity'},
   { id: 'spectralCentroidTime', name: 'Spectral Centroid'},
@@ -111,12 +108,10 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
   onProcessInference,
   inferenceReductionMethod,
   canExportRawFeatures,
-  exportColumnLabels,
-  onExportRawFeatures
+  onOpenExportRawFeatures
 }) => {
   // State for selected controls
   const [selectedMirFeatures, setSelectedMirFeatures] = useState<Set<string>>(() => new Set(['mfcc'])); // Default MFCC
-  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [selectedDimReducer, setSelectedDimReducer] = useState<ReductionMethod>('umap'); // Default t-SNE
   const [targetDimensions, setTargetDimensions] = useState<number>(2); // Default 2D
   const [numClusters, setNumClusters] = useState<number>(3); // Default k=3
@@ -271,7 +266,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
                 variant="primary"
                 enableTilt={true}
                 type="button"
-                onClick={() => setIsExportModalOpen(true)}
+                onClick={onOpenExportRawFeatures}
                 className="flex w-full text-sm"
                 title="Export selected dimensions from the raw feature matrix"
               >
@@ -279,12 +274,6 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
               </Button>
             </div>
           )}
-          <ExportRawFeaturesDialog
-            isOpen={isExportModalOpen}
-            columnLabels={exportColumnLabels}
-            onClose={() => setIsExportModalOpen(false)}
-            onConfirm={onExportRawFeatures}
-          />
         </div>
 
         {/* === NEW: Data Processing Selection === */}

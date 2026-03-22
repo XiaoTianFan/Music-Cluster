@@ -28,7 +28,7 @@ const ExportRawFeaturesDialog: React.FC<ExportRawFeaturesDialogProps> = ({
     }
   }, [isOpen, columnLabels]);
 
-  const handleDialogClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleDialogClick = (e: React.MouseEvent) => {
     e.stopPropagation();
   };
 
@@ -57,7 +57,7 @@ const ExportRawFeaturesDialog: React.FC<ExportRawFeaturesDialogProps> = ({
 
   if (!isOpen) return null;
 
-  const panelClassName = 'text-gray-100 shadow-xl max-w-lg w-full max-h-[85vh] flex flex-col relative';
+  const panelClassName = 'text-gray-100 shadow-xl max-w-xl w-full relative';
   const panelStyle: React.CSSProperties = {
     '--aug-border-bg': 'var(--foreground)',
   } as React.CSSProperties;
@@ -77,18 +77,18 @@ const ExportRawFeaturesDialog: React.FC<ExportRawFeaturesDialogProps> = ({
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-2 right-2 text-gray-400 hover:text-[var(--accent-primary)] text-2xl font-bold p-1 leading-none z-10"
+          className="absolute top-2 right-2 text-gray-400 hover:text-[var(--accent-primary)] text-2xl font-bold leading-none p-1"
           aria-label="Close export dialog"
         >
           &times;
         </button>
 
-        <div className="p-6 flex flex-col min-h-0 flex-1">
-          <h3 className="text-xl font-semibold mb-2 text-[var(--accent-primary)] font-mono">
-            Export raw features
-          </h3>
-          <p className="text-xs text-gray-400 mb-4 font-mono">
-            Choose matrix dimensions and file format. Values come from the current raw feature matrix.
+        <div className="p-6">
+          <h2 className="text-xl font-bold mb-4 text-[var(--accent-primary)]">Export raw features</h2>
+
+          <p className="text-sm text-gray-300 mb-4">
+            Choose which matrix dimensions to include and the file format. Values come from the current raw feature
+            matrix.
           </p>
 
           <div className="flex gap-2 mb-3">
@@ -101,54 +101,56 @@ const ExportRawFeaturesDialog: React.FC<ExportRawFeaturesDialogProps> = ({
           </div>
 
           <div
-            className="flex-1 overflow-y-auto border border-[var(--accent-primary)]/40 rounded-sm p-2 mb-4 max-h-[40vh] font-mono text-xs"
+            className="text-sm text-gray-300 overflow-y-auto max-h-60 pr-2 mb-4 border border-gray-600/50 rounded-sm p-2"
             role="group"
             aria-label="Feature dimensions"
           >
             {columnLabels.map((label, index) => (
               <label
                 key={`${label}-${index}`}
-                className="flex items-start gap-2 py-1 px-1 hover:bg-white/5 cursor-pointer text-[var(--accent-primary)]"
+                className="flex items-start gap-2 py-1 px-0.5 hover:bg-white/5 cursor-pointer"
               >
                 <input
                   type="checkbox"
                   checked={selected.has(index)}
                   onChange={() => toggleIndex(index)}
-                  className="mt-0.5 shrink-0"
+                  className="mt-0.5 shrink-0 accent-[var(--accent-primary)]"
                 />
                 <span className="break-all">
-                  <span className="text-gray-500 mr-2">{index}</span>
+                  <span className="text-gray-500 mr-2 tabular-nums">{index}</span>
                   {label}
                 </span>
               </label>
             ))}
           </div>
 
-          <fieldset className="mb-4 font-mono text-sm">
+          <fieldset className="mb-4 text-sm text-gray-300">
             <legend className="text-gray-400 mb-2">Format</legend>
             <div className="flex gap-6">
-              <label className="flex items-center gap-2 text-[var(--accent-primary)] cursor-pointer">
+              <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="radio"
                   name="export-format"
                   checked={format === 'csv'}
                   onChange={() => setFormat('csv')}
+                  className="accent-[var(--accent-primary)]"
                 />
                 CSV
               </label>
-              <label className="flex items-center gap-2 text-[var(--accent-primary)] cursor-pointer">
+              <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="radio"
                   name="export-format"
                   checked={format === 'json'}
                   onChange={() => setFormat('json')}
+                  className="accent-[var(--accent-primary)]"
                 />
                 JSON
               </label>
             </div>
           </fieldset>
 
-          <div className="flex gap-2 mt-auto">
+          <div className="flex gap-2">
             <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>
               Cancel
             </Button>

@@ -73,6 +73,8 @@ interface ANNControlsPanelProps {
     // --- NEW: Selected Features State/Callback from Parent --- 
     selectedFeatures: Set<string>; 
     onSelectedFeaturesChange: (features: Set<string>) => void;
+    canExportRawFeatures: boolean;
+    onOpenExportRawFeatures: () => void;
 }
 
 // --- ADDED: Feature list from ControlsPanel.tsx --- 
@@ -135,7 +137,9 @@ const ANNControlsPanel: React.FC<ANNControlsPanelProps> = ({
     onShowExplanation,
     // --- NEW: Destructure selectedFeatures props ---
     selectedFeatures,
-    onSelectedFeaturesChange 
+    onSelectedFeaturesChange,
+    canExportRawFeatures,
+    onOpenExportRawFeatures
 }) => {
 
     // --- Local State for Form Inputs --- 
@@ -284,6 +288,19 @@ const ANNControlsPanel: React.FC<ANNControlsPanelProps> = ({
                     >
                         {isExtracting ? 'Processing...' : `Extract Features`}
                     </Button>
+                    {canExportRawFeatures && (
+                        <Button
+                            type="button"
+                            onClick={onOpenExportRawFeatures}
+                            className="w-full text-base py-1 mt-2"
+                            variant="primary"
+                            enableTilt={true}
+                            disabled={isAnyProcessRunning}
+                            title="Export selected dimensions from the raw feature matrix"
+                        >
+                            Export Raw Features
+                        </Button>
+                    )}
                 </div>
 
                 {/* --- Section 2: Data Processing --- */}
