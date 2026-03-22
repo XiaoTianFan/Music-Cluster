@@ -103,7 +103,7 @@ type ProcessingStage = 'features' | 'processed' | 'reduced' | 'kmeans' | null;
 interface VisPoint { x: number; y: number; }
 
 // Data structure types
-type UnprocessedDataType = { vectors: number[][], songIds: string[], isOHEColumn: boolean[] };
+type UnprocessedDataType = { vectors: number[][], songIds: string[], isOHEColumn: boolean[], columnLabels: string[] };
 type ProcessedDataType = { vectors: number[][], songIds: string[] };
 // Placeholder for K-Means assignments (not used in ANN page)
 const placeholderKmeansAssignments: Record<string, number> = {};
@@ -236,6 +236,9 @@ export default function ANNPage() {
         const songIds: string[] = [];
         const vectors: number[][] = [];
         const initialIsOHE: boolean[] = [];
+        const columnLabels: string[] = [];
+        const possibleKeys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        const possibleScales = ['major', 'minor'];
 
         setProcessedData(null);
         setReducedDataPoints({});
@@ -258,10 +261,8 @@ export default function ANNPage() {
                 featuresToUse.forEach((key) => {
                     const value = features[key];
                     if (key === 'key' || key === 'keyScale') {
-                        const possibleKeys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-                        const possibleScales = ['major', 'minor'];
                         let valuesToAdd: number[] = [];
-                        let isOHE = true;
+                        const isOHE = true;
                         if (key === 'key') {
                             valuesToAdd = possibleKeys.map(k => (k === value ? 1 : 0));
                         } else { 
@@ -270,21 +271,31 @@ export default function ANNPage() {
                         vector.push(...valuesToAdd);
                         if (firstVector) {
                              initialIsOHE.push(...Array(valuesToAdd.length).fill(isOHE));
+                             if (key === 'key') {
+                                 possibleKeys.forEach((k) => columnLabels.push(`Key: ${k}`));
+                             } else {
+                                 possibleScales.forEach((s) => columnLabels.push(`Scale: ${s}`));
+                             }
                          }
                     } else if (Array.isArray(value)) {
                         vector.push(...value);
                         if (firstVector) {
                             initialIsOHE.push(...Array(value.length).fill(false));
+                            for (let ai = 0; ai < value.length; ai++) {
+                                columnLabels.push(`${key}[${ai}]`);
+                            }
                         }
                     } else if (typeof value === 'number') {
                         vector.push(value);
                          if (firstVector) {
                              initialIsOHE.push(false);
+                             columnLabels.push(String(key));
                          }
                     } else {
                         vector.push(NaN);
                         if (firstVector) {
                             initialIsOHE.push(false);
+                            columnLabels.push(String(key));
                         }
                         addLogMessage(`Missing/invalid feature '${key}' for song ${song.name}. Using NaN.`, 'warn');
                     }
@@ -306,9 +317,15 @@ export default function ANNPage() {
         });
 
         if (vectors.length > 0 && !inconsistentLength) {
-            setUnprocessedData({ vectors, songIds, isOHEColumn: initialIsOHE });
-            setInputDimension(vectorLength);
-            addLogMessage(`Data matrix prepared: ${vectors.length} songs, ${vectorLength} features.`, 'complete');
+            if (columnLabels.length !== initialIsOHE.length || columnLabels.length !== vectorLength) {
+                addLogMessage('Column labels mismatch after matrix preparation.', 'error');
+                setUnprocessedData(null);
+                setInputDimension(0);
+            } else {
+                setUnprocessedData({ vectors, songIds, isOHEColumn: initialIsOHE, columnLabels });
+                setInputDimension(vectorLength);
+                addLogMessage(`Data matrix prepared: ${vectors.length} songs, ${vectorLength} features.`, 'complete');
+            }
         } else if (inconsistentLength) {
             setUnprocessedData(null);
              setInputDimension(0);

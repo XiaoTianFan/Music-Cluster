@@ -12,6 +12,7 @@ import FeatureExplanationDialog from '../components/FeatureExplanationDialog'; /
 import AboutDialog from '../components/AboutDialog'; // Import the About dialog
 import ExplanationDialog from '../components/ExplanationDialog'; // <-- Import the new generic dialog
 import AudioPlayer from '../components/AudioPlayer'; // <-- NEW: Import AudioPlayer
+import { downloadRawFeatureMatrixExport, type ExportFormat } from '@/lib/exportRawFeatureMatrix';
 // Remove the static import of VisualizationPanel
 // import VisualizationPanel from '../components/VisualizationPanel';
 
@@ -252,7 +253,7 @@ const featureIdToDataKeysMap: Map<string, (keyof Features)[]> = new Map([
 const prepareMatrix = (
     activeFeatures: { id: string; features: Features }[], // Input: Features of active songs
     logFn: (msg: string, level: LogLevel) => void
-): { vectors: number[][], songIds: string[], isOHEColumn: boolean[] } | null => {
+): { vectors: number[][], songIds: string[], isOHEColumn: boolean[], columnLabels: string[] } | null => {
     logFn('Preparing numerical matrix from features...', 'info');
 
     if (activeFeatures.length === 0) {
@@ -303,11 +304,19 @@ const prepareMatrix = (
         logFn(`Preparing one-hot encoding for 'keyScale' (${numScaleDimensions} dimensions).`, 'complete');
     }
 
+    const keyListSorted = commonFeatures.has('key') && keyToIndex
+        ? Array.from(uniqueKeys).sort()
+        : [];
+    const scaleListSorted = commonFeatures.has('keyScale') && scaleToIndex
+        ? Array.from(uniqueScales).sort()
+        : [];
+
     // Construct vectors
     const featureVectors: number[][] = [];
     const vectorSongIds: string[] = [];
     // --- NEW: Track OHE status for each column ---
     let isOHEColumnDefinition: boolean[] = []; 
+    let columnLabelsDefinition: string[] = [];
     let isOHEColumnDefinitionFinalized = false;
     // ---------------------------------------------
     let inconsistencyFound = false;
@@ -317,6 +326,7 @@ const prepareMatrix = (
         // Define isOHEColumnDefinition based on the first row
         if (rowIndex === 0) {
              isOHEColumnDefinition = []; // Reset for the first row run
+             columnLabelsDefinition = [];
         }
 
         for (const key of canonicalFeatureOrder) {
@@ -332,6 +342,7 @@ const prepareMatrix = (
                 // Mark these columns as OHE (only needed for first row)
                 if (rowIndex === 0) {
                     isOHEColumnDefinition.push(...Array(numKeyDimensions).fill(true));
+                    keyListSorted.forEach((k) => columnLabelsDefinition.push(`Key: ${k}`));
                 }
             } else if (key === 'keyScale' && scaleToIndex) {
                 const scaleOneHot = Array(numScaleDimensions).fill(0);
@@ -342,6 +353,7 @@ const prepareMatrix = (
                  // Mark these columns as OHE (only needed for first row)
                 if (rowIndex === 0) {
                      isOHEColumnDefinition.push(...Array(numScaleDimensions).fill(true));
+                     scaleListSorted.forEach((s) => columnLabelsDefinition.push(`Scale: ${s}`));
                  }
             } else if (Array.isArray(value)) {
                 const numericalArray = value as number[];
@@ -349,12 +361,16 @@ const prepareMatrix = (
                  // Mark these columns as NOT OHE (only needed for first row)
                  if (rowIndex === 0) {
                      isOHEColumnDefinition.push(...Array(numericalArray.length).fill(false));
+                     for (let ai = 0; ai < numericalArray.length; ai++) {
+                         columnLabelsDefinition.push(`${String(key)}[${ai}]`);
+                     }
                  }
             } else if (typeof value === 'number') {
                 vec.push(value);
                  // Mark this column as NOT OHE (only needed for first row)
                  if (rowIndex === 0) {
                      isOHEColumnDefinition.push(false);
+                     columnLabelsDefinition.push(String(key));
                  }
             }
         }
@@ -382,6 +398,11 @@ const prepareMatrix = (
         return null;
     }
 
+    if (columnLabelsDefinition.length !== isOHEColumnDefinition.length) {
+        logFn('Matrix column labels length mismatch.', 'error');
+        return null;
+    }
+
     // Final checks (vector consistency, length)
     if (featureVectors.length > 0) {
         const firstLen = featureVectors[0].length;
@@ -393,6 +414,10 @@ const prepareMatrix = (
             logFn('Constructed feature vectors are empty (length 0).', 'warn');
             return null;
         }
+        if (firstLen !== columnLabelsDefinition.length) {
+            logFn('Vector length does not match column label count.', 'error');
+            return null;
+        }
         logFn(`Prepared ${featureVectors.length} vectors for processing, each with ${firstLen} dimensions.`, 'complete');
     } else {
          logFn('No valid feature vectors constructed for matrix prep.', 'warn');
@@ -400,7 +425,7 @@ const prepareMatrix = (
     }
 
     // MODIFIED Return Value:
-    return { vectors: featureVectors, songIds: vectorSongIds, isOHEColumn: isOHEColumnDefinition };
+    return { vectors: featureVectors, songIds: vectorSongIds, isOHEColumn: isOHEColumnDefinition, columnLabels: columnLabelsDefinition };
 };
 
 // --- NEW: Helper to prepare matrix with fixed feature structure (for inference) ---
@@ -410,7 +435,7 @@ const prepareMatrixWithFixedStructure = (
     fixedKeyToIndex: Map<string, number> | null,
     fixedScaleToIndex: Map<string, number> | null,
     logFn: (msg: string, level: LogLevel) => void
-): { vectors: number[][], songIds: string[], isOHEColumn: boolean[] } | null => {
+): { vectors: number[][], songIds: string[], isOHEColumn: boolean[], columnLabels: string[] } | null => {
     logFn('Preparing numerical matrix with fixed feature structure for inference...', 'info');
 
     if (activeFeatures.length === 0) {
@@ -421,10 +446,18 @@ const prepareMatrixWithFixedStructure = (
     const numKeyDimensions = fixedKeyToIndex ? fixedKeyToIndex.size : 0;
     const numScaleDimensions = fixedScaleToIndex ? fixedScaleToIndex.size : 0;
 
+    const sortedKeyColumnLabels = fixedKeyToIndex
+        ? [...fixedKeyToIndex.entries()].sort((a, b) => a[1] - b[1]).map(([k]) => `Key: ${k}`)
+        : [];
+    const sortedScaleColumnLabels = fixedScaleToIndex
+        ? [...fixedScaleToIndex.entries()].sort((a, b) => a[1] - b[1]).map(([s]) => `Scale: ${s}`)
+        : [];
+
     // Construct vectors using the fixed structure
     const featureVectors: number[][] = [];
     const vectorSongIds: string[] = [];
     let isOHEColumnDefinition: boolean[] = [];
+    let columnLabelsDefinition: string[] = [];
     let isOHEColumnDefinitionFinalized = false;
     let inconsistencyFound = false;
 
@@ -432,6 +465,7 @@ const prepareMatrixWithFixedStructure = (
         const vec: number[] = [];
         if (rowIndex === 0) {
             isOHEColumnDefinition = [];
+            columnLabelsDefinition = [];
         }
 
         for (const key of canonicalFeatureOrder) {
@@ -446,11 +480,13 @@ const prepareMatrixWithFixedStructure = (
                     vec.push(...Array(numKeyDimensions).fill(0));
                     if (rowIndex === 0) {
                         isOHEColumnDefinition.push(...Array(numKeyDimensions).fill(true));
+                        sortedKeyColumnLabels.forEach((lbl) => columnLabelsDefinition.push(lbl));
                     }
                 } else if (key === 'keyScale' && fixedScaleToIndex) {
                     vec.push(...Array(numScaleDimensions).fill(0));
                     if (rowIndex === 0) {
                         isOHEColumnDefinition.push(...Array(numScaleDimensions).fill(true));
+                        sortedScaleColumnLabels.forEach((lbl) => columnLabelsDefinition.push(lbl));
                     }
                 } else {
                     // For other features, we need to know the expected length
@@ -473,6 +509,7 @@ const prepareMatrixWithFixedStructure = (
                 vec.push(...keyOneHot);
                 if (rowIndex === 0) {
                     isOHEColumnDefinition.push(...Array(numKeyDimensions).fill(true));
+                    sortedKeyColumnLabels.forEach((lbl) => columnLabelsDefinition.push(lbl));
                 }
             } else if (key === 'keyScale' && fixedScaleToIndex) {
                 const scaleOneHot = Array(numScaleDimensions).fill(0);
@@ -485,17 +522,22 @@ const prepareMatrixWithFixedStructure = (
                 vec.push(...scaleOneHot);
                 if (rowIndex === 0) {
                     isOHEColumnDefinition.push(...Array(numScaleDimensions).fill(true));
+                    sortedScaleColumnLabels.forEach((lbl) => columnLabelsDefinition.push(lbl));
                 }
             } else if (Array.isArray(value)) {
                 const numericalArray = value as number[];
                 vec.push(...numericalArray);
                 if (rowIndex === 0) {
                     isOHEColumnDefinition.push(...Array(numericalArray.length).fill(false));
+                    for (let ai = 0; ai < numericalArray.length; ai++) {
+                        columnLabelsDefinition.push(`${String(key)}[${ai}]`);
+                    }
                 }
             } else if (typeof value === 'number') {
                 vec.push(value);
                 if (rowIndex === 0) {
                     isOHEColumnDefinition.push(false);
+                    columnLabelsDefinition.push(String(key));
                 }
             }
         }
@@ -521,6 +563,11 @@ const prepareMatrixWithFixedStructure = (
         return null;
     }
 
+    if (columnLabelsDefinition.length !== isOHEColumnDefinition.length) {
+        logFn('Matrix column labels length mismatch (fixed structure).', 'error');
+        return null;
+    }
+
     if (featureVectors.length > 0) {
         const firstLen = featureVectors[0].length;
         if (!featureVectors.every(v => v.length === firstLen)) {
@@ -531,13 +578,17 @@ const prepareMatrixWithFixedStructure = (
             logFn('Constructed feature vectors are empty (length 0).', 'warn');
             return null;
         }
+        if (firstLen !== columnLabelsDefinition.length) {
+            logFn('Vector length does not match column label count (fixed structure).', 'error');
+            return null;
+        }
         logFn(`Prepared ${featureVectors.length} vectors for inference, each with ${firstLen} dimensions.`, 'complete');
     } else {
         logFn('No valid feature vectors constructed for matrix prep.', 'warn');
         return null;
     }
 
-    return { vectors: featureVectors, songIds: vectorSongIds, isOHEColumn: isOHEColumnDefinition };
+    return { vectors: featureVectors, songIds: vectorSongIds, isOHEColumn: isOHEColumnDefinition, columnLabels: columnLabelsDefinition };
 };
 // --- End Helper ---
 
@@ -553,7 +604,7 @@ export default function DashboardPage() {
   );
   // --- Data Processing State (New) ---
   // MODIFIED: Add isOHEColumn to state type
-  type UnprocessedDataType = { vectors: number[][], songIds: string[], isOHEColumn: boolean[] };
+  type UnprocessedDataType = { vectors: number[][], songIds: string[], isOHEColumn: boolean[], columnLabels: string[] };
   const [unprocessedData, setUnprocessedData] = useState<UnprocessedDataType | null>(null);
   const [processedData, setProcessedData] = useState<{ vectors: number[][], songIds: string[] } | null>(null); // Processed data doesn't need OHE info directly
   const [isProcessingData, setIsProcessingData] = useState<boolean>(false);
@@ -1358,7 +1409,7 @@ export default function DashboardPage() {
         if (songIndex === -1) return prev;
         const newVectors = prev.vectors.filter((_, index) => index !== songIndex);
         const newSongIds = prev.songIds.filter(id => id !== songIdToRemove);
-        return newVectors.length > 0 ? { vectors: newVectors, songIds: newSongIds, isOHEColumn: prev.isOHEColumn } : null;
+        return newVectors.length > 0 ? { vectors: newVectors, songIds: newSongIds, isOHEColumn: prev.isOHEColumn, columnLabels: prev.columnLabels } : null;
     });
     setProcessedData(prev => {
         if (!prev) return null;
@@ -2099,6 +2150,30 @@ export default function DashboardPage() {
           return point != null && point.length > 0 && (targetDim === 0 || point.length === targetDim);
       });
   }, [activeSongIds, reducedDataPoints, reductionDimensions]);
+
+  const canExportRawFeatures = useMemo(() => {
+      if (!unprocessedData) return false;
+      const { vectors, columnLabels, isOHEColumn } = unprocessedData;
+      if (vectors.length === 0 || !vectors[0]?.length) return false;
+      const n = vectors[0].length;
+      return columnLabels.length === n && isOHEColumn.length === n;
+  }, [unprocessedData]);
+
+  const exportColumnLabels = useMemo(() => unprocessedData?.columnLabels ?? [], [unprocessedData]);
+
+  const handleExportRawFeatures = useCallback((selectedIndices: number[], format: ExportFormat) => {
+      if (!unprocessedData) return;
+      downloadRawFeatureMatrixExport({
+          songs,
+          songIds: unprocessedData.songIds,
+          vectors: unprocessedData.vectors,
+          columnLabels: unprocessedData.columnLabels,
+          selectedIndices,
+          format,
+          filenameBase: 'musiccluster-raw-features',
+      });
+      addLogMessage(`Exported raw features (${format.toUpperCase()}).`, 'complete');
+  }, [unprocessedData, songs, addLogMessage]);
 
   // Filter logs for display in the panel
   const filteredLogMessages = useMemo(() => {

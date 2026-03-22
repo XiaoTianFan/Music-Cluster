@@ -9,6 +9,7 @@ interface UnprocessedDataType {
   vectors: number[][];
   songIds: string[];
   isOHEColumn: boolean[];
+  columnLabels: string[];
 }
 
 // Type for processed data structure
@@ -559,8 +560,11 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
       if (features.dynamicComplexity !== undefined) hoverText += `<br>Dynamic Complexity: ${features.dynamicComplexity.toFixed(3)}`;
       if (features.loudness !== undefined) hoverText += `<br>Loudness: ${features.loudness.toFixed(3)}`;
       if (features.rms !== undefined) hoverText += `<br>RMS: ${features.rms.toFixed(3)}`;
+      if (features.bpm !== undefined) hoverText += `<br>BPM: ${features.bpm.toFixed(1)}`;
+      if (features.onsetRate !== undefined) hoverText += `<br>Onset Rate: ${features.onsetRate.toFixed(3)}`;
       if (features.keyStrength !== undefined) hoverText += `<br>Key Strength: ${features.keyStrength.toFixed(3)}`;
       if (features.tuningFrequency !== undefined) hoverText += `<br>Tuning Frequency: ${features.tuningFrequency.toFixed(2)} Hz`;
+      if (features.rhythmConfidence !== undefined) hoverText += `<br>Rhythm Confidence: ${features.rhythmConfidence.toFixed(3)}`;
 
       // Add categorical values
       if (features.key !== undefined) hoverText += `<br>Key: ${features.key}`;
@@ -589,6 +593,8 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
       if (features.pitchSalienceStdDev !== undefined) hoverText += `<br>Pitch Salience Std: ${features.pitchSalienceStdDev.toFixed(3)}`;
       if (features.spectralFluxMean !== undefined) hoverText += `<br>Spectral Flux Mean: ${features.spectralFluxMean.toFixed(4)}`;
       if (features.spectralFluxStdDev !== undefined) hoverText += `<br>Spectral Flux Std: ${features.spectralFluxStdDev.toFixed(4)}`;
+      if (features.danceability !== undefined) hoverText += `<br>Danceability: ${features.danceability.toFixed(3)}`;
+      if (features.intensity !== undefined) hoverText += `<br>Intensity: ${features.intensity}`;
 
       // Optional: Add vector features (MFCC, Contrast, Mel) summary if needed
       if (features.mfccMeans) hoverText += `<br>MFCC Means: [${features.mfccMeans.length} vals]`;
