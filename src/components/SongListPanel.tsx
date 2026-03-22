@@ -30,6 +30,7 @@ interface SongListPanelProps {
   onAddSongs: (newSongs: Song[]) => void; // New prop for handling dropped/added songs
   onSelectAll: () => void; // Added prop
   onClearAll: () => void;  // Added prop
+  onRemoveAll: () => void; // Remove every track from the pool (not just deselect)
   onShowDetails: (songId: string) => void; // Prop to trigger showing details
   // --- NEW: Audio Player Props ---
   onPlayRequest: (songId: string) => void;
@@ -94,6 +95,7 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
   onAddSongs, // Destructure new prop
   onSelectAll, // Destructure added prop
   onClearAll,  // Destructure added prop
+  onRemoveAll,
   onShowDetails, // Destructure added prop
   // --- NEW: Destructure Audio Props ---
   onPlayRequest,
@@ -355,6 +357,15 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
                     title="Deselect all songs"
                 >
                     Clear
+                </Button>
+                <Button
+                    onClick={onRemoveAll}
+                    disabled={isProcessing || songs.length === 0}
+                    variant="secondary"
+                    className="px-4 py-1 text-xs"
+                    title="Remove all songs from the pool"
+                >
+                    Remove
                 </Button>
             </div>
             <div className="flex-grow"></div> 

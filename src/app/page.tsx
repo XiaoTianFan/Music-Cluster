@@ -1468,6 +1468,55 @@ export default function DashboardPage() {
     setActiveSongIds(new Set());
     addLogMessage('Cleared all song selections.', 'info');
   }, [addLogMessage]);
+
+  const handleRemoveAllSongs = useCallback(() => {
+    songs.forEach((song) => {
+      if (song.source === 'user') {
+        URL.revokeObjectURL(song.url);
+      }
+    });
+    setSongs([]);
+    setActiveSongIds(new Set());
+    setSongFeatures({});
+    setFeatureStatus({});
+    setReducedDataPoints({});
+    setUnprocessedData(null);
+    setProcessedData(null);
+    setAvailableFeatureKeys(null);
+    setReductionDimensions(0);
+    setIsClustering(false);
+    setIsKmeansInitialized(false);
+    setKmeansIteration(0);
+    setKmeansCentroids([]);
+    setKmeansAssignments({});
+    if (kmeansWorkerRef.current) {
+      kmeansWorkerRef.current.postMessage({ type: 'resetTraining' });
+    }
+    setLatestSuccessfulStage(null);
+    setVisualizationDisplayStage(null);
+    initialTargetSongIdsRef.current = new Set();
+    setProcessingSongIds(new Set());
+    setCurrentlyPlayingSongId(null);
+    setIsPlaying(false);
+    setDetailsSongId(null);
+    setIsDetailsDialogOpen(false);
+    setTrainingPipelineParams({
+      selectedFeatures: null,
+      processingStats: null,
+      reductionModelInfo: null,
+      unprocessedDataForInference: null,
+      trainingFeatureKeys: null,
+      trainingKeyToIndex: null,
+      trainingScaleToIndex: null,
+    });
+    setInferencePlotPoint(null);
+    setInferenceFile(null);
+    setInferenceSongId(null);
+    setInferenceResult(null);
+    setInferenceError(null);
+    setIsProcessingInference(false);
+    addLogMessage('Removed all songs from the pool.', 'complete');
+  }, [songs, addLogMessage]);
   // --------------------------------
 
   // Handler to trigger the hidden file input
@@ -2778,6 +2827,7 @@ export default function DashboardPage() {
             onAddSongs={handleAddSongs} // Pass the new handler
             onSelectAll={handleSelectAll}
             onClearAll={handleClearAll}
+            onRemoveAll={handleRemoveAllSongs}
             onShowDetails={handleShowDetails}
             kmeansAssignments={kmeansAssignments} // <-- ADD THIS PROP
             // --- NEW: Pass Audio Props ---
