@@ -60681,7 +60681,7 @@ self.onmessage = async (event) => {
                             const rmsResult = essentia.RMS(audioVectorEssentia);
                             combinedFeatures.rms = rmsResult.rms;
                             break;
-                        case 'rhythm': // Includes BPM
+                        case 'rhythm': // BPM (Fast) — RhythmExtractor2013 degara
                             const rhythmResult = essentia.RhythmExtractor2013(audioVectorEssentia, 208, 'degara', 40);
                             combinedFeatures.bpm = rhythmResult.bpm;
                             // combinedFeatures.ticks = essentia.vectorToArray(rhythmResult.ticks); // Keep ticks commented unless needed
@@ -60689,6 +60689,10 @@ self.onmessage = async (event) => {
                             // rhythmResult.ticks?.delete(); // Clean up vector if extracted
                             // rhythmResult.estimates?.delete();
                             // rhythmResult.bpmIntervals?.delete();
+                            break;
+                        case 'rhythmSlow': // BPM (Slow) — RhythmExtractor2013 multifeature
+                            const rhythmSlowResult = essentia.RhythmExtractor2013(audioVectorEssentia, 208, 'multifeature', 40);
+                            combinedFeatures.bpmSlow = rhythmSlowResult.bpm;
                             break;
                         case 'tuningFrequency':
                             let vectorToDelete = null; // Keep track of vector to delete

@@ -86,7 +86,8 @@ const availableMirFeatures = [
   { id: 'dynamicComplexity', name: 'Dynamic Complexity' }, // Represents dynamicComplexity, loudness
   { id: 'rms', name: 'RMS' },
   { id: 'tuningFrequency', name: 'Tuning Frequency' }, // Represents tuningFrequency
-  { id: 'rhythm', name: 'BPM'}, // Represents bpm, rhythmConfidence
+  { id: 'rhythm', name: 'BPM (Fast)'}, // degara → bpm
+  { id: 'rhythmSlow', name: 'BPM (Slow)'}, // multifeature → bpmSlow
   { id: 'danceability', name: 'Danceability'},
   { id: 'intensity', name: 'Intensity'},
   { id: 'spectralCentroidTime', name: 'Spectral Centroid'},
@@ -289,17 +290,22 @@ const ANNControlsPanel: React.FC<ANNControlsPanelProps> = ({
                         {isExtracting ? 'Processing...' : `Extract Features`}
                     </Button>
                     {canExportRawFeatures && (
-                        <Button
-                            type="button"
-                            onClick={onOpenExportRawFeatures}
-                            className="w-full text-base py-1 mt-2"
-                            variant="primary"
-                            enableTilt={true}
-                            disabled={isAnyProcessRunning}
-                            title="Export selected dimensions from the raw feature matrix"
-                        >
-                            Export Raw Features
-                        </Button>
+                        <div className="mt-2 flex-shrink-0">
+                            <Button
+                                type="button"
+                                onClick={onOpenExportRawFeatures}
+                                className="w-full text-base py-1"
+                                variant="primary"
+                                enableTilt={true}
+                                disabled={isAnyProcessRunning}
+                                title="Export selected dimensions from the raw feature matrix"
+                            >
+                                Export Raw Features
+                            </Button>
+                            <p className="mt-1.5 text-[11px] leading-snug text-[var(--text-secondary)]">
+                                Or click the info icon in the Song Pool for each track to see their raw features
+                            </p>
+                        </div>
                     )}
                 </div>
 

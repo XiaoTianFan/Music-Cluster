@@ -56,7 +56,8 @@ const availableMirFeatures = [
   { id: 'rms', name: 'RMS' },
   { id: 'tuningFrequency', name: 'Tuning Frequency' }, // Represents tuningFrequency
   // --- NEW FEATURES --- Based on worker capabilities ---
-  { id: 'rhythm', name: 'BPM'}, // Represents bpm, rhythmConfidence
+  { id: 'rhythm', name: 'BPM (Fast)'}, // RhythmExtractor2013 degara → bpm
+  { id: 'rhythmSlow', name: 'BPM (Slow)'}, // RhythmExtractor2013 multifeature → bpmSlow
   { id: 'onsetRate', name: 'Onset Rate'},
   { id: 'danceability', name: 'Danceability'},
   { id: 'intensity', name: 'Intensity'},
@@ -272,6 +273,9 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
               >
                 Export Raw Features
               </Button>
+              <p className="mt-1.5 text-[11px] leading-snug text-[var(--text-secondary)]">
+                Or click the info icon in the Song Pool for each track to see their raw features
+              </p>
             </div>
           )}
         </div>

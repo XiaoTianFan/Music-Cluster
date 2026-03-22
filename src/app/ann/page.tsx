@@ -37,6 +37,7 @@ export interface Features {
     rms?: number;
     tuningFrequency?: number;
     bpm?: number;
+    bpmSlow?: number;
     rhythmConfidence?: number;
     onsetRate?: number;
     danceability?: number;

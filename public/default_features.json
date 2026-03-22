@@ -10,6 +10,7 @@
         "dynamicComplexity",
         "loudness",
         "bpm",
+        "bpmSlow",
         "onsetRate",
         "danceability",
         "rms",
@@ -156,7 +157,8 @@
                 10.684236702623448,
                 9.773044195165014
             ],
-            "onsetRate": 3.489957332611084
+            "onsetRate": 3.489957332611084,
+            "bpmSlow": 90.47970581054688
         },
         "/audio/Excerpt_Tchaikovsky - Nutcracker March_Piano Solo.mp3": {
             "intensity": -1,
@@ -281,7 +283,8 @@
                 11.658870613783074,
                 13.99278014303266
             ],
-            "onsetRate": 3.689859390258789
+            "onsetRate": 3.689859390258789,
+            "bpmSlow": 128.58843994140625
         },
         "/audio/Excerpt_Yes - Roundabout.mp3": {
             "intensity": 0,
@@ -406,7 +409,8 @@
                 9.50182568361175,
                 9.1718702579869
             ],
-            "onsetRate": 3.173445701599121
+            "onsetRate": 3.173445701599121,
+            "bpmSlow": 135.30062866210938
         },
         "/audio/Excerpt_Grover Washington, Jr.-Bill Withers - Just the Two of Us.mp3": {
             "intensity": -1,
@@ -531,7 +535,8 @@
                 14.108351985121015,
                 12.465000969438531
             ],
-            "onsetRate": 4.272907257080078
+            "onsetRate": 4.272907257080078,
+            "bpmSlow": 95.98760986328125
         },
         "/audio/Excerpt_Eric Clapton - Autumn Leaves.mp3": {
             "intensity": -1,
@@ -656,7 +661,8 @@
                 9.56700292658771,
                 8.586027714252618
             ],
-            "onsetRate": 2.6153855323791504
+            "onsetRate": 2.6153855323791504,
+            "bpmSlow": 82.819091796875
         },
         "/audio/Excerpt_Frank Sinatra - Fly Me To The Moon.mp3": {
             "intensity": -1,
@@ -781,7 +787,8 @@
                 11.486989622539332,
                 10.194077066308758
             ],
-            "onsetRate": 3.2150919437408447
+            "onsetRate": 3.2150919437408447,
+            "bpmSlow": 122.52615356445312
         },
         "/audio/Excerpt_Genesis - Firth of Fifth.mp3": {
             "intensity": 0,
@@ -906,7 +913,8 @@
                 8.851196532225917,
                 9.559750445973723
             ],
-            "onsetRate": 4.322882652282715
+            "onsetRate": 4.322882652282715,
+            "bpmSlow": 172.2655487060547
         },
         "/audio/Excerpt_Mariya Takeuchi - Plastic Love.mp3": {
             "intensity": 0,
@@ -1031,7 +1039,8 @@
                 8.157496532529084,
                 7.83554806720721
             ],
-            "onsetRate": 4.181285381317139
+            "onsetRate": 4.181285381317139,
+            "bpmSlow": 102.24120330810547
         },
         "/audio/Excerpt_Michael Jackson - Billie Jean.mp3": {
             "intensity": 0,
@@ -1156,7 +1165,8 @@
                 8.950880454492257,
                 8.34597592933545
             ],
-            "onsetRate": 4.0480170249938965
+            "onsetRate": 4.0480170249938965,
+            "bpmSlow": 116.86224365234375
         },
         "/audio/Excerpt_Queen - Bohemian Rhapsody.mp3": {
             "intensity": -1,
@@ -1281,7 +1291,8 @@
                 12.636852112136799,
                 9.812648538448093
             ],
-            "onsetRate": 2.3155324459075928
+            "onsetRate": 2.3155324459075928,
+            "bpmSlow": 142.65728759765625
         },
         "/audio/Excerpt_Rachmaninov - Symphony No. 2 Op. 27 III. Adagio Adagio.mp3": {
             "intensity": 0,
@@ -1406,7 +1417,8 @@
                 7.754365774884441,
                 8.298486578541262
             ],
-            "onsetRate": 0.17491433024406433
+            "onsetRate": 0.17491433024406433,
+            "bpmSlow": 163.4338836669922
         },
         "/audio/Excerpt_The Beatles - Abbey Road_Come Together.mp3": {
             "intensity": -1,
@@ -1531,7 +1543,8 @@
                 11.004087560672819,
                 11.453930089853007
             ],
-            "onsetRate": 3.806468963623047
+            "onsetRate": 3.806468963623047,
+            "bpmSlow": 163.32749938964844
         },
         "/audio/Excerpt_Yasuha - Flyday Chinatown.mp3": {
             "intensity": 0,
@@ -1656,7 +1669,8 @@
                 9.978102351585424,
                 9.516854332947114
             ],
-            "onsetRate": 3.9147491455078125
+            "onsetRate": 3.9147491455078125,
+            "bpmSlow": 123.22764587402344
         },
         "/audio/Excerpt_Dvorak - Symphony No. 9 (From the New World)_Movement 4.mp3": {
             "intensity": 0,
@@ -1781,7 +1795,8 @@
                 10.090889016276837,
                 10.42273045207992
             ],
-            "onsetRate": 2.0323379039764404
+            "onsetRate": 2.0323379039764404,
+            "bpmSlow": 144.35513305664062
         },
         "/audio/Excerpt_King Crimson - The Court of the Crimson King.mp3": {
             "intensity": 0,
@@ -1906,7 +1921,8 @@
                 10.19721634841825,
                 7.946635977702408
             ],
-            "onsetRate": 2.8319461345672607
+            "onsetRate": 2.8319461345672607,
+            "bpmSlow": 136.28074645996094
         },
         "/audio/Excerpt_Richard Wagner - Ride of the Valkyries.mp3": {
             "intensity": -1,
@@ -2031,7 +2047,8 @@
                 11.165839832561797,
                 9.532501833859888
             ],
-            "onsetRate": 1.9823623895645142
+            "onsetRate": 1.9823623895645142,
+            "bpmSlow": 99.44127655029297
         },
         "/audio/Excerpt_Chopin - Nocturne op.9 No.2.mp3": {
             "intensity": -1,
@@ -2156,7 +2173,8 @@
                 10.99999211149075,
                 14.418493985863538
             ],
-            "onsetRate": 2.515434503555298
+            "onsetRate": 2.515434503555298,
+            "bpmSlow": 123.41448974609375
         },
         "/audio/Excerpt_Debussy - Clair De Lune.mp3": {
             "intensity": -1,
@@ -2281,7 +2299,8 @@
                 14.688135719965885,
                 13.134373460685534
             ],
-            "onsetRate": 1.5492411851882935
+            "onsetRate": 1.5492411851882935,
+            "bpmSlow": 155.0698699951172
         },
         "/audio/Excerpt_Michael Jaskson - Beat It.mp3": {
             "intensity": 0,
@@ -2406,7 +2425,8 @@
                 8.947096498390277,
                 8.49187874172265
             ],
-            "onsetRate": 3.5232741832733154
+            "onsetRate": 3.5232741832733154,
+            "bpmSlow": 138.5095672607422
         },
         "/audio/Excerpt_Miki Matsubara - Stay With Me.mp3": {
             "intensity": 0,
@@ -2531,7 +2551,8 @@
                 13.570190479332819,
                 10.523802631535935
             ],
-            "onsetRate": 4.339540958404541
+            "onsetRate": 4.339540958404541,
+            "bpmSlow": 108.41645812988281
         },
         "/audio/Excerpt_Schubert - Piano Sonata_D845.mp3": {
             "intensity": -1,
@@ -2656,7 +2677,8 @@
                 10.334551794678582,
                 10.422169079006688
             ],
-            "onsetRate": 2.4404714107513428
+            "onsetRate": 2.4404714107513428,
+            "bpmSlow": 172.2655029296875
         },
         "/audio/Excerpt_Schubert-Liszt - Erlkoenig.mp3": {
             "intensity": -1,
@@ -2781,7 +2803,8 @@
                 8.226536146090837,
                 10.672786832845217
             ],
-            "onsetRate": 3.6648716926574707
+            "onsetRate": 3.6648716926574707,
+            "bpmSlow": 139.58758544921875
         },
         "/audio/Excerpt_Stan Getz - The Girl From Ipanema.mp3": {
             "intensity": -1,
@@ -2906,7 +2929,8 @@
                 9.834712697863893,
                 8.626135938562712
             ],
-            "onsetRate": 3.7981395721435547
+            "onsetRate": 3.7981395721435547,
+            "bpmSlow": 129.88406372070312
         },
         "/audio/Excerpt_Tatsuro Yamashita - Christmas Eve.mp3": {
             "intensity": -1,
@@ -3031,7 +3055,8 @@
                 8.921302192510367,
                 8.596745466062492
             ],
-            "onsetRate": 3.3233721256256104
+            "onsetRate": 3.3233721256256104,
+            "bpmSlow": 117.6375961303711
         },
         "/audio/Excerpt_Oscar Peterson - Tea For Two.mp3": {
             "intensity": -1,
@@ -3156,7 +3181,8 @@
                 13.413557162839297,
                 12.949963969940208
             ],
-            "onsetRate": 3.7648227214813232
+            "onsetRate": 3.7648227214813232,
+            "bpmSlow": 122.79051971435547
         }
     }
 }

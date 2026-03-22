@@ -28,8 +28,12 @@
     "explanation": "Estimates the reference tuning frequency (often around A4 = 440 Hz) used in the recording. It analyzes the pitch content to find the most prominent tuning standard. 'Tuning Cents' shows the deviation from the standard 440 Hz tuning in cents (100 cents = 1 semitone)."
   },
   "rhythm": {
-      "name": "BPM (tempo)",
+      "name": "BPM (Fast)",
       "explanation": "Estimates global tempo in beats per minute (BPM) using Essentia's RhythmExtractor2013 with the degara method. That path uses BeatTrackerDegara: it builds an onset strength curve from complex spectral difference, then runs TempoTapDegara to infer tempo and beat times. The search range is 40–208 BPM (configured min/max tempo). This setting is faster than the alternative multifeature mode (BeatTrackerMultiFeature) but typically less accurate on difficult material. The app stores only the scalar bpm value; beat times and Essentia's rhythm confidence are not exported. With degara, Essentia does not provide a meaningful confidence score (it is fixed at 0), so this feature does not populate rhythm confidence in the UI."
+  },
+  "rhythmSlow": {
+      "name": "BPM (Slow)",
+      "explanation": "Estimates global tempo in beats per minute (BPM) using Essentia's RhythmExtractor2013 with the multifeature method (BeatTrackerMultiFeature). It combines several onset functions and band-wise energy for more robust tempo estimation than the degara path, at higher CPU cost. The same 40–208 BPM search range is used as for BPM (Fast). The app stores only the scalar bpmSlow value; beat times and Essentia's rhythm confidence are not exported, though multifeature does provide a meaningful confidence score in Essentia if you extend the pipeline later."
   },
   "onsetRate": {
       "name": "Onset Rate",

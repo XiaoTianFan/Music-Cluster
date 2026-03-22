@@ -72,7 +72,8 @@ export interface Features {
   loudness?: number; // Note: This 'loudness' is from DynamicComplexity
   rms?: number;
   tuningFrequency?: number;
-  bpm?: number; // From RhythmExtractor2013
+  bpm?: number; // From RhythmExtractor2013 (degara)
+  bpmSlow?: number; // From RhythmExtractor2013 (multifeature)
   rhythmConfidence?: number; // From RhythmExtractor2013
 
   // --- NEW Full Signal Features ---
@@ -109,6 +110,7 @@ export interface Features {
   rmsError?: string;
   tuningFrequencyError?: string;
   rhythmError?: string;
+  rhythmSlowError?: string;
   onsetRateError?: string;
   danceabilityError?: string;
   intensityError?: string;
@@ -195,7 +197,7 @@ type ProcessingStage = 'features' | 'processed' | 'reduced' | 'kmeans' | null; /
 // Exporting might be better long-term, but redefining for now.
 const canonicalFeatureOrder: (keyof Features)[] = [
   // Existing Scalar Rhythmic/Dynamic/Loudness
-  'energy', 'entropy', 'loudness', 'rms', 'dynamicComplexity', 'bpm', 'onsetRate',
+  'energy', 'entropy', 'loudness', 'rms', 'dynamicComplexity', 'bpm', 'bpmSlow', 'onsetRate',
   // Existing Scalar Tonal/Pitch
   'keyStrength', 'tuningFrequency', 'rhythmConfidence', 'pitchSalienceMean', 'pitchSalienceStdDev',
   // NEW Scalar Spectral/Timbral
@@ -234,6 +236,7 @@ const featureIdToDataKeysMap: Map<string, (keyof Features)[]> = new Map([
   ['rms', ['rms']],
   // Example: Grouping Rhythm features under 'bpm' user-selectable option
   ['rhythm', ['bpm']],
+  ['rhythmSlow', ['bpmSlow']],
   ['onsetRate', ['onsetRate']],
   ['danceability', ['danceability']],
   ['intensity', ['intensity']], // Note: Intensity is categorical

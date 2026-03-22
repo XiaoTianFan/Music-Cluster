@@ -71,7 +71,7 @@ type ProcessingStage = 'features' | 'processed' | 'reduced' | 'kmeans' | null;
 // --- NEW: Redefine canonical feature order from page.tsx --- 
 const canonicalFeatureOrder: (keyof Features)[] = [
   // Existing Scalar Rhythmic/Dynamic/Loudness
-  'energy', 'entropy', 'loudness', 'rms', 'dynamicComplexity', 'bpm', 'onsetRate',
+  'energy', 'entropy', 'loudness', 'rms', 'dynamicComplexity', 'bpm', 'bpmSlow', 'onsetRate',
   // Existing Scalar Tonal/Pitch
   'keyStrength', 'tuningFrequency', 'rhythmConfidence', 'pitchSalienceMean', 'pitchSalienceStdDev',
   // NEW Scalar Spectral/Timbral
@@ -148,7 +148,8 @@ const FEATURE_FIELD_ORDER = [
   { key: 'keyStrength', prefix: 'Key Strength', isArray: false },
 
 
-  { key: 'bpm', prefix: 'BPM', isArray: false },
+  { key: 'bpm', prefix: 'BPM (Fast)', isArray: false },
+  { key: 'bpmSlow', prefix: 'BPM (Slow)', isArray: false },
   { key: 'onsetRate', prefix: 'Onset Rate', isArray: false },
   { key: 'rhythmConfidence', prefix: 'Rhythm Confidence', isArray: false },
   { key: 'pitchSalienceMean', prefix: 'Pitch Salience μ', isMean: true },
@@ -600,7 +601,8 @@ const ANNDataVisualizationPanel: React.FC<VisualizationPanelProps> = ({
       if (features.dynamicComplexity !== undefined) hoverText += `<br>Dynamic Complexity: ${features.dynamicComplexity.toFixed(3)}`;
       if (features.loudness !== undefined) hoverText += `<br>Loudness: ${features.loudness.toFixed(3)}`;
       if (features.rms !== undefined) hoverText += `<br>RMS: ${features.rms.toFixed(3)}`;
-      if (features.bpm !== undefined) hoverText += `<br>BPM: ${features.bpm.toFixed(1)}`;
+      if (features.bpm !== undefined) hoverText += `<br>BPM (Fast): ${features.bpm.toFixed(1)}`;
+      if (features.bpmSlow !== undefined) hoverText += `<br>BPM (Slow): ${features.bpmSlow.toFixed(1)}`;
       if (features.onsetRate !== undefined) hoverText += `<br>Onset Rate: ${features.onsetRate.toFixed(3)}`;
       if (features.keyStrength !== undefined) hoverText += `<br>Key Strength: ${features.keyStrength.toFixed(3)}`;
       if (features.tuningFrequency !== undefined) hoverText += `<br>Tuning Frequency: ${features.tuningFrequency.toFixed(2)} Hz`;
