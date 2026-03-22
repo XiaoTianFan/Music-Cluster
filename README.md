@@ -53,6 +53,12 @@ This web application demonstrates and visualizes the process of unsupervised k-m
     ```
 4.  Open [http://localhost:3000](http://localhost:3000) in your browser.
 
+### Regenerating `default_features.json`
+
+From the `musiccluster` directory, after `npm install`, run `npm run regenerate-default-features`. The script uses **Essentia.js** (same as the app worker) and **FFmpeg** (via the `ffmpeg-static` devDependency) to decode each file under `public/audio/` and merge computed fields into `public/default_features.json`. Currently it updates **`onsetRate`** for every song entry. Pass `--dry-run` to print values without writing. Override the output path with `--output <path>`.
+
+For adding new default songs, new cached features, or extending the script, see **`../product-docs/regenerate-default-features.md`** (from the repo root: `product-docs/regenerate-default-features.md`).
+
 ## 📂 Project Structure
 
 ```
@@ -62,6 +68,8 @@ This web application demonstrates and visualizes the process of unsupervised k-m
 │   ├── featureExplanations.json # Descriptions for MIR features
 │   ├── algorithmExplanations.json # Descriptions for algorithms
 │   └── default_features.json # Pre-computed features for default songs (optional cache)
+├── scripts/
+│   └── regenerate-default-features.cjs # Local cache regeneration (onset rate, etc.)
 ├── src/
 │   ├── app/           # Next.js App Router pages (page.tsx, globals.css, layout.tsx, etc.)
 │   ├── components/

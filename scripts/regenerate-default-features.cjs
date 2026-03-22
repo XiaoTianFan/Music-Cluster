@@ -104,9 +104,12 @@ function computeOnsetRate(essentia, samples) {
 }
 
 function ensureAvailableKey(keys, key) {
-  const set = new Set(keys);
-  if (!set.has(key)) set.add(key);
-  return [...set].sort();
+  const k = keys && keys.length ? [...keys] : [];
+  if (k.includes(key)) return k;
+  const bpm = k.indexOf('bpm');
+  if (bpm >= 0) k.splice(bpm + 1, 0, key);
+  else k.push(key);
+  return k;
 }
 
 function main() {
