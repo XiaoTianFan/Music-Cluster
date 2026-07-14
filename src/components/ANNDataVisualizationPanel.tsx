@@ -465,7 +465,7 @@ const ANNDataVisualizationPanel: React.FC<VisualizationPanelProps> = ({
   // --- Dynamic options for controls ---
   const getAvailableColorOptions = useMemo(() => {
     // --- RESTORED: Original implementation --- 
-    let options = [{ value: 'cluster', label: 'Cluster Assignment' }];
+    let options = [{ value: 'cluster', label: 'Label Assignment' }];
     featureColumnsMap.categorical.forEach(category => {
       options.push({
         value: `feature:${category}`,

@@ -15,7 +15,9 @@
     },
     // Moved 'include' and 'exclude' outside compilerOptions
     "include": [
-      "src/workers/**/*.ts", 
+      "src/workers/**/*.ts",
+      "src/lib/dataProcessing.ts",
+      "src/lib/mlpTraining.ts",
       "src/types/**/*.d.ts" 
     ],
     "exclude": [

@@ -1523,10 +1523,10 @@ function batchMatMul(args) {
                         for (let j = j0; j < jBlock; j++) {
                             let sum = 0.0;
                             for (let k = k0; k < kBlock; k++) {
-                                const aVal = 
+                                const aVal =
                                 // tslint:disable-next-line: max-line-length
                                 a3dValues[batchIndexA * aBatch + i * aOuterStep + k * aInnerStep];
-                                const bVal = 
+                                const bVal =
                                 // tslint:disable-next-line: max-line-length
                                 b3dValues[k * bInnerStep + j * bOuterStep + batchIndexB * bBatch];
                                 sum += aVal * bVal;
@@ -57878,7 +57878,7 @@ class Engine {
                 const dtype = 'float32';
                 const gradInputs = { x: dy };
                 const attrs = { dtype };
-                return ENGINE.runKernel(_kernel_names__WEBPACK_IMPORTED_MODULE_5__.Cast, gradInputs, 
+                return ENGINE.runKernel(_kernel_names__WEBPACK_IMPORTED_MODULE_5__.Cast, gradInputs,
                 // tslint:disable-next-line: no-unnecessary-type-assertion
                 attrs);
             }
@@ -58392,9 +58392,9 @@ class Engine {
             const accumulatedGradientMap = {};
             accumulatedGradientMap[y.id] = (dy == null) ? ones(y.shape) : dy;
             // Backprop gradients through the filtered nodes.
-            (0,_tape__WEBPACK_IMPORTED_MODULE_9__.backpropagateGradients)(accumulatedGradientMap, filteredTape, 
+            (0,_tape__WEBPACK_IMPORTED_MODULE_9__.backpropagateGradients)(accumulatedGradientMap, filteredTape,
             // Pass the tidy function to avoid circular dep with `tape.ts`.
-            f => this.tidy(f), 
+            f => this.tidy(f),
             // Pass an add function to avoide a circular dep with `tape.ts`.
             add);
             const grads = xs.map(x => accumulatedGradientMap[x.id]);
@@ -63561,7 +63561,7 @@ const resizeBilinearGradConfig = {
     gradFunc: (dy, saved, attrs) => {
         const [images] = saved;
         const inputs = { dy, images };
-        const imagesDer = () => 
+        const imagesDer = () =>
         // tslint:disable-next-line: no-unnecessary-type-assertion
         _engine__WEBPACK_IMPORTED_MODULE_0__.ENGINE.runKernel(_kernel_names__WEBPACK_IMPORTED_MODULE_1__.ResizeBilinearGrad, inputs, attrs);
         return { images: imagesDer };
@@ -63608,7 +63608,7 @@ const resizeNearestNeighborGradConfig = {
     gradFunc: (dy, saved, attrs) => {
         const [images] = saved;
         const inputs = { dy, images };
-        const imagesDer = () => 
+        const imagesDer = () =>
         // tslint:disable-next-line: no-unnecessary-type-assertion
         _engine__WEBPACK_IMPORTED_MODULE_0__.ENGINE.runKernel(_kernel_names__WEBPACK_IMPORTED_MODULE_1__.ResizeNearestNeighborGrad, inputs, attrs);
         return { images: imagesDer };
@@ -65096,7 +65096,7 @@ __webpack_require__.r(__webpack_exports__);
 // rollup.
 
 // tslint:disable-next-line
-const Long = 
+const Long =
 // tslint:disable-next-line
 (long__WEBPACK_IMPORTED_MODULE_0___default()) || long__WEBPACK_IMPORTED_MODULE_0__;
 function hexToLong(hex) {
@@ -75296,7 +75296,7 @@ function depthwiseConv2dNativeBackpropInput_(xShape, dy, filter, strides, pad, d
     }
     const inputs = { dy: dy4D, filter };
     const attrs = { strides, pad, dimRoundingMode, dilations, inputShape: xShape };
-    const res = 
+    const res =
     // tslint:disable-next-line: no-unnecessary-type-assertion
     _engine__WEBPACK_IMPORTED_MODULE_0__.ENGINE.runKernel(_kernel_names__WEBPACK_IMPORTED_MODULE_2__.DepthwiseConv2dNativeBackpropInput, inputs, attrs);
     if (reshapedTo4D) {
@@ -77066,7 +77066,7 @@ function fusedConv2d_({ x, filter, strides, pad, dataFormat = 'NHWC', dilations 
     // inputs and thus a a different number of elements in the gradient.
     if (bias == null) {
         const customOp = (0,_gradients__WEBPACK_IMPORTED_MODULE_12__.customGrad)((x4D, filter, save) => {
-            let res = 
+            let res =
             // tslint:disable-next-line: no-unnecessary-type-assertion
             _engine__WEBPACK_IMPORTED_MODULE_0__.ENGINE.runKernel(_kernel_names__WEBPACK_IMPORTED_MODULE_13__.FusedConv2D, inputs, attrs);
             save([filter, x4D, res]);
@@ -77463,7 +77463,7 @@ function fusedMatMul_({ a, b, transposeA = false, transposeB = false, bias, acti
     // inputs and thus a a different number of elements in the gradient.
     if (bias == null) {
         const customOp = (0,_gradients__WEBPACK_IMPORTED_MODULE_9__.customGrad)((a3D, b3D, save) => {
-            const res = 
+            const res =
             // tslint:disable-next-line: no-unnecessary-type-assertion
             _engine__WEBPACK_IMPORTED_MODULE_0__.ENGINE.runKernel(_kernel_names__WEBPACK_IMPORTED_MODULE_10__._FusedMatMul, inputs, attrs);
             save([a3D, b3D, res]);
@@ -77473,7 +77473,7 @@ function fusedMatMul_({ a, b, transposeA = false, transposeB = false, bias, acti
     }
     else {
         const customOpWithBias = (0,_gradients__WEBPACK_IMPORTED_MODULE_9__.customGrad)((a3D, b3D, $bias, save) => {
-            const res = 
+            const res =
             // tslint:disable-next-line: no-unnecessary-type-assertion
             _engine__WEBPACK_IMPORTED_MODULE_0__.ENGINE.runKernel(_kernel_names__WEBPACK_IMPORTED_MODULE_10__._FusedMatMul, inputs, attrs);
             save([a3D, b3D, res, $bias]);
@@ -103768,7 +103768,7 @@ function shuffle(array) {
  */
 function shuffleCombo(
 // tslint:disable-next-line:no-any
-array, 
+array,
 // tslint:disable-next-line:no-any
 array2) {
     if (array.length !== array2.length) {
@@ -106239,7 +106239,7 @@ class LazyIterator {
      * @returns A `LazyIterator` of batches of elements, represented as an object
      *   with collections at the leaves.
      */
-    columnMajorBatch(batchSize, smallLastBatch = true, 
+    columnMajorBatch(batchSize, smallLastBatch = true,
     // tslint:disable-next-line:no-any
     zipFn = _util_deep_map__WEBPACK_IMPORTED_MODULE_3__.zipToList) {
         // First collect the desired number of input elements as a row-major batch.
@@ -107009,7 +107009,7 @@ class MicrophoneIterator extends _lazy_iterator__WEBPACK_IMPORTED_MODULE_1__.Laz
         if (!this.stream) {
             throw new Error('Could not obtain audio from microphone.');
         }
-        const ctxConstructor = 
+        const ctxConstructor =
         // tslint:disable-next-line:no-any
         window.AudioContext || window.webkitAudioContext;
         this.audioContext = new ctxConstructor();
@@ -112768,7 +112768,7 @@ let _nextNodeID = 0;
  *     B.inboundNodes
  */
 class Node {
-    constructor(args, 
+    constructor(args,
     // TODO(michaelterry): Define actual type for this.
     callArgs) {
         this.callArgs = callArgs;
@@ -130329,7 +130329,7 @@ __webpack_require__.r(__webpack_exports__);
  *   It will be called on each line of the summary. You can provide a custom
  *   function in order to capture the string summary. Defaults to `console.log`.
  */
-function printSummary(model, lineLength, positions, 
+function printSummary(model, lineLength, positions,
 // tslint:disable-next-line:no-any
 printFn = console.log) {
     const sequentialLike = isModelSequentialLike(model);
@@ -130428,7 +130428,7 @@ function isModelSequentialLike(model) {
     }
     return sequentialLike;
 }
-function printRow(fields, positions, 
+function printRow(fields, positions,
 // tslint:disable-next-line:no-any
 printFn = console.log) {
     let line = '';
@@ -130447,7 +130447,7 @@ printFn = console.log) {
  *
  * @param layer: Layer instance to print.
  */
-function printLayerSummary(layer, positions, 
+function printLayerSummary(layer, positions,
 // tslint:disable-next-line:no-any
 printFn) {
     let outputShape;
@@ -130473,7 +130473,7 @@ printFn) {
 /**
  * Prints a summary for a single Layer, with connectivity information.
  */
-function printLayerSummaryWithConnections(layer, positions, relevantNodes, 
+function printLayerSummaryWithConnections(layer, positions, relevantNodes,
 // tslint:disable-next-line:no-any
 printFn) {
     let outputShape;
@@ -134279,6 +134279,520 @@ if ( true && module.exports) {
 
 /***/ }),
 
+/***/ "./src/lib/mlpTraining.ts":
+/*!********************************!*\
+  !*** ./src/lib/mlpTraining.ts ***!
+  \********************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   createStratifiedTrainValidationSplit: () => (/* binding */ createStratifiedTrainValidationSplit),
+/* harmony export */   getLabelCounts: () => (/* binding */ getLabelCounts),
+/* harmony export */   validateTrainingRows: () => (/* binding */ validateTrainingRows)
+/* harmony export */ });
+function getLabelCounts(labels) {
+    var _a;
+    const counts = {};
+    for (const label of labels) {
+        counts[label] = ((_a = counts[label]) !== null && _a !== void 0 ? _a : 0) + 1;
+    }
+    return counts;
+}
+function createSeededRandom(seed) {
+    let state = seed >>> 0;
+    return () => {
+        state = (state * 1664525 + 1013904223) >>> 0;
+        return state / 0x100000000;
+    };
+}
+function getRandom(seed) {
+    return typeof seed === 'number' && Number.isFinite(seed)
+        ? createSeededRandom(seed)
+        : Math.random;
+}
+function shuffledCopy(items, random) {
+    const copy = [...items];
+    for (let index = copy.length - 1; index > 0; index--) {
+        const swapIndex = Math.floor(random() * (index + 1));
+        [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]];
+    }
+    return copy;
+}
+function validateLabelMap(labelMap) {
+    const entries = Object.entries(labelMap);
+    if (entries.length < 2) {
+        throw new Error('Need at least two distinct labels for classification.');
+    }
+    const seenIndexes = new Set();
+    for (const [label, index] of entries) {
+        if (!label.trim()) {
+            throw new Error('Label names must not be empty.');
+        }
+        if (!Number.isInteger(index) || index < 0) {
+            throw new Error(`Label "${label}" has an invalid class index.`);
+        }
+        if (seenIndexes.has(index)) {
+            throw new Error(`Duplicate class index ${index} in label map.`);
+        }
+        seenIndexes.add(index);
+    }
+    return entries
+        .sort(([, leftIndex], [, rightIndex]) => leftIndex - rightIndex)
+        .map(([label]) => label);
+}
+function validateTrainingRows(vectors, labels, labelMap) {
+    var _a, _b;
+    if (!vectors || vectors.length < 2 || !labels || labels.length !== vectors.length) {
+        throw new Error('Need at least two labeled vectors for training.');
+    }
+    const inputDimension = (_b = (_a = vectors[0]) === null || _a === void 0 ? void 0 : _a.length) !== null && _b !== void 0 ? _b : 0;
+    if (inputDimension <= 0 ||
+        !vectors.every(vector => vector.length === inputDimension && vector.every(Number.isFinite))) {
+        throw new Error('Training vectors must be finite and share one non-empty dimension.');
+    }
+    const outputLabels = validateLabelMap(labelMap);
+    const unknownLabel = labels.find(label => labelMap[label] === undefined);
+    if (unknownLabel) {
+        throw new Error(`Unknown label "${unknownLabel}" is missing from labelMap.`);
+    }
+    const labelCounts = getLabelCounts(labels);
+    const emptyMappedLabel = outputLabels.find(label => !labelCounts[label]);
+    if (emptyMappedLabel) {
+        throw new Error(`Label "${emptyMappedLabel}" has no training rows.`);
+    }
+    return {
+        inputDimension,
+        numClasses: outputLabels.length,
+        outputLabels,
+        labelCounts,
+    };
+}
+function createStratifiedTrainValidationSplit(vectors, labels, labelMap, splitRatio, seed) {
+    const validation = validateTrainingRows(vectors, labels, labelMap);
+    if (!Number.isFinite(splitRatio) || splitRatio <= 0 || splitRatio >= 1) {
+        throw new Error('Train split ratio must be greater than 0 and less than 1.');
+    }
+    const tooSmallLabel = validation.outputLabels.find(label => validation.labelCounts[label] < 2);
+    if (tooSmallLabel) {
+        throw new Error(`Need at least two samples per label for stratified training; "${tooSmallLabel}" has ${validation.labelCounts[tooSmallLabel]}.`);
+    }
+    const random = getRandom(seed);
+    const pairsByLabel = new Map();
+    vectors.forEach((vector, index) => {
+        var _a;
+        const label = labels[index];
+        const pairs = (_a = pairsByLabel.get(label)) !== null && _a !== void 0 ? _a : [];
+        pairs.push({ vector, label });
+        pairsByLabel.set(label, pairs);
+    });
+    const trainPairs = [];
+    const validationPairs = [];
+    validation.outputLabels.forEach(label => {
+        var _a;
+        const pairs = shuffledCopy((_a = pairsByLabel.get(label)) !== null && _a !== void 0 ? _a : [], random);
+        const trainCount = Math.max(1, Math.min(pairs.length - 1, Math.round(pairs.length * splitRatio)));
+        trainPairs.push(...pairs.slice(0, trainCount));
+        validationPairs.push(...pairs.slice(trainCount));
+    });
+    return {
+        trainPairs: shuffledCopy(trainPairs, random),
+        validationPairs: shuffledCopy(validationPairs, random),
+    };
+}
+
+
+/***/ }),
+
+/***/ "./src/lib/mlpWorkerContract.ts":
+/*!**************************************!*\
+  !*** ./src/lib/mlpWorkerContract.ts ***!
+  \**************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   MlpWorkerController: () => (/* binding */ MlpWorkerController)
+/* harmony export */ });
+/* harmony import */ var _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @tensorflow/tfjs */ "./node_modules/@tensorflow/tfjs/dist/index.js");
+/* harmony import */ var _mlpTraining__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./mlpTraining */ "./src/lib/mlpTraining.ts");
+
+
+const activationValueLimit = 64;
+function getErrorMessage(error) {
+    return error instanceof Error ? error.message : String(error);
+}
+function withRequestId(message, requestId) {
+    return requestId ? Object.assign(Object.assign({}, message), { requestId }) : message;
+}
+function createOptimizer(config) {
+    switch (config.optimizer) {
+        case 'adam': return _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.train.adam(config.learningRate);
+        case 'sgd': return _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.train.sgd(config.learningRate);
+        case 'rmsprop': return _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.train.rmsprop(config.learningRate);
+        default: throw new Error(`Unsupported optimizer: ${config.optimizer}`);
+    }
+}
+function normalizeWeightData(weightData) {
+    if (weightData instanceof ArrayBuffer)
+        return weightData.slice(0);
+    if (Array.isArray(weightData) && weightData.every(item => item instanceof ArrayBuffer)) {
+        const totalBytes = weightData.reduce((sum, item) => sum + item.byteLength, 0);
+        const merged = new Uint8Array(totalBytes);
+        let offset = 0;
+        weightData.forEach(item => {
+            merged.set(new Uint8Array(item), offset);
+            offset += item.byteLength;
+        });
+        return merged.buffer;
+    }
+    throw new Error('Trained model artifacts are missing weight data.');
+}
+function validateModelArtifactsPayload(payload) {
+    if (!payload || !payload.modelArtifacts) {
+        throw new Error('Imported model artifacts are missing.');
+    }
+    const { modelArtifacts, outputLabels } = payload;
+    if (!modelArtifacts.modelTopology || modelArtifacts.modelTopology instanceof ArrayBuffer) {
+        throw new Error('Imported model artifacts are missing model topology.');
+    }
+    if (!Array.isArray(modelArtifacts.weightSpecs) || modelArtifacts.weightSpecs.length === 0) {
+        throw new Error('Imported model artifacts are missing weight specs.');
+    }
+    if (!(modelArtifacts.weightData instanceof ArrayBuffer) || modelArtifacts.weightData.byteLength === 0) {
+        throw new Error('Imported model artifacts are missing weight data.');
+    }
+    if (!Array.isArray(outputLabels) || outputLabels.length < 2 || outputLabels.some(label => typeof label !== 'string' || !label.trim())) {
+        throw new Error('Imported model output labels are missing or invalid.');
+    }
+}
+function createModel(inputDimension, outputDimension, config) {
+    var _a, _b;
+    const model = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.sequential();
+    const hiddenLayerCount = Math.max(0, config.layers);
+    if (hiddenLayerCount === 0) {
+        model.add(_tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.layers.dense({
+            inputShape: [inputDimension],
+            units: outputDimension,
+            activation: 'softmax',
+            name: 'output',
+        }));
+    }
+    else {
+        for (let layerIndex = 0; layerIndex < hiddenLayerCount; layerIndex++) {
+            const fallbackUnits = (_a = config.nodes[config.nodes.length - 1]) !== null && _a !== void 0 ? _a : 16;
+            model.add(_tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.layers.dense({
+                inputShape: layerIndex === 0 ? [inputDimension] : undefined,
+                units: (_b = config.nodes[layerIndex]) !== null && _b !== void 0 ? _b : fallbackUnits,
+                activation: config.activation,
+                name: `hidden_${layerIndex + 1}`,
+            }));
+        }
+        model.add(_tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.layers.dense({
+            units: outputDimension,
+            activation: 'softmax',
+            name: 'output',
+        }));
+    }
+    model.compile({
+        optimizer: createOptimizer(config),
+        loss: 'categoricalCrossentropy',
+        metrics: ['accuracy'],
+    });
+    return model;
+}
+function validateExplicitValidationRows({ vectors, labels, labelMap, inputDimension, }) {
+    if (!vectors || !labels || vectors.length === 0 || labels.length !== vectors.length) {
+        throw new Error('Explicit validation rows must include matching vectors and labels.');
+    }
+    for (let index = 0; index < vectors.length; index++) {
+        const vector = vectors[index];
+        const label = labels[index];
+        if (!Array.isArray(vector) || vector.length !== inputDimension || !vector.every(Number.isFinite)) {
+            throw new Error('Explicit validation vectors must match the training input dimension.');
+        }
+        if (labelMap[label] === undefined) {
+            throw new Error(`Unknown validation label "${label}" is missing from labelMap.`);
+        }
+    }
+    return vectors.map((vector, index) => ({ vector, label: labels[index] }));
+}
+function summarizeValues(name, values) {
+    const finiteValues = values.filter(Number.isFinite);
+    const min = finiteValues.length > 0 ? Math.min(...finiteValues) : 0;
+    const max = finiteValues.length > 0 ? Math.max(...finiteValues) : 0;
+    const mean = finiteValues.length > 0
+        ? finiteValues.reduce((sum, value) => sum + value, 0) / finiteValues.length
+        : 0;
+    return {
+        name,
+        units: values.length,
+        values: values.slice(0, activationValueLimit),
+        min,
+        max,
+        mean,
+    };
+}
+async function getActivationSnapshot(model, probeVector, epoch, songId) {
+    const layers = [summarizeValues('Input', probeVector)];
+    let currentTensor = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.tensor2d([probeVector]);
+    try {
+        for (const layer of model.layers) {
+            const outputTensor = layer.apply(currentTensor);
+            if (Array.isArray(outputTensor)) {
+                throw new Error('Unexpected multi-output layer in MLP activation snapshot.');
+            }
+            currentTensor.dispose();
+            currentTensor = outputTensor;
+            const values = Array.from(await currentTensor.data());
+            layers.push(summarizeValues(layer.name, values));
+        }
+    }
+    finally {
+        currentTensor === null || currentTensor === void 0 ? void 0 : currentTensor.dispose();
+    }
+    return { epoch, songId, layers };
+}
+class MlpWorkerController {
+    constructor() {
+        this.trainedModel = null;
+        this.outputLabels = [];
+    }
+    dispose() {
+        if (this.trainedModel) {
+            this.trainedModel.dispose();
+            this.trainedModel = null;
+        }
+        this.outputLabels = [];
+    }
+    async handleMessage(message, postMessage) {
+        const requestId = message.requestId;
+        const reply = (replyMessage) => {
+            postMessage(withRequestId(replyMessage, requestId));
+        };
+        try {
+            switch (message.type) {
+                case 'reset':
+                    this.dispose();
+                    reply({ type: 'mlpResetComplete' });
+                    break;
+                case 'train':
+                    await this.train(message.payload, reply);
+                    break;
+                case 'infer':
+                    await this.infer(message.payload, reply);
+                    break;
+                case 'exportModel':
+                    await this.exportModel(reply);
+                    break;
+                case 'importModel':
+                    await this.importModel(message.payload, reply);
+                    break;
+                default:
+                    throw new Error(`Unknown message type: ${message.type}`);
+            }
+        }
+        catch (error) {
+            if (message.type === 'train')
+                this.dispose();
+            reply({ type: 'mlpError', payload: { error: getErrorMessage(error) } });
+        }
+    }
+    async train(payload, postMessage) {
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m;
+        this.dispose();
+        const { vectors, labels, config, labelMap, trainIterations, batchSize, splitRatio, seed, activationSampleSongId, validationVectors, validationLabels, } = payload;
+        if (!config || !labelMap || !trainIterations || !batchSize || !splitRatio) {
+            throw new Error('Invalid training parameters.');
+        }
+        const validation = (0,_mlpTraining__WEBPACK_IMPORTED_MODULE_1__.validateTrainingRows)(vectors, labels, labelMap);
+        const hasExplicitValidationRows = validationVectors !== undefined || validationLabels !== undefined;
+        const { trainPairs, validationPairs: testPairs } = hasExplicitValidationRows
+            ? {
+                trainPairs: vectors.map((vector, index) => ({ vector, label: labels[index] })),
+                validationPairs: validateExplicitValidationRows({
+                    vectors: validationVectors,
+                    labels: validationLabels,
+                    labelMap,
+                    inputDimension: validation.inputDimension,
+                }),
+            }
+            : (0,_mlpTraining__WEBPACK_IMPORTED_MODULE_1__.createStratifiedTrainValidationSplit)(vectors, labels, labelMap, splitRatio, seed);
+        const { inputDimension, numClasses } = validation;
+        this.outputLabels = validation.outputLabels;
+        if (trainPairs.length === 0 || testPairs.length === 0) {
+            throw new Error(`Training split produced ${trainPairs.length} train rows and ${testPairs.length} validation rows.`);
+        }
+        const trainTensors = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.tensor2d(trainPairs.map(pair => pair.vector));
+        const testTensors = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.tensor2d(testPairs.map(pair => pair.vector));
+        const trainLabels = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.oneHot(trainPairs.map(pair => labelMap[pair.label]), numClasses);
+        const testLabels = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.oneHot(testPairs.map(pair => labelMap[pair.label]), numClasses);
+        const model = createModel(inputDimension, numClasses, config);
+        const probeVector = trainPairs[0].vector;
+        try {
+            for (let epoch = 0; epoch < trainIterations; epoch++) {
+                const history = await model.fit(trainTensors, trainLabels, {
+                    epochs: 1,
+                    batchSize,
+                    shuffle: true,
+                    validationData: [testTensors, testLabels],
+                    verbose: 0,
+                });
+                const loss = Number((_b = (_a = history.history.loss) === null || _a === void 0 ? void 0 : _a[0]) !== null && _b !== void 0 ? _b : 0);
+                const acc = Number((_e = (_d = ((_c = history.history.acc) !== null && _c !== void 0 ? _c : history.history.accuracy)) === null || _d === void 0 ? void 0 : _d[0]) !== null && _e !== void 0 ? _e : 0);
+                const valLoss = Number((_g = (_f = history.history.val_loss) === null || _f === void 0 ? void 0 : _f[0]) !== null && _g !== void 0 ? _g : 0);
+                const valAcc = Number((_k = (_j = ((_h = history.history.val_acc) !== null && _h !== void 0 ? _h : history.history.val_accuracy)) === null || _j === void 0 ? void 0 : _j[0]) !== null && _k !== void 0 ? _k : 0);
+                postMessage({
+                    type: 'epochMetrics',
+                    payload: {
+                        epoch: epoch + 1,
+                        metrics: { loss, acc, valLoss, valAcc },
+                    },
+                });
+                postMessage({
+                    type: 'activationSnapshot',
+                    payload: await getActivationSnapshot(model, probeVector, epoch + 1, activationSampleSongId),
+                });
+            }
+            const evalResult = model.evaluate(testTensors, testLabels);
+            const evalTensors = Array.isArray(evalResult) ? evalResult : [evalResult];
+            const testLoss = (_l = (await evalTensors[0].data())[0]) !== null && _l !== void 0 ? _l : 0;
+            const testAcc = evalTensors[1] ? (_m = (await evalTensors[1].data())[0]) !== null && _m !== void 0 ? _m : 0 : 0;
+            evalTensors.forEach(tensor => tensor.dispose());
+            this.trainedModel = model;
+            postMessage({
+                type: 'trainingComplete',
+                payload: {
+                    finalMetrics: { loss: testLoss, accuracy: testAcc },
+                    activationSnapshot: await getActivationSnapshot(model, probeVector, trainIterations, activationSampleSongId),
+                },
+            });
+        }
+        catch (error) {
+            model.dispose();
+            throw error;
+        }
+        finally {
+            trainTensors.dispose();
+            testTensors.dispose();
+            trainLabels.dispose();
+            testLabels.dispose();
+        }
+    }
+    async infer(payload, postMessage) {
+        var _a, _b;
+        if (!this.trainedModel) {
+            throw new Error('Model not trained yet. Train the model before running inference.');
+        }
+        const { vectors, songIds } = payload;
+        if (!vectors || vectors.length === 0 || !songIds || songIds.length !== vectors.length) {
+            throw new Error('Invalid inference data: vectors or songIds are missing or mismatched.');
+        }
+        if (!this.outputLabels.length) {
+            throw new Error('Output label mapping is missing from the trained model context.');
+        }
+        const inputDimension = (_b = (_a = vectors[0]) === null || _a === void 0 ? void 0 : _a.length) !== null && _b !== void 0 ? _b : 0;
+        if (inputDimension <= 0 || !vectors.every(vector => vector.length === inputDimension && vector.every(Number.isFinite))) {
+            throw new Error('Inference vectors must be finite and share one non-empty dimension.');
+        }
+        const inferTensor = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.tensor2d(vectors);
+        try {
+            const predictions = this.trainedModel.predict(inferTensor);
+            const probabilities = await predictions.array();
+            const results = {};
+            probabilities.forEach((row, index) => {
+                var _a, _b;
+                let bestIndex = 0;
+                let bestConfidence = (_a = row[0]) !== null && _a !== void 0 ? _a : 0;
+                row.forEach((confidence, candidateIndex) => {
+                    if (confidence > bestConfidence) {
+                        bestConfidence = confidence;
+                        bestIndex = candidateIndex;
+                    }
+                });
+                results[songIds[index]] = {
+                    predictedLabel: (_b = this.outputLabels[bestIndex]) !== null && _b !== void 0 ? _b : 'Unknown',
+                    confidence: bestConfidence,
+                };
+            });
+            postMessage({
+                type: 'activationSnapshot',
+                payload: await getActivationSnapshot(this.trainedModel, vectors[0], undefined, songIds[0]),
+            });
+            postMessage({ type: 'inferenceComplete', payload: { results } });
+            predictions.dispose();
+        }
+        finally {
+            inferTensor.dispose();
+        }
+    }
+    async exportModel(postMessage) {
+        if (!this.trainedModel) {
+            throw new Error('Model not trained yet. Train the model before exporting it.');
+        }
+        if (!this.outputLabels.length) {
+            throw new Error('Output label mapping is missing from the trained model context.');
+        }
+        let savedArtifacts = null;
+        await this.trainedModel.save(_tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.io.withSaveHandler(async (artifacts) => {
+            savedArtifacts = artifacts;
+            return {
+                modelArtifactsInfo: {
+                    dateSaved: new Date(),
+                    modelTopologyType: 'JSON',
+                    modelTopologyBytes: artifacts.modelTopology ? JSON.stringify(artifacts.modelTopology).length : 0,
+                    weightSpecsBytes: artifacts.weightSpecs ? JSON.stringify(artifacts.weightSpecs).length : 0,
+                    weightDataBytes: normalizeWeightData(artifacts.weightData).byteLength,
+                },
+            };
+        }));
+        const artifacts = savedArtifacts;
+        if (!artifacts || !artifacts.modelTopology || artifacts.modelTopology instanceof ArrayBuffer) {
+            throw new Error('Trained model artifacts are missing model topology.');
+        }
+        if (!Array.isArray(artifacts.weightSpecs) || artifacts.weightSpecs.length === 0) {
+            throw new Error('Trained model artifacts are missing weight specs.');
+        }
+        postMessage({
+            type: 'modelExportComplete',
+            payload: {
+                modelArtifacts: {
+                    modelTopology: artifacts.modelTopology,
+                    weightSpecs: artifacts.weightSpecs,
+                    weightData: normalizeWeightData(artifacts.weightData),
+                    format: artifacts.format,
+                    generatedBy: artifacts.generatedBy,
+                    convertedBy: artifacts.convertedBy,
+                },
+                outputLabels: [...this.outputLabels],
+            },
+        });
+    }
+    async importModel(payload, postMessage) {
+        validateModelArtifactsPayload(payload);
+        const nextModel = await _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.loadLayersModel(_tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.io.fromMemory({
+            modelTopology: payload.modelArtifacts.modelTopology,
+            weightSpecs: payload.modelArtifacts.weightSpecs,
+            weightData: payload.modelArtifacts.weightData,
+            format: payload.modelArtifacts.format,
+            generatedBy: payload.modelArtifacts.generatedBy,
+            convertedBy: payload.modelArtifacts.convertedBy,
+        }));
+        this.dispose();
+        this.trainedModel = nextModel;
+        this.outputLabels = [...payload.outputLabels];
+        postMessage({
+            type: 'modelImportComplete',
+            payload: { outputLabels: [...this.outputLabels] },
+        });
+    }
+}
+
+
+/***/ }),
+
 /***/ "?9a43":
 /*!****************************!*\
   !*** node-fetch (ignored) ***!
@@ -134343,7 +134857,7 @@ if ( true && module.exports) {
 /************************************************************************/
 /******/ 	// The module cache
 /******/ 	var __webpack_module_cache__ = {};
-/******/ 	
+/******/
 /******/ 	// The require function
 /******/ 	function __webpack_require__(moduleId) {
 /******/ 		// Check if module is in cache
@@ -134357,17 +134871,17 @@ if ( true && module.exports) {
 /******/ 			loaded: false,
 /******/ 			exports: {}
 /******/ 		};
-/******/ 	
+/******/
 /******/ 		// Execute the module function
 /******/ 		__webpack_modules__[moduleId].call(module.exports, module, module.exports, __webpack_require__);
-/******/ 	
+/******/
 /******/ 		// Flag the module as loaded
 /******/ 		module.loaded = true;
-/******/ 	
+/******/
 /******/ 		// Return the exports of the module
 /******/ 		return module.exports;
 /******/ 	}
-/******/ 	
+/******/
 /************************************************************************/
 /******/ 	/* webpack/runtime/amd define */
 /******/ 	(() => {
@@ -134375,12 +134889,12 @@ if ( true && module.exports) {
 /******/ 			throw new Error('define cannot be used indirect');
 /******/ 		};
 /******/ 	})();
-/******/ 	
+/******/
 /******/ 	/* webpack/runtime/amd options */
 /******/ 	(() => {
 /******/ 		__webpack_require__.amdO = {};
 /******/ 	})();
-/******/ 	
+/******/
 /******/ 	/* webpack/runtime/compat get default export */
 /******/ 	(() => {
 /******/ 		// getDefaultExport function for compatibility with non-harmony modules
@@ -134392,7 +134906,7 @@ if ( true && module.exports) {
 /******/ 			return getter;
 /******/ 		};
 /******/ 	})();
-/******/ 	
+/******/
 /******/ 	/* webpack/runtime/define property getters */
 /******/ 	(() => {
 /******/ 		// define getter functions for harmony exports
@@ -134404,7 +134918,7 @@ if ( true && module.exports) {
 /******/ 			}
 /******/ 		};
 /******/ 	})();
-/******/ 	
+/******/
 /******/ 	/* webpack/runtime/global */
 /******/ 	(() => {
 /******/ 		__webpack_require__.g = (function() {
@@ -134416,12 +134930,12 @@ if ( true && module.exports) {
 /******/ 			}
 /******/ 		})();
 /******/ 	})();
-/******/ 	
+/******/
 /******/ 	/* webpack/runtime/hasOwnProperty shorthand */
 /******/ 	(() => {
 /******/ 		__webpack_require__.o = (obj, prop) => (Object.prototype.hasOwnProperty.call(obj, prop))
 /******/ 	})();
-/******/ 	
+/******/
 /******/ 	/* webpack/runtime/make namespace object */
 /******/ 	(() => {
 /******/ 		// define __esModule on exports
@@ -134432,7 +134946,7 @@ if ( true && module.exports) {
 /******/ 			Object.defineProperty(exports, '__esModule', { value: true });
 /******/ 		};
 /******/ 	})();
-/******/ 	
+/******/
 /******/ 	/* webpack/runtime/node module decorator */
 /******/ 	(() => {
 /******/ 		__webpack_require__.nmd = (module) => {
@@ -134441,7 +134955,7 @@ if ( true && module.exports) {
 /******/ 			return module;
 /******/ 		};
 /******/ 	})();
-/******/ 	
+/******/
 /************************************************************************/
 var __webpack_exports__ = {};
 // This entry needs to be wrapped in an IIFE because it needs to be in strict mode.
@@ -134451,207 +134965,17 @@ var __webpack_exports__ = {};
   !*** ./src/workers/mlp-worker.ts ***!
   \***********************************/
 __webpack_require__.r(__webpack_exports__);
-/* harmony import */ var _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @tensorflow/tfjs */ "./node_modules/@tensorflow/tfjs/dist/index.js");
-// src/workers/mlp-worker.ts
+/* harmony import */ var _lib_mlpWorkerContract__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../lib/mlpWorkerContract */ "./src/lib/mlpWorkerContract.ts");
+/// <reference lib="webworker" />
 
-console.log('MLP Worker: Script loaded');
-// Store the trained model and label mapping info within the worker's scope
-let trainedModel = null;
-let outputLabels = []; // Store the order of labels for decoding predictions
-// Helper function to shuffle two arrays in unison
-function shuffleArraysInUnison(arr1, arr2, seed) {
-    // Simple Fisher-Yates shuffle - consider a seeded PRNG if strict reproducibility needed
-    // For simplicity here, we'll use Math.random, but tf.data.Dataset.shuffle is better if using tf.data
-    for (let i = arr1.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [arr1[i], arr1[j]] = [arr1[j], arr1[i]];
-        [arr2[i], arr2[j]] = [arr2[j], arr2[i]];
-    }
-}
-self.onmessage = async (event) => {
-    const { type, payload } = event.data;
-    console.log(`MLP Worker: Received message type: ${type}`);
-    try {
-        switch (type) {
-            case 'train':
-                trainedModel = null; // Clear previous model
-                outputLabels = []; // Clear previous labels
-                console.log('MLP Worker: Received train command with payload:', payload);
-                const { vectors, labels, config, labelMap, trainIterations, batchSize, splitRatio, seed // Note: Simple Math.random shuffle used below, seed not directly applied yet
-                 } = payload;
-                if (!vectors || vectors.length === 0 || !labels || labels.length !== vectors.length) {
-                    throw new Error('Invalid input data: vectors or labels are missing or mismatched.');
-                }
-                if (!config || !labelMap || !trainIterations || !batchSize || !splitRatio) {
-                    throw new Error('Invalid training parameters.');
-                }
-                const numClasses = Object.keys(labelMap).length;
-                if (numClasses < 2) {
-                    throw new Error('Need at least two distinct labels for classification.');
-                }
-                outputLabels = Object.keys(labelMap).sort((a, b) => labelMap[a] - labelMap[b]); // Store labels in index order
-                _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.tidy(() => {
-                    // 1. Shuffle data (important!)
-                    // Consider using tf.data.Dataset for more robust shuffling/batching if data gets large
-                    const indices = Array.from(vectors.keys());
-                    shuffleArraysInUnison(indices, labels, seed); // Shuffle indices and labels together
-                    const shuffledVectors = indices.map(i => vectors[i]);
-                    const shuffledLabels = labels; // Already shuffled in place by the helper
-                    // 2. Split data
-                    const numTrainExamples = Math.round(shuffledVectors.length * splitRatio);
-                    const numTestExamples = shuffledVectors.length - numTrainExamples;
-                    const trainVectors = shuffledVectors.slice(0, numTrainExamples);
-                    const testVectors = shuffledVectors.slice(numTrainExamples);
-                    const trainLabelsRaw = shuffledLabels.slice(0, numTrainExamples);
-                    const testLabelsRaw = shuffledLabels.slice(numTestExamples);
-                    if (trainVectors.length === 0 || testVectors.length === 0) {
-                        throw new Error(`Training (count: ${trainVectors.length}) or testing (count: ${testVectors.length}) set is empty after split. Adjust split ratio or increase data.`);
-                    }
-                    // 3. One-hot encode labels
-                    const trainLabels = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.oneHot(trainLabelsRaw.map(l => labelMap[l]), numClasses);
-                    const testLabels = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.oneHot(testLabelsRaw.map(l => labelMap[l]), numClasses);
-                    // 4. Convert vectors to tensors
-                    const trainTensors = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.tensor2d(trainVectors);
-                    const testTensors = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.tensor2d(testVectors);
-                    // 5. Build tf.sequential model
-                    const model = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.sequential();
-                    const inputShape = [trainVectors[0].length];
-                    // Input Layer (implicitly defined by the first dense layer's inputShape)
-                    // Hidden Layers
-                    for (let i = 0; i < config.layers; i++) {
-                        model.add(_tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.layers.dense({
-                            inputShape: i === 0 ? inputShape : undefined, // Only specify for the first layer
-                            units: config.nodes,
-                            activation: config.activation,
-                        }));
-                    }
-                    // Output Layer
-                    model.add(_tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.layers.dense({
-                        units: numClasses,
-                        activation: 'softmax' // For multi-class classification
-                    }));
-                    // 6. Compile model
-                    let optimizerInstance;
-                    switch (config.optimizer) {
-                        case 'adam':
-                            optimizerInstance = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.train.adam(config.learningRate);
-                            break;
-                        case 'sgd':
-                            optimizerInstance = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.train.sgd(config.learningRate);
-                            break;
-                        case 'rmsprop':
-                            optimizerInstance = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.train.rmsprop(config.learningRate);
-                            break;
-                        default: throw new Error(`Unsupported optimizer: ${config.optimizer}`);
-                    }
-                    model.compile({
-                        optimizer: optimizerInstance,
-                        loss: 'categoricalCrossentropy',
-                        metrics: ['accuracy'],
-                    });
-                    console.log('MLP Worker: Model built and compiled. Summary:');
-                    model.summary();
-                    // 7. Train model
-                    console.log(`MLP Worker: Starting training for ${trainIterations} iterations...`);
-                    const history = model.fit(trainTensors, trainLabels, {
-                        epochs: trainIterations,
-                        batchSize: batchSize,
-                        validationData: [testTensors, testLabels],
-                        callbacks: {
-                            onEpochEnd: (epoch, logs) => {
-                                var _a, _b, _c, _d;
-                                if (logs) {
-                                    console.log(`Epoch ${epoch + 1}/${trainIterations} - loss: ${logs.loss.toFixed(4)}, acc: ${(_a = logs.acc) === null || _a === void 0 ? void 0 : _a.toFixed(4)}, val_loss: ${(_b = logs.val_loss) === null || _b === void 0 ? void 0 : _b.toFixed(4)}, val_acc: ${(_c = logs.val_acc) === null || _c === void 0 ? void 0 : _c.toFixed(4)}`);
-                                    const epochMetrics = {
-                                        epoch: epoch + 1,
-                                        metrics: {
-                                            loss: logs.loss,
-                                            acc: (_d = logs.acc) !== null && _d !== void 0 ? _d : 0 // Handle potential undefined acc
-                                        }
-                                    };
-                                    // 8. Post metrics back
-                                    self.postMessage({ type: 'epochMetrics', payload: epochMetrics });
-                                }
-                            }
-                        }
-                    }); // Don't await here if you want the worker to be responsive
-                    // Wait for training to actually finish before storing the model and sending completion message
-                    history.then(async (result) => {
-                        console.log('MLP Worker: Training finished.');
-                        // 9. Store the trained model
-                        // Detach the model from the current tf.tidy scope if keeping it long-term
-                        // However, tfjs manages model weights separately, so direct storage might be okay.
-                        // For safety, let's serialize and deserialize, or manage scopes carefully.
-                        // Simplest approach: just assign it. Ensure no other tidy block disposes it unintentionally.
-                        trainedModel = model; // Store reference
-                        console.log("MLP Worker: Trained model stored.");
-                        // Optional: Evaluate final performance on test set
-                        const evalResult = model.evaluate(testTensors, testLabels);
-                        const testLoss = await evalResult[0].data();
-                        const testAcc = await evalResult[1].data();
-                        console.log(`MLP Worker: Final Test Set Performance - Loss: ${testLoss[0].toFixed(4)}, Accuracy: ${testAcc[0].toFixed(4)}`);
-                        // 10. Post completion message
-                        self.postMessage({ type: 'trainingComplete', payload: { finalMetrics: { loss: testLoss[0], accuracy: testAcc[0] } } });
-                    }).catch(err => {
-                        console.error("MLP Worker: Error during model.fit finalization:", err);
-                        self.postMessage({ type: 'mlpError', payload: { error: `Training finalization failed: ${err.message}` } });
-                    });
-                }); // End tf.tidy() for training setup tensors
-                // Note: The 'trainedModel' (tf.Sequential instance) itself is NOT disposed by the tidy block.
-                // We need to manage its lifecycle separately or ensure it's used before the worker terminates.
-                break; // End of 'train' case
-            case 'infer':
-                console.log('MLP Worker: Received infer command with payload:', payload);
-                const { vectors: inferVectors, songIds, labelMap: inferLabelMap } = payload;
-                if (!trainedModel) {
-                    throw new Error('Model not trained yet. Train the model before running inference.');
-                }
-                if (!inferVectors || inferVectors.length === 0 || !songIds || songIds.length !== inferVectors.length) {
-                    throw new Error('Invalid inference data: vectors or songIds are missing or mismatched.');
-                }
-                if (!outputLabels || outputLabels.length === 0) {
-                    throw new Error('Output label mapping is missing from the trained model context.');
-                }
-                const results = {};
-                _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.tidy(() => {
-                    // 2. Convert vectors to tensor
-                    const inferTensor = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.tensor2d(inferVectors);
-                    // 3. Use trainedModel.predict()
-                    console.log('MLP Worker: Running inference...');
-                    const predictions = trainedModel.predict(inferTensor); // Type assertion safe due to check above
-                    // 4. Process predictions (argMax)
-                    const predictedIndices = predictions.argMax(1).dataSync(); // Get indices synchronously
-                    // 5. Convert indices back to labels
-                    predictedIndices.forEach((index, i) => {
-                        const songId = songIds[i];
-                        const predictedLabel = outputLabels[index]; // Use the stored label order
-                        results[songId] = predictedLabel;
-                    });
-                    console.log('MLP Worker: Inference completed.');
-                }); // End tf.tidy() for inference
-                // 6. postMessage results
-                self.postMessage({ type: 'inferenceComplete', payload: { results } });
-                break; // End of 'infer' case
-            default:
-                console.warn(`MLP Worker: Unknown message type: ${type}`);
-                self.postMessage({ type: 'mlpError', payload: { error: `Unknown message type: ${type}` } });
-        }
-    }
-    catch (error) {
-        console.error('MLP Worker Error:', error);
-        // Ensure stack trace is included if available
-        const errorMessage = error instanceof Error ? `${error.message} (Stack: ${error.stack})` : String(error);
-        self.postMessage({ type: 'mlpError', payload: { error: errorMessage } });
-        // If training failed, ensure the model reference is cleared
-        if (type === 'train') {
-            trainedModel = null;
-            outputLabels = [];
-        }
-    }
+const controller = new _lib_mlpWorkerContract__WEBPACK_IMPORTED_MODULE_0__.MlpWorkerController();
+const postMsg = (message) => {
+    self.postMessage(message);
 };
-// Optional: Signal readiness
+self.onmessage = async (event) => {
+    await controller.handleMessage(event.data, postMsg);
+};
 self.postMessage({ type: 'mlpWorkerReady' });
-console.log('MLP Worker: Ready and listening for messages.');
 
 })();
 

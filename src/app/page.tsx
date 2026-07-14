@@ -13,6 +13,7 @@ import AboutDialog from '../components/AboutDialog'; // Import the About dialog
 import ExplanationDialog from '../components/ExplanationDialog'; // <-- Import the new generic dialog
 import ExportRawFeaturesDialog from '../components/ExportRawFeaturesDialog';
 import AudioPlayer from '../components/AudioPlayer'; // <-- NEW: Import AudioPlayer
+import ModeSwitchLink from '../components/ModeSwitchLink';
 import { downloadRawFeatureMatrixExport, type ExportFormat } from '@/lib/exportRawFeatureMatrix';
 // Remove the static import of VisualizationPanel
 // import VisualizationPanel from '../components/VisualizationPanel';
@@ -2752,7 +2753,10 @@ export default function DashboardPage() {
           '--aug-bl': '10px',
          } as React.CSSProperties}
       >
-        <h1 className="px-4 text-xl font-bold text-[var(--accent-primary)] flex-shrink-0">Music Cluster Dashboard</h1>
+        <div className="flex flex-shrink-0 items-center gap-1">
+          <h1 className="pl-4 pr-2 text-xl font-bold text-[var(--accent-primary)]">Music Cluster Dashboard</h1>
+          <ModeSwitchLink currentMode="cluster" />
+        </div>
         {/* --- NEW: Add Audio Player in the middle --- */}
         <AudioPlayer 
           song={currentlyPlayingSong} 

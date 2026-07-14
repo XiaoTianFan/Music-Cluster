@@ -29653,7 +29653,7 @@ Module['vectorToArray'] = function(vect) {
   if (vect.size() == 0) { throw "Empty vector input"};
   const typedArray = new Float32Array(vect.size());
     for (var i=0; i < vect.size(); i++) {
-      typedArray[i] = vect.get(i); 
+      typedArray[i] = vect.get(i);
     }
   return typedArray;
 }
@@ -37910,7 +37910,7 @@ exports.EssentiaWASM = Module;
             if (config === void 0) { config = this.profile; }
             var signalFrame = this.arrayToVector(audioFrame);
             var _frameSize = audioFrame.length;
-            // we need to compute the following signal process chain 
+            // we need to compute the following signal process chain
             // audio frame => windowing => spectrum => mel bands => log scale
             var windowOut = this.Windowing(signalFrame, config.Windowing.normalized, config.Windowing.size, config.Windowing.type, config.Windowing.zeroPadding, config.Windowing.zeroPhase);
             var spectrumOut = this.Spectrum(windowOut.frame, _frameSize);
@@ -37956,7 +37956,7 @@ exports.EssentiaWASM = Module;
             if (config === void 0) { config = this.profile; }
             var signalFrame = this.arrayToVector(audioFrame);
             var _frameSize = audioFrame.length;
-            // we need to compute the following signal process chain 
+            // we need to compute the following signal process chain
             // audio frame => windowing => spectrum => spectral peak => spectral whitening => HPCP
             var windowOut = this.Windowing(signalFrame, config.Windowing.normalized, config.Windowing.size, config.Windowing.type, config.Windowing.zeroPadding, config.Windowing.zeroPhase);
             var spectrumOut = this.Spectrum(windowOut.frame, _frameSize);
@@ -38420,7 +38420,7 @@ exports.EssentiaWASM = Module;
          */
         EssentiaTensorflowJSModel.prototype.arrayToTensorAsBatches = function (inputfeatureArray, inputShape, patchSize, zeroPadding) {
             if (zeroPadding === void 0) { zeroPadding = false; }
-            // convert a flattened 1D typed array into 2D tensor with given shape 
+            // convert a flattened 1D typed array into 2D tensor with given shape
             var featureTensor = this.tf.tensor(inputfeatureArray, inputShape, 'float32');
             // create a tensor of zeros for zero-padding the output tensor if necessary
             var zeroPadTensor;
@@ -38438,7 +38438,7 @@ exports.EssentiaWASM = Module;
             }
             else if (inputShape[0] === patchSize) {
                 return featureTensor.as3D(1, patchSize, inputShape[1]);
-                // Otherwise do zeropadding 
+                // Otherwise do zeropadding
             }
             else if (inputShape[0] > patchSize) {
                 if ((inputShape[0] % patchSize) != 0) {
@@ -38494,7 +38494,7 @@ exports.EssentiaWASM = Module;
             }
             else if (inputsCount === 3) {
                 // Overhead from the tensorflowjs-converter, creates random tensorinput without
-                // connected to other layers for some vggish models trained on audioset. 
+                // connected to other layers for some vggish models trained on audioset.
                 // The tfjs model needs this unsignificant tensor object on the prediction call.
                 // This will removed in future once this has been sorted on the conversation process.
                 if (!this.randomTensorInput)
@@ -38967,7 +38967,7 @@ exports.EssentiaWASM = Module;
                     throw "Got 1D array as input, expect a 2D array...";
                 }
                 this.startTimeIndex = timeAxis[timeAxis.length - 1];
-                // realtime mode  
+                // realtime mode
                 this.Plotly.extendTraces(this.divId, {
                     x: [timeAxis],
                     z: [featureArray],
@@ -59618,13 +59618,13 @@ Script.prototype.runInContext = function (context) {
     if (!(context instanceof Context)) {
         throw new TypeError("needs a 'context' argument.");
     }
-    
+
     var iframe = document.createElement('iframe');
     if (!iframe.style) iframe.style = {};
     iframe.style.display = 'none';
-    
+
     document.body.appendChild(iframe);
-    
+
     var win = iframe.contentWindow;
     var wEval = win.eval, wExecScript = win.execScript;
 
@@ -59633,7 +59633,7 @@ Script.prototype.runInContext = function (context) {
         wExecScript.call(win, 'null');
         wEval = win.eval;
     }
-    
+
     forEach(Object_keys(context), function (key) {
         win[key] = context[key];
     });
@@ -59642,11 +59642,11 @@ Script.prototype.runInContext = function (context) {
             win[key] = context[key];
         }
     });
-    
+
     var winKeys = Object_keys(win);
 
     var res = wEval.call(win, this.code);
-    
+
     forEach(Object_keys(win), function (key) {
         // Avoid copying circular objects like `top` and `window` by only
         // updating existing context properties or new properties in the `win`
@@ -59661,9 +59661,9 @@ Script.prototype.runInContext = function (context) {
             defineProp(context, key, win[key]);
         }
     });
-    
+
     document.body.removeChild(iframe);
-    
+
     return res;
 };
 
@@ -59836,6 +59836,40 @@ module.exports = function whichTypedArray(value) {
 	if (!gOPD) { return null; } // unknown engine
 	return tryTypedArrays(value);
 };
+
+
+/***/ }),
+
+/***/ "./src/lib/essentiaWorkerMessages.ts":
+/*!*******************************************!*\
+  !*** ./src/lib/essentiaWorkerMessages.ts ***!
+  \*******************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   getEssentiaFeatureExtractionError: () => (/* binding */ getEssentiaFeatureExtractionError),
+/* harmony export */   getEssentiaFeatureExtractionResult: () => (/* binding */ getEssentiaFeatureExtractionResult),
+/* harmony export */   withEssentiaRequestId: () => (/* binding */ withEssentiaRequestId)
+/* harmony export */ });
+function withEssentiaRequestId(message, requestId) {
+    return requestId ? Object.assign(Object.assign({}, message), { requestId }) : message;
+}
+function getEssentiaFeatureExtractionResult(message, expectedSongId) {
+    var _a;
+    if (message.songId !== expectedSongId) {
+        throw new Error(`Essentia reply songId mismatch: expected ${expectedSongId}, received ${(_a = message.songId) !== null && _a !== void 0 ? _a : 'none'}.`);
+    }
+    if (!message.features || typeof message.features !== 'object') {
+        throw new Error('Essentia feature extraction returned no features.');
+    }
+    return message.features;
+}
+function getEssentiaFeatureExtractionError(message) {
+    var _a;
+    return (_a = message.error) !== null && _a !== void 0 ? _a : 'Essentia feature extraction failed.';
+}
 
 
 /***/ }),
@@ -60132,7 +60166,7 @@ sampleRate, songId, featuresToExtract // List of frame-based feature IDs
                 console.error(`[FrameExtractor ${songId}] Error processing frame ${actualFrameIdx}:`, frameProcessingError);
             }
             finally {
-                // --- Per-Frame Cleanup --- 
+                // --- Per-Frame Cleanup ---
                 if (frame)
                     frame.delete();
                 // --- Cleanup Current Spectrum ONLY if it wasn't carried over ---
@@ -60366,7 +60400,7 @@ sampleRate, songId, featuresToExtract // List of frame-based feature IDs
 /************************************************************************/
 /******/ 	// The module cache
 /******/ 	var __webpack_module_cache__ = {};
-/******/ 	
+/******/
 /******/ 	// The require function
 /******/ 	function __webpack_require__(moduleId) {
 /******/ 		// Check if module is in cache
@@ -60380,17 +60414,17 @@ sampleRate, songId, featuresToExtract // List of frame-based feature IDs
 /******/ 			loaded: false,
 /******/ 			exports: {}
 /******/ 		};
-/******/ 	
+/******/
 /******/ 		// Execute the module function
 /******/ 		__webpack_modules__[moduleId].call(module.exports, module, module.exports, __webpack_require__);
-/******/ 	
+/******/
 /******/ 		// Flag the module as loaded
 /******/ 		module.loaded = true;
-/******/ 	
+/******/
 /******/ 		// Return the exports of the module
 /******/ 		return module.exports;
 /******/ 	}
-/******/ 	
+/******/
 /************************************************************************/
 /******/ 	/* webpack/runtime/define property getters */
 /******/ 	(() => {
@@ -60403,7 +60437,7 @@ sampleRate, songId, featuresToExtract // List of frame-based feature IDs
 /******/ 			}
 /******/ 		};
 /******/ 	})();
-/******/ 	
+/******/
 /******/ 	/* webpack/runtime/global */
 /******/ 	(() => {
 /******/ 		__webpack_require__.g = (function() {
@@ -60415,12 +60449,12 @@ sampleRate, songId, featuresToExtract // List of frame-based feature IDs
 /******/ 			}
 /******/ 		})();
 /******/ 	})();
-/******/ 	
+/******/
 /******/ 	/* webpack/runtime/hasOwnProperty shorthand */
 /******/ 	(() => {
 /******/ 		__webpack_require__.o = (obj, prop) => (Object.prototype.hasOwnProperty.call(obj, prop))
 /******/ 	})();
-/******/ 	
+/******/
 /******/ 	/* webpack/runtime/make namespace object */
 /******/ 	(() => {
 /******/ 		// define __esModule on exports
@@ -60431,7 +60465,7 @@ sampleRate, songId, featuresToExtract // List of frame-based feature IDs
 /******/ 			Object.defineProperty(exports, '__esModule', { value: true });
 /******/ 		};
 /******/ 	})();
-/******/ 	
+/******/
 /******/ 	/* webpack/runtime/node module decorator */
 /******/ 	(() => {
 /******/ 		__webpack_require__.nmd = (module) => {
@@ -60440,7 +60474,7 @@ sampleRate, songId, featuresToExtract // List of frame-based feature IDs
 /******/ 			return module;
 /******/ 		};
 /******/ 	})();
-/******/ 	
+/******/
 /************************************************************************/
 var __webpack_exports__ = {};
 // This entry needs to be wrapped in an IIFE because it needs to be in strict mode.
@@ -60451,14 +60485,68 @@ var __webpack_exports__ = {};
   \****************************************/
 __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _features_frame_feature_extractor__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./features/frame-feature-extractor */ "./src/workers/features/frame-feature-extractor.ts");
+/* harmony import */ var _lib_essentiaWorkerMessages__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../lib/essentiaWorkerMessages */ "./src/lib/essentiaWorkerMessages.ts");
 console.log("Worker script evaluating... [Bundled Approach using require]");
 // Use require - Webpack will handle this during build
 const esPkg = __webpack_require__(/*! essentia.js */ "./node_modules/essentia.js/index.js");
 // Import the new frame-based feature extractor
 
+
 console.log('[Debug] esPkg structure keys:', Object.keys(esPkg));
 let essentia; // Use 'any' for now
 let essentiaInstancePromise = null;
+const isUsableEssentiaInstance = (candidate) => {
+    if (!candidate || typeof candidate.version === 'undefined' || typeof candidate.arrayToVector !== 'function') {
+        return false;
+    }
+    let probeVector = null;
+    try {
+        probeVector = candidate.arrayToVector(new Float32Array([0, 0.25, -0.25]));
+        if (!probeVector || typeof probeVector.size !== 'function' || typeof candidate.Energy !== 'function') {
+            return false;
+        }
+        const energyResult = candidate.Energy(probeVector);
+        return Number.isFinite(energyResult === null || energyResult === void 0 ? void 0 : energyResult.energy);
+    }
+    catch (error) {
+        console.warn('[Initialize] Essentia instance probe failed:', error);
+        return false;
+    }
+    finally {
+        if (probeVector && typeof probeVector.delete === 'function') {
+            probeVector.delete();
+        }
+    }
+};
+const acceptEssentiaInstance = (candidate, label) => {
+    if (!isUsableEssentiaInstance(candidate)) {
+        console.warn(`[Initialize] ${label} Essentia instance was not usable for vector conversion.`);
+        return false;
+    }
+    essentia = candidate;
+    console.log(`[Initialize] Created using ${label}. Version:`, candidate.version);
+    self.postMessage({ type: 'essentiaReady', payload: true });
+    return true;
+};
+const createEssentiaWasmAdapter = (wasmModule) => {
+    const algorithms = new wasmModule.EssentiaJS(false);
+    const adapter = {
+        version: 'wasm-adapter',
+        algorithmNames: [],
+        arrayToVector: (inputArray) => wasmModule.arrayToVector(inputArray),
+        vectorToArray: (inputVector) => wasmModule.vectorToArray(inputVector),
+        shutdown: () => { var _a; return (_a = algorithms.shutdown) === null || _a === void 0 ? void 0 : _a.call(algorithms); },
+        delete: () => { var _a; return (_a = algorithms.delete) === null || _a === void 0 ? void 0 : _a.call(algorithms); },
+    };
+    return new Proxy(adapter, {
+        get(target, property) {
+            if (property in target)
+                return target[property];
+            const algorithmValue = algorithms[property];
+            return typeof algorithmValue === 'function' ? algorithmValue.bind(algorithms) : algorithmValue;
+        },
+    });
+};
 // Initialize Essentia.js
 const initializeEssentia = async () => {
     if (!essentiaInstancePromise) {
@@ -60474,15 +60562,23 @@ const initializeEssentia = async () => {
                     if (esPkg.EssentiaWASM.EssentiaWASM) {
                         console.log('[Debug] Found nested EssentiaWASM - using that first');
                         try {
-                            essentia = new esPkg.Essentia(esPkg.EssentiaWASM.EssentiaWASM);
-                            if (essentia && typeof essentia.version !== 'undefined') {
-                                console.log('[Initialize] Created using nested WASM. Version:', essentia.version);
-                                self.postMessage({ type: 'essentiaReady', payload: true });
+                            const candidate = new esPkg.Essentia(esPkg.EssentiaWASM.EssentiaWASM);
+                            if (acceptEssentiaInstance(candidate, 'nested WASM')) {
                                 return true;
                             }
                         }
                         catch (nestedError) {
                             console.error('[Debug] Nested WASM approach failed:', nestedError);
+                        }
+                        console.log('[Debug] Trying nested EssentiaWASM adapter');
+                        try {
+                            const candidate = createEssentiaWasmAdapter(esPkg.EssentiaWASM.EssentiaWASM);
+                            if (acceptEssentiaInstance(candidate, 'nested EssentiaWASM adapter')) {
+                                return true;
+                            }
+                        }
+                        catch (adapterError) {
+                            console.error('[Debug] Nested WASM adapter failed:', adapterError);
                         }
                     }
                 }
@@ -60535,44 +60631,38 @@ const initializeEssentia = async () => {
                     };
                     return stubInstance;
                 };
-                // Try direct initialization without arguments first - might work in the worker context
+                if (esPkg.EssentiaWASM) {
+                    console.log('[Debug] Trying direct Essentia(EssentiaWASM)');
+                    try {
+                        const candidate = new esPkg.Essentia(esPkg.EssentiaWASM);
+                        if (acceptEssentiaInstance(candidate, 'direct EssentiaWASM')) {
+                            return true;
+                        }
+                    }
+                    catch (directWasmError) {
+                        console.log('[Debug] Direct Essentia(EssentiaWASM) failed, continuing with patch if available.', directWasmError);
+                    }
+                }
+                // Try direct initialization without arguments next; some bundles expose a version but cannot extract.
                 try {
                     console.log('[Debug] Trying direct Essentia() with no args');
-                    essentia = new esPkg.Essentia();
-                    if (essentia && typeof essentia.version !== 'undefined') {
-                        console.log('[Initialize] Created with direct no-args approach. Version:', essentia.version);
-                        self.postMessage({ type: 'essentiaReady', payload: true });
+                    const candidate = new esPkg.Essentia();
+                    if (acceptEssentiaInstance(candidate, 'direct no-args')) {
                         return true;
                     }
                 }
                 catch (directError) {
-                    console.log('[Debug] Direct approach failed, continuing with patch if available');
-                    if (esPkg.EssentiaWASM) {
-                        console.log('[Debug] Trying direct Essentia(EssentiaWASM)');
-                        try {
-                            essentia = new esPkg.Essentia(esPkg.EssentiaWASM);
-                            if (essentia && typeof essentia.version !== 'undefined') {
-                                console.log('[Initialize] Created using direct Essentia(EssentiaWASM). Version:', essentia.version);
-                                self.postMessage({ type: 'essentiaReady', payload: true });
-                                return true;
-                            }
-                        }
-                        catch (directWasmError) {
-                            console.log('[Debug] Direct Essentia(EssentiaWASM) failed, initialization likely failed.', directWasmError);
-                        }
-                    }
+                    console.log('[Debug] Direct no-args approach failed, continuing with patch if available.', directError);
                 }
                 // Step 3: Try to use the patched module
                 console.log('[Debug] Trying Essentia with enhanced patched WASM module');
-                essentia = new esPkg.Essentia(patchedWASM);
+                const candidate = new esPkg.Essentia(patchedWASM);
                 // Check if we have a valid essentia instance
-                if (essentia && typeof essentia.version !== 'undefined') {
-                    console.log('[Initialize] Essentia instance created successfully. Version:', essentia.version);
-                    self.postMessage({ type: 'essentiaReady', payload: true });
+                if (acceptEssentiaInstance(candidate, 'enhanced patched WASM module')) {
                     return true;
                 }
                 else {
-                    throw new Error('Essentia instance created but version property is missing');
+                    throw new Error('Essentia instance created but could not convert audio vectors');
                 }
             }
             catch (e) {
@@ -60611,7 +60701,10 @@ const FRAME_BASED_FEATURES = new Set([
 // Main message handler
 self.onmessage = async (event) => {
     console.log("Worker received message:", event.data.type);
-    const { type, payload } = event.data;
+    const { type, payload, requestId } = event.data;
+    const postExtractionMessage = (message) => {
+        self.postMessage((0,_lib_essentiaWorkerMessages__WEBPACK_IMPORTED_MODULE_1__.withEssentiaRequestId)(message, requestId));
+    };
     if (type === 'init') {
         await initializeEssentia();
         return;
@@ -60623,7 +60716,7 @@ self.onmessage = async (event) => {
         const ready = await initializeEssentia();
         if (!ready || !essentia) {
             console.error(`Cannot extract features for ${songId}: Essentia not ready or instance is null.`);
-            self.postMessage({ type: 'featureExtractionError', songId, error: 'Essentia not initialized' });
+            postExtractionMessage({ type: 'featureExtractionError', songId, error: 'Essentia not initialized' });
             return;
         }
         console.log(`[MainWorker Extract ${songId}] Processing. Requested: [${featuresToExtract.join(', ')}]`);
@@ -60854,15 +60947,15 @@ self.onmessage = async (event) => {
             else {
                 console.log(`[MainWorker Extract ${songId}] No frame-based features requested.`);
             }
-            // --- 4. Post Combined Results --- 
+            // --- 4. Post Combined Results ---
             console.log(`[MainWorker Extract ${songId}] All processing finished. Posting results.`);
-            self.postMessage({ type: 'featureExtractionComplete', songId, features: combinedFeatures });
+            postExtractionMessage({ type: 'featureExtractionComplete', songId, features: combinedFeatures });
         }
         catch (error) {
             // Catch errors from top-level processing (e.g., initial vector conversion)
             const errorMessage = (error instanceof Error) ? error.message : String(error);
             console.error(`[MainWorker Extract ${songId}] Top-level error extracting features:`, error);
-            self.postMessage({ type: 'featureExtractionError', songId, error: errorMessage });
+            postExtractionMessage({ type: 'featureExtractionError', songId, error: errorMessage });
         }
         finally {
             // --- Cleanup Full Signal Vector ---

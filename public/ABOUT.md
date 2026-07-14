@@ -1,37 +1,45 @@
-Welcome to MusicCluster! This application demonstrates an end-to-end unsupervised machine learning pipeline for audio clustering, running entirely in your browser.
+MusicCluster is an in-browser Music Information Retrieval (MIR) workspace with two related machine-learning modes. **Cluster mode** discovers groups without labels. **Neural Network mode** learns user-defined labels and predicts them with a multilayer perceptron (MLP). Use the icon beside the page title to switch modes.
 
-## Project Goal
+Audio analysis and model work stay in the browser. Web Workers perform the expensive feature, processing, reduction, clustering, and neural-network operations so the interface remains usable during longer runs.
 
-The primary goal is to provide an interactive and educational tool for visualizing how audio files can be grouped based on their extracted musical features without prior labeling. Users can explore the effects of different feature extraction, dimensionality reduction, and clustering parameters.
+## Cluster Mode: Unsupervised Discovery
 
-## How it Works: The Pipeline
+Cluster mode is useful when you want the data to reveal its own groupings.
 
-1.  **Audio Input:** You can start with the provided default song excerpts or upload your own audio files.
-2.  **Feature Extraction (MIR):** Using **Essentia.js**, the application analyzes the audio waveform to extract various Music Information Retrieval (MIR) features (like MFCCs, Energy, Key, etc.). You can select which features to use. Extracted features are then prepared into a numerical matrix, converting categorical features (like Key) using one-hot encoding. Processing happens in a Web Worker to keep the interface responsive.
-3.  **Data Processing (Scaling):** Before reducing dimensions, the numerical matrix (excluding one-hot encoded columns) can be scaled using **Standardization (Z-score)** or **Normalization (Min-Max)**. This step, also running in a Web Worker (`data-processing-worker.ts`), can help improve the performance of subsequent distance-based algorithms.
-4.  **Dimensionality Reduction:** The high-dimensional (and potentially scaled) feature vectors are then reduced to 2 or 3 dimensions using **DruidJS**, allowing for visualization. You can choose between PCA, t-SNE, or UMAP algorithms. This also runs in a Web Worker.
-5.  **K-Means Clustering:** The reduced data points are clustered using the K-Means algorithm, implemented with **tf-kmeans**. The application allows visualizing the step-by-step process of centroid initialization, point assignment, and centroid updates.
-6.  **Data Visualization:** The entire process is visualized using **Plotly.js** and potentially other charting libraries, showing feature data, the dimensionality reduction space, and the final cluster assignments on an interactive scatter plot.
-7.  **Audio Visualization:** View detailed waveform and spectrogram visualizations for each song, with interactive playback controls and logarithmic frequency scaling for better frequency analysis.
+1. **Choose audio:** Start with the bundled excerpts, enable or disable songs in the Song Pool, or upload local audio.
+2. **Extract MIR features:** Select descriptors such as MFCC, energy, key, rhythm, spectral shape, or intensity. Essentia.js analyzes each waveform and categorical values are converted into numerical columns.
+3. **Process the matrix:** Choose standardization, min-max normalization, or no scaling. One-hot encoded columns remain categorical.
+4. **Reduce dimensions:** Project the feature matrix to 2D or 3D with PCA, UMAP, or t-SNE for inspection and clustering.
+5. **Run K-Means:** Select the number of clusters, initialize centroids, and advance the assignment/update cycle step by step or run it continuously.
+6. **Inspect the result:** Color the Plotly visualization by cluster or feature, compare points and centroids, play songs, and open waveform, spectrogram, and raw-feature details.
 
-## Technologies Used
+Cluster assignments describe similarity in the selected feature space. They are not genre labels unless you interpret and name them that way.
 
-*   **Frontend Framework:** Next.js
-*   **MIR Library:** Essentia.js
-*   **Data Processing:** Custom logic (Standardization/Normalization) in Web Worker
-*   **Dimensionality Reduction:** DruidJS
-*   **Clustering:** tf-kmeans (TensorFlow.js)
-*   **Visualization:** D3.js, Chart.js, Plotly.js, WaveSurfer.js
-*   **UI Styling:** augmented-ui, Tailwind CSS
-*   **Concurrency:** Web Workers (`essentia-worker.ts`, `data-processing-worker.ts`, `druid-worker.ts`, `kmeans-worker.ts`)
+## Neural Network Mode: Supervised Classification
 
-## Dimensionality Reduction & Inference Caveats
+Neural Network mode is useful when you already know the categories you want the model to learn.
 
-Not every dimensionality reduction technique behaves the same way once you try to embed a *new* song after training:
+1. **Label the training data:** Create at least two labels and drag songs into their columns. Each active label needs at least two usable songs. Uploaded training songs remain local to the current browser session unless their setup metadata is exported.
+2. **Extract MIR features:** Select the model inputs and prepare a feature matrix from the labeled songs. Cached features accelerate the bundled excerpts; uploaded files are analyzed locally.
+3. **Choose data processing:** Select standardization, min-max normalization, or **None**, then process the matrix. Changing this choice invalidates stale processed or reduced output so the next model uses the visible configuration.
+4. **Choose dimensionality reduction:** Select **None** to train on the prepared matrix, or use PCA, UMAP, or t-SNE with a 2D or 3D target. Changing the algorithm or target clears stale projections.
+5. **Configure the MLP:** Set hidden layers, nodes, activation, optimizer, learning rate, epochs, split ratio, seed, batch size, and an optional target loss.
+6. **Train and inspect:** Train in the TensorFlow.js worker. The interface reports label readiness, training summary, feature signal, network structure and activations, plus full-size training/validation loss and accuracy charts.
+7. **Infer labels:** Predict the prepared dataset and review accuracy, confidence, confusion, and per-label metrics. You can also classify one uploaded audio file when its feature pipeline can reproduce the trained input shape.
+8. **Validate and compare:** Run the suggested holdout, stratified k-fold, or leave-one-out validation. Comparison history ranks raw, processed, and reduced runs; runs can be reviewed, annotated, exported, imported, or deleted individually.
+9. **Explain and reuse:** Permutation-based feature impact identifies influential inputs. Export labels and setup for another session, or export the trained model with its preprocessing context for later inference.
 
-* **PCA** is linear and yields an explicit projection matrix. We can multiply any new (processed) feature vector by that matrix and land it in the same coordinate system, so inference is deterministic and fast.
-* **UMAP** preserves a neighbor graph of the training data. Its implementation in DruidJS exposes an approximate `transform` that inserts new points by comparing them to that fixed graph, so inference is feasible as long as we keep the fitted structure around.
-* **t-SNE** optimizes all points jointly and does not learn a reusable transform. Adding even a single new song forces the entire layout to be recomputed, which would invalidate the saved clusters/centroids. In practice this manifests as new songs collapsing near the origin or drifting away from the trained clusters, so the UI blocks inference whenever the reduction step used t-SNE. Use PCA or UMAP (or retrain reduction + clustering with the new song included) when you need inference.
+## Reduction and Inference Constraints
+
+PCA learns a reusable linear projection and is supported for reduced uploaded-audio inference. The current ANN workflow does not reuse t-SNE or UMAP projections for a new standalone song, so uploaded inference is blocked for models trained with those reducers. Dataset inference remains available when the current matrix matches the trained pipeline. Retrain after changing features, processing, reduction, labels, or network structure.
+
+## Main Technologies
+
+- **Application:** Next.js, React, TypeScript, Tailwind CSS, augmented-ui
+- **Audio and MIR:** Essentia.js, WaveSurfer.js
+- **Machine learning:** TensorFlow.js, tf-kmeans, DruidJS
+- **Visualization:** Plotly.js, D3.js, Chart.js
+- **Concurrency:** Dedicated browser workers for feature extraction, processing, reduction, K-Means, and MLP operations
 
 ## Author
 

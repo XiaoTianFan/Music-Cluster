@@ -7,7 +7,13 @@
     "build:worker": "webpack --config webpack.worker.config.js",
     "build": "npm run build:worker && next build",
     "start": "next start",
-    "lint": "next lint",
+    "test": "tsc -p tsconfig.test.json && node --test .test-build/tests/*.test.js",
+    "test:unit": "tsc -p tsconfig.test.json && node --test .test-build/tests/*.test.js",
+    "test:route": "tsc -p tsconfig.test.json && node --test .test-build/tests/*.route-test.js",
+    "test:browser-worker": "tsc -p tsconfig.test.json && node --test .test-build/tests/*.browser-test.js",
+    "test:browser-route:setup": "tsc -p tsconfig.test.json && node --test .test-build/tests/annSetupPortability.browser-route-test.js",
+    "test:browser-route": "tsc -p tsconfig.test.json && node --test .test-build/tests/*.browser-route-test.js",
+    "lint": "eslint src --ext .ts,.tsx,.js,.jsx",
     "regenerate-default-features": "node scripts/regenerate-default-features.cjs"
   },
   "dependencies": {

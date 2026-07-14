@@ -18,10 +18,13 @@ const SongDetailsDialog: React.FC<SongDetailsDialogProps> = ({ song, features, o
   const wavesurferRef = useRef<WaveSurfer | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isReady, setIsReady] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     setIsReady(false);
+    setLoadError(null);
     if (!waveformRef.current || !spectrogramRef.current) return;
+    let isDisposed = false;
 
     const ws = WaveSurfer.create({
       container: waveformRef.current,
@@ -52,7 +55,11 @@ const SongDetailsDialog: React.FC<SongDetailsDialogProps> = ({ song, features, o
       })
     );
 
-    ws.load(song.url);
+    void ws.load(song.url).catch((error: unknown) => {
+      if (!isDisposed && !(error instanceof DOMException && error.name === 'AbortError')) {
+        setLoadError('Audio visualization is unavailable for this track.');
+      }
+    });
 
     ws.on('ready', () => {
       setIsReady(true);
@@ -65,7 +72,14 @@ const SongDetailsDialog: React.FC<SongDetailsDialogProps> = ({ song, features, o
     wavesurferRef.current = ws;
 
     return () => {
-      ws.destroy();
+      isDisposed = true;
+      try {
+        ws.destroy();
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === 'AbortError')) {
+          console.error('Failed to destroy song visualization:', error);
+        }
+      }
     };
   }, [song.url]);
 
@@ -123,7 +137,11 @@ const SongDetailsDialog: React.FC<SongDetailsDialogProps> = ({ song, features, o
 
           {/* Visualization Section */}
           <div className="flex-shrink-0 bg-black/20 p-4 rounded border border-gray-700 relative min-h-[400px]">
-            {!isReady && (
+            {loadError ? (
+                <div className="absolute inset-0 z-10 flex items-center justify-center px-6 text-center text-sm text-yellow-300/90">
+                    {loadError}
+                </div>
+            ) : !isReady && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
                     <svg className="animate-spin h-8 w-8 text-[var(--accent-primary)] mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>

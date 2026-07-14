@@ -1,6 +1,36 @@
 // musiccluster/webpack.worker.config.js
 const path = require('path');
 
+class StripTrailingWhitespacePlugin {
+  apply(compiler) {
+    compiler.hooks.thisCompilation.tap('StripTrailingWhitespacePlugin', (compilation) => {
+      const { Compilation, sources } = compiler.webpack;
+      const stage = Compilation.PROCESS_ASSETS_STAGE_OPTIMIZE_TRANSFER
+        ?? Compilation.PROCESS_ASSETS_STAGE_OPTIMIZE_SIZE;
+
+      compilation.hooks.processAssets.tap(
+        {
+          name: 'StripTrailingWhitespacePlugin',
+          stage,
+        },
+        (assets) => {
+          for (const assetName of Object.keys(assets)) {
+            if (!assetName.endsWith('.js')) {
+              continue;
+            }
+
+            const source = assets[assetName].source().toString();
+            const stripped = source.replace(/[ \t]+(?=\r?\n|$)/g, '');
+            if (stripped !== source) {
+              compilation.updateAsset(assetName, new sources.RawSource(stripped));
+            }
+          }
+        }
+      );
+    });
+  }
+}
+
 module.exports = {
   // Target the webworker environment
   target: 'webworker',
@@ -19,7 +49,7 @@ module.exports = {
     // Output filename
     filename: '[name].bundled.js',
     // Important for WASM loading within worker
-    publicPath: '/workers/' 
+    publicPath: '/workers/'
   },
   resolve: {
     // Add '.ts' and '.js' as resolvable extensions.
@@ -54,8 +84,9 @@ module.exports = {
       // If using top-level await in worker (like for initialization)
       // topLevelAwait: true // Uncomment if needed
   },
+  plugins: [new StripTrailingWhitespacePlugin()],
   // Development mode for easier debugging
   mode: 'development',
   // Optional: Generate source maps for debugging
-  devtool: 'source-map', 
+  devtool: 'source-map',
 };

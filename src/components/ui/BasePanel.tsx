@@ -19,11 +19,9 @@ const BasePanel: React.FC<BasePanelProps> = ({
   ...rest // <-- Capture rest of the props (including event handlers)
 }) => {
   // Combine default classes, augmented-ui styles, and passed className
-  const combinedClassName = `
-    p-4 relative
-    before:absolute before:inset-0 before:bg-red-500 before:content-[\'\'] 
-    ${className} 
-  `.trim();
+  const combinedClassName = `p-4 relative ${className}`.trim();
+
+  const panelGlowFilter = style?.filter ?? 'drop-shadow(0 0 5px var(--accent-primary))';
 
   // Define augmented-ui specific styles using CSS variables
   // Apply these to the main element, which will be *above* the pseudo-element
@@ -32,7 +30,6 @@ const BasePanel: React.FC<BasePanelProps> = ({
     '--aug-border-all': '3px', 
     '--aug-border-bg': `var(--foreground)`, 
     '--aug-border-opacity': `0.9`, 
-    filter: `drop-shadow(0 0 5px var(--accent-primary))`, 
     '--aug-inlay-all': '10px', 
     '--aug-inlay-bg': `var(--background)`,
     '--aug-inlay-opacity': '0.0', 
@@ -41,6 +38,7 @@ const BasePanel: React.FC<BasePanelProps> = ({
     '--aug-br': '20px', 
     '--aug-bl': '20px',
     ...style, // Spread the incoming style prop here to allow overrides on the main element
+    filter: 'none', // Keep descendant controls out of the panel border glow compositing layer.
   } as React.CSSProperties;
 
   return (
@@ -50,10 +48,19 @@ const BasePanel: React.FC<BasePanelProps> = ({
       style={augmentedStyles}
       {...rest} // <-- Spread the rest of the props (like onDragOver, etc.) onto the div
     >
-      {/* Render children inside the panel, implicitly above the ::before pseudo-element */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+        data-augmented-ui={dataAugmentedUi}
+        data-base-panel-glow="true"
+        style={{
+          '--aug-inlay-opacity': '0',
+          filter: panelGlowFilter,
+        } as React.CSSProperties}
+      />
       {children}
     </div>
   );
 };
 
-export default BasePanel; 
+export default BasePanel;

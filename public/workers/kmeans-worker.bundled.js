@@ -1523,10 +1523,10 @@ function batchMatMul(args) {
                         for (let j = j0; j < jBlock; j++) {
                             let sum = 0.0;
                             for (let k = k0; k < kBlock; k++) {
-                                const aVal = 
+                                const aVal =
                                 // tslint:disable-next-line: max-line-length
                                 a3dValues[batchIndexA * aBatch + i * aOuterStep + k * aInnerStep];
-                                const bVal = 
+                                const bVal =
                                 // tslint:disable-next-line: max-line-length
                                 b3dValues[k * bInnerStep + j * bOuterStep + batchIndexB * bBatch];
                                 sum += aVal * bVal;
@@ -57878,7 +57878,7 @@ class Engine {
                 const dtype = 'float32';
                 const gradInputs = { x: dy };
                 const attrs = { dtype };
-                return ENGINE.runKernel(_kernel_names__WEBPACK_IMPORTED_MODULE_5__.Cast, gradInputs, 
+                return ENGINE.runKernel(_kernel_names__WEBPACK_IMPORTED_MODULE_5__.Cast, gradInputs,
                 // tslint:disable-next-line: no-unnecessary-type-assertion
                 attrs);
             }
@@ -58392,9 +58392,9 @@ class Engine {
             const accumulatedGradientMap = {};
             accumulatedGradientMap[y.id] = (dy == null) ? ones(y.shape) : dy;
             // Backprop gradients through the filtered nodes.
-            (0,_tape__WEBPACK_IMPORTED_MODULE_9__.backpropagateGradients)(accumulatedGradientMap, filteredTape, 
+            (0,_tape__WEBPACK_IMPORTED_MODULE_9__.backpropagateGradients)(accumulatedGradientMap, filteredTape,
             // Pass the tidy function to avoid circular dep with `tape.ts`.
-            f => this.tidy(f), 
+            f => this.tidy(f),
             // Pass an add function to avoide a circular dep with `tape.ts`.
             add);
             const grads = xs.map(x => accumulatedGradientMap[x.id]);
@@ -63561,7 +63561,7 @@ const resizeBilinearGradConfig = {
     gradFunc: (dy, saved, attrs) => {
         const [images] = saved;
         const inputs = { dy, images };
-        const imagesDer = () => 
+        const imagesDer = () =>
         // tslint:disable-next-line: no-unnecessary-type-assertion
         _engine__WEBPACK_IMPORTED_MODULE_0__.ENGINE.runKernel(_kernel_names__WEBPACK_IMPORTED_MODULE_1__.ResizeBilinearGrad, inputs, attrs);
         return { images: imagesDer };
@@ -63608,7 +63608,7 @@ const resizeNearestNeighborGradConfig = {
     gradFunc: (dy, saved, attrs) => {
         const [images] = saved;
         const inputs = { dy, images };
-        const imagesDer = () => 
+        const imagesDer = () =>
         // tslint:disable-next-line: no-unnecessary-type-assertion
         _engine__WEBPACK_IMPORTED_MODULE_0__.ENGINE.runKernel(_kernel_names__WEBPACK_IMPORTED_MODULE_1__.ResizeNearestNeighborGrad, inputs, attrs);
         return { images: imagesDer };
@@ -65096,7 +65096,7 @@ __webpack_require__.r(__webpack_exports__);
 // rollup.
 
 // tslint:disable-next-line
-const Long = 
+const Long =
 // tslint:disable-next-line
 (long__WEBPACK_IMPORTED_MODULE_0___default()) || long__WEBPACK_IMPORTED_MODULE_0__;
 function hexToLong(hex) {
@@ -75296,7 +75296,7 @@ function depthwiseConv2dNativeBackpropInput_(xShape, dy, filter, strides, pad, d
     }
     const inputs = { dy: dy4D, filter };
     const attrs = { strides, pad, dimRoundingMode, dilations, inputShape: xShape };
-    const res = 
+    const res =
     // tslint:disable-next-line: no-unnecessary-type-assertion
     _engine__WEBPACK_IMPORTED_MODULE_0__.ENGINE.runKernel(_kernel_names__WEBPACK_IMPORTED_MODULE_2__.DepthwiseConv2dNativeBackpropInput, inputs, attrs);
     if (reshapedTo4D) {
@@ -77066,7 +77066,7 @@ function fusedConv2d_({ x, filter, strides, pad, dataFormat = 'NHWC', dilations 
     // inputs and thus a a different number of elements in the gradient.
     if (bias == null) {
         const customOp = (0,_gradients__WEBPACK_IMPORTED_MODULE_12__.customGrad)((x4D, filter, save) => {
-            let res = 
+            let res =
             // tslint:disable-next-line: no-unnecessary-type-assertion
             _engine__WEBPACK_IMPORTED_MODULE_0__.ENGINE.runKernel(_kernel_names__WEBPACK_IMPORTED_MODULE_13__.FusedConv2D, inputs, attrs);
             save([filter, x4D, res]);
@@ -77463,7 +77463,7 @@ function fusedMatMul_({ a, b, transposeA = false, transposeB = false, bias, acti
     // inputs and thus a a different number of elements in the gradient.
     if (bias == null) {
         const customOp = (0,_gradients__WEBPACK_IMPORTED_MODULE_9__.customGrad)((a3D, b3D, save) => {
-            const res = 
+            const res =
             // tslint:disable-next-line: no-unnecessary-type-assertion
             _engine__WEBPACK_IMPORTED_MODULE_0__.ENGINE.runKernel(_kernel_names__WEBPACK_IMPORTED_MODULE_10__._FusedMatMul, inputs, attrs);
             save([a3D, b3D, res]);
@@ -77473,7 +77473,7 @@ function fusedMatMul_({ a, b, transposeA = false, transposeB = false, bias, acti
     }
     else {
         const customOpWithBias = (0,_gradients__WEBPACK_IMPORTED_MODULE_9__.customGrad)((a3D, b3D, $bias, save) => {
-            const res = 
+            const res =
             // tslint:disable-next-line: no-unnecessary-type-assertion
             _engine__WEBPACK_IMPORTED_MODULE_0__.ENGINE.runKernel(_kernel_names__WEBPACK_IMPORTED_MODULE_10__._FusedMatMul, inputs, attrs);
             save([a3D, b3D, res, $bias]);
@@ -103768,7 +103768,7 @@ function shuffle(array) {
  */
 function shuffleCombo(
 // tslint:disable-next-line:no-any
-array, 
+array,
 // tslint:disable-next-line:no-any
 array2) {
     if (array.length !== array2.length) {
@@ -106239,7 +106239,7 @@ class LazyIterator {
      * @returns A `LazyIterator` of batches of elements, represented as an object
      *   with collections at the leaves.
      */
-    columnMajorBatch(batchSize, smallLastBatch = true, 
+    columnMajorBatch(batchSize, smallLastBatch = true,
     // tslint:disable-next-line:no-any
     zipFn = _util_deep_map__WEBPACK_IMPORTED_MODULE_3__.zipToList) {
         // First collect the desired number of input elements as a row-major batch.
@@ -107009,7 +107009,7 @@ class MicrophoneIterator extends _lazy_iterator__WEBPACK_IMPORTED_MODULE_1__.Laz
         if (!this.stream) {
             throw new Error('Could not obtain audio from microphone.');
         }
-        const ctxConstructor = 
+        const ctxConstructor =
         // tslint:disable-next-line:no-any
         window.AudioContext || window.webkitAudioContext;
         this.audioContext = new ctxConstructor();
@@ -112768,7 +112768,7 @@ let _nextNodeID = 0;
  *     B.inboundNodes
  */
 class Node {
-    constructor(args, 
+    constructor(args,
     // TODO(michaelterry): Define actual type for this.
     callArgs) {
         this.callArgs = callArgs;
@@ -130329,7 +130329,7 @@ __webpack_require__.r(__webpack_exports__);
  *   It will be called on each line of the summary. You can provide a custom
  *   function in order to capture the string summary. Defaults to `console.log`.
  */
-function printSummary(model, lineLength, positions, 
+function printSummary(model, lineLength, positions,
 // tslint:disable-next-line:no-any
 printFn = console.log) {
     const sequentialLike = isModelSequentialLike(model);
@@ -130428,7 +130428,7 @@ function isModelSequentialLike(model) {
     }
     return sequentialLike;
 }
-function printRow(fields, positions, 
+function printRow(fields, positions,
 // tslint:disable-next-line:no-any
 printFn = console.log) {
     let line = '';
@@ -130447,7 +130447,7 @@ printFn = console.log) {
  *
  * @param layer: Layer instance to print.
  */
-function printLayerSummary(layer, positions, 
+function printLayerSummary(layer, positions,
 // tslint:disable-next-line:no-any
 printFn) {
     let outputShape;
@@ -130473,7 +130473,7 @@ printFn) {
 /**
  * Prints a summary for a single Layer, with connectivity information.
  */
-function printLayerSummaryWithConnections(layer, positions, relevantNodes, 
+function printLayerSummaryWithConnections(layer, positions, relevantNodes,
 // tslint:disable-next-line:no-any
 printFn) {
     let outputShape;
@@ -134343,7 +134343,7 @@ if ( true && module.exports) {
 /************************************************************************/
 /******/ 	// The module cache
 /******/ 	var __webpack_module_cache__ = {};
-/******/ 	
+/******/
 /******/ 	// The require function
 /******/ 	function __webpack_require__(moduleId) {
 /******/ 		// Check if module is in cache
@@ -134357,17 +134357,17 @@ if ( true && module.exports) {
 /******/ 			loaded: false,
 /******/ 			exports: {}
 /******/ 		};
-/******/ 	
+/******/
 /******/ 		// Execute the module function
 /******/ 		__webpack_modules__[moduleId].call(module.exports, module, module.exports, __webpack_require__);
-/******/ 	
+/******/
 /******/ 		// Flag the module as loaded
 /******/ 		module.loaded = true;
-/******/ 	
+/******/
 /******/ 		// Return the exports of the module
 /******/ 		return module.exports;
 /******/ 	}
-/******/ 	
+/******/
 /************************************************************************/
 /******/ 	/* webpack/runtime/amd define */
 /******/ 	(() => {
@@ -134375,12 +134375,12 @@ if ( true && module.exports) {
 /******/ 			throw new Error('define cannot be used indirect');
 /******/ 		};
 /******/ 	})();
-/******/ 	
+/******/
 /******/ 	/* webpack/runtime/amd options */
 /******/ 	(() => {
 /******/ 		__webpack_require__.amdO = {};
 /******/ 	})();
-/******/ 	
+/******/
 /******/ 	/* webpack/runtime/compat get default export */
 /******/ 	(() => {
 /******/ 		// getDefaultExport function for compatibility with non-harmony modules
@@ -134392,7 +134392,7 @@ if ( true && module.exports) {
 /******/ 			return getter;
 /******/ 		};
 /******/ 	})();
-/******/ 	
+/******/
 /******/ 	/* webpack/runtime/define property getters */
 /******/ 	(() => {
 /******/ 		// define getter functions for harmony exports
@@ -134404,7 +134404,7 @@ if ( true && module.exports) {
 /******/ 			}
 /******/ 		};
 /******/ 	})();
-/******/ 	
+/******/
 /******/ 	/* webpack/runtime/global */
 /******/ 	(() => {
 /******/ 		__webpack_require__.g = (function() {
@@ -134416,12 +134416,12 @@ if ( true && module.exports) {
 /******/ 			}
 /******/ 		})();
 /******/ 	})();
-/******/ 	
+/******/
 /******/ 	/* webpack/runtime/hasOwnProperty shorthand */
 /******/ 	(() => {
 /******/ 		__webpack_require__.o = (obj, prop) => (Object.prototype.hasOwnProperty.call(obj, prop))
 /******/ 	})();
-/******/ 	
+/******/
 /******/ 	/* webpack/runtime/make namespace object */
 /******/ 	(() => {
 /******/ 		// define __esModule on exports
@@ -134432,7 +134432,7 @@ if ( true && module.exports) {
 /******/ 			Object.defineProperty(exports, '__esModule', { value: true });
 /******/ 		};
 /******/ 	})();
-/******/ 	
+/******/
 /******/ 	/* webpack/runtime/node module decorator */
 /******/ 	(() => {
 /******/ 		__webpack_require__.nmd = (module) => {
@@ -134441,7 +134441,7 @@ if ( true && module.exports) {
 /******/ 			return module;
 /******/ 		};
 /******/ 	})();
-/******/ 	
+/******/
 /************************************************************************/
 var __webpack_exports__ = {};
 // This entry needs to be wrapped in an IIFE because it needs to be in strict mode.
@@ -134454,7 +134454,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @tensorflow/tfjs */ "./node_modules/@tensorflow/tfjs/dist/index.js");
 // musiccluster/src/workers/kmeans-worker.ts
 // Remove tf-kmeans import, rely only on tfjs core
-// import * as KMeans from 'tf-kmeans'; 
+// import * as KMeans from 'tf-kmeans';
 
 console.log('[KMeans Worker] Loading TensorFlow.js backend...');
 // Optional: Set backend explicitly if needed
@@ -134510,7 +134510,7 @@ const updateCentroids = async (data, assignments, k, oldCentroids) => {
                 console.warn(`[KMeans Worker] Cluster ${i} is empty. Reusing old centroid.`);
                 // Reuse the old centroid for this cluster (slicing creates a new tensor view)
                 const oldCentroidForCluster = oldCentroids.slice([i, 0], [1, oldCentroids.shape[1]]).squeeze([0]);
-                // We don't own oldCentroidForCluster memory directly (it's from oldCentroids), 
+                // We don't own oldCentroidForCluster memory directly (it's from oldCentroids),
                 // but we need to keep it for stacking. Stacking creates a new tensor.
                 newCentroidsList.push(oldCentroidForCluster);
             }
@@ -134662,7 +134662,7 @@ self.onmessage = async (event) => {
             // --- Prepare Data for Sending Back ---
             const initialCentroidsArray = await localInitialCentroidsTensor.array();
             const initialAssignmentsArray = await localInitialAssignmentsTensor.array();
-            // --- Mark as Initialized and Send ---            
+            // --- Mark as Initialized and Send ---
             isTrainingInitialized = true;
             console.log('[KMeans Worker] Initialization complete.');
             postMsg({
@@ -134735,7 +134735,7 @@ self.onmessage = async (event) => {
             // --- Prepare Data for Sending Back ---
             const centroidsArray = await nextCentroidsTensor.array();
             const assignmentsArray = await assignmentsTensor.array();
-            // --- Send Step Results ---            
+            // --- Send Step Results ---
             console.log(`[KMeans Worker] Step ${currentIteration} complete.`);
             postMsg({
                 type: 'stepComplete',
@@ -134880,10 +134880,10 @@ self.onmessage = async (event) => {
         }
         return;
     }
-    // --- Handle Unknown Message Type --- 
+    // --- Handle Unknown Message Type ---
     console.warn('[KMeans Worker] Received unknown message type:', type);
 };
-// --- Generic Error Handler --- 
+// --- Generic Error Handler ---
 self.onerror = (error) => {
     const errorMessage = (error instanceof Error) ? error.message : (typeof error === 'string' ? error : 'Unknown worker error');
     console.error('[KMeans Worker] Unhandled error:', error);
