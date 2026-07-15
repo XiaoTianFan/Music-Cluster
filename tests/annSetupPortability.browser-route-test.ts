@@ -551,7 +551,7 @@ function installPreloadScript(setup: AnnSetupSnapshot): string {
 async function getSetupRouteState(client: CdpClient, sessionId: string): Promise<SetupRouteState> {
   return evaluateInPage<SetupRouteState>(client, sessionId, `
     (() => {
-      const text = document.body.innerText || '';
+      const text = document.body.textContent || '';
       const storageRaw = window.localStorage.getItem(${JSON.stringify(ANN_SETUP_STORAGE_KEY)});
       const storageSnapshot = storageRaw ? JSON.parse(storageRaw) : null;
       const comparisonStorageRaw = window.localStorage.getItem(${JSON.stringify(ANN_MODEL_COMPARISON_STORAGE_KEY)});
@@ -644,7 +644,7 @@ async function getSetupRouteState(client: CdpClient, sessionId: string): Promise
         hasFeatureSignal: text.includes('Feature signal')
           && text.includes('Top signal:')
           && text.includes('1 input / 4 labeled rows'),
-        hasDatasetInferenceCompleteLog: text.includes('Dataset inference complete.'),
+        hasDatasetInferenceCompleteLog: text.includes('[ANN Infer][Dataset] Complete |'),
         hasDatasetEvaluation: text.includes('Dataset evaluation')
           && text.includes('Correct')
           && text.includes('Avg confidence'),
@@ -1357,7 +1357,7 @@ async function runTrainedModelPortabilitySmoke(chromePath: string, url: string):
       'cache-backed feature extraction for trained-model portability'
     );
 
-    await clickButtonByText(client, sessionId, 'Train Network');
+    await clickButtonByText(client, sessionId, 'Train Automatic');
     const afterTraining = await waitForCondition(
       client,
       sessionId,

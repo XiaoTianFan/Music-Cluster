@@ -1,6 +1,6 @@
 import type { AnnEvaluationSummary } from './annEvaluation';
 import type { AnnTrainingSummary, AnnTrainingSummaryWarningCode } from './annTrainingSummary';
-import type { TrainingInputKind } from './annPipeline';
+import type { AnnTrainingExecutionMode, AnnTrainingPhaseKind, TrainingInputKind } from './annPipeline';
 import type { AnnValidationExecutionSummary } from './annValidationExecution';
 
 const comparisonInputKinds: readonly TrainingInputKind[] = ['raw', 'processed', 'reduced'];
@@ -55,6 +55,10 @@ export interface AnnModelComparisonRun {
   reviewStatus: AnnModelComparisonReviewStatus;
   note: string;
   warningCodes: AnnTrainingSummaryWarningCode[];
+  checkpointKind?: 'completed' | 'intermediate';
+  modelEpoch?: number | null;
+  executionMode?: AnnTrainingExecutionMode | null;
+  trainingPhase?: AnnTrainingPhaseKind | null;
 }
 
 export type AnnModelComparisonCoverageStatus = 'missing' | 'trained' | 'validated' | 'evaluated';
@@ -98,11 +102,18 @@ export function createAnnModelComparisonRun({
   runNumber,
   trainedAt,
   trainingSummary,
+  checkpoint,
 }: {
   id: string;
   runNumber: number;
   trainedAt: string;
   trainingSummary: AnnTrainingSummary;
+  checkpoint?: {
+    kind: 'completed' | 'intermediate';
+    epoch: number;
+    executionMode: AnnTrainingExecutionMode;
+    phase?: AnnTrainingPhaseKind | null;
+  };
 }): AnnModelComparisonRun {
   return {
     id,
@@ -126,6 +137,10 @@ export function createAnnModelComparisonRun({
     reviewStatus: 'unreviewed',
     note: '',
     warningCodes: trainingSummary.warnings.map(warning => warning.code),
+    checkpointKind: checkpoint?.kind ?? 'completed',
+    modelEpoch: checkpoint?.epoch ?? trainingSummary.epochs,
+    executionMode: checkpoint?.executionMode ?? null,
+    trainingPhase: checkpoint?.phase ?? null,
   };
 }
 

@@ -149,6 +149,10 @@ test('createAnnModelComparisonRun captures the training summary fields needed fo
     reviewStatus: 'unreviewed',
     note: '',
     warningCodes: ['under-sampled-labels'],
+    checkpointKind: 'completed',
+    modelEpoch: 50,
+    executionMode: null,
+    trainingPhase: null,
   });
 });
 

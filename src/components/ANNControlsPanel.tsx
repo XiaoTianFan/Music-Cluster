@@ -129,6 +129,7 @@ interface ANNControlsPanelProps {
     trainingExecutionMode?: AnnTrainingExecutionMode;
     trainingSessionStatus?: AnnTrainingSessionStatus | null;
     trainingPhaseSnapshot?: AnnTrainingPhaseSnapshot | null;
+    isAutomaticTrainingArmed?: boolean;
     canContinueTraining?: boolean;
     continueTrainingDisabledReason?: string | null;
     featureSignalSummary?: AnnFeatureSignalSummary | null;
@@ -180,6 +181,7 @@ interface ANNControlsPanelProps {
     onTrainingExecutionModeChange?: (mode: AnnTrainingExecutionMode) => void;
     onTrain: (mode?: AnnTrainingExecutionMode) => void;
     onAdvanceTraining?: () => void;
+    onStartAutomaticTraining?: () => void;
     onContinueTraining?: (additionalEpochs: number, mode: AnnTrainingExecutionMode) => void;
     onInfer: () => void;
     onRunPermutationImportance: () => void;
@@ -277,6 +279,7 @@ const ANNControlsPanel: React.FC<ANNControlsPanelProps> = ({
     trainingExecutionMode = 'automatic',
     trainingSessionStatus = null,
     trainingPhaseSnapshot = null,
+    isAutomaticTrainingArmed = false,
     canContinueTraining = false,
     continueTrainingDisabledReason = null,
     featureSignalSummary,
@@ -326,6 +329,7 @@ const ANNControlsPanel: React.FC<ANNControlsPanelProps> = ({
     onTrain,
     onTrainingExecutionModeChange = () => {},
     onAdvanceTraining = () => {},
+    onStartAutomaticTraining = () => {},
     onContinueTraining = () => {},
     onInfer,
     onRunPermutationImportance,
@@ -440,6 +444,8 @@ const ANNControlsPanel: React.FC<ANNControlsPanelProps> = ({
     };
 
     const isAnyProcessRunning = isExtracting || isProcessingData || isReducing || isTraining || isTrainingSessionActive || isInferring || isValidating || isAnalyzingPermutationImportance;
+    const isTrainingModeSwitchBlocked = isExtracting || isProcessingData || isReducing || isInferring || isValidating || isAnalyzingPermutationImportance;
+    const isInferenceActionBlocked = isExtracting || isProcessingData || isReducing || isTraining || isInferring || isValidating || isAnalyzingPermutationImportance;
     const areBaseWorkersReady = essentiaWorkerReady && dataProcessingWorkerReady && druidWorkerReady;
     const formatPercent = (value: number | null) => (
         value === null ? 'n/a' : `${(value * 100).toFixed(1)}%`
@@ -459,6 +465,9 @@ const ANNControlsPanel: React.FC<ANNControlsPanelProps> = ({
         return 'No low-confidence change';
     };
     const formatSignalRange = (value: number) => value.toFixed(3);
+    const formatExecutionMode = (mode: AnnTrainingExecutionMode | null | undefined) => (
+        mode === 'step' ? 'Internal steps' : mode === 'epoch' ? 'By epoch' : mode === 'automatic' ? 'Automatic' : 'Mode unknown'
+    );
     const validationProgressLabel = validationRunProgress?.stage === 'train'
         ? 'Training fold model'
         : validationRunProgress?.stage === 'infer'
@@ -843,7 +852,7 @@ const ANNControlsPanel: React.FC<ANNControlsPanelProps> = ({
                                         type="button"
                                         className={`min-h-8 px-1 text-[10px] transition-colors ${trainingExecutionMode === mode ? 'bg-cyan-400/15 text-cyan-200' : 'text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)]'}`}
                                         aria-pressed={trainingExecutionMode === mode}
-                                        disabled={isAnyProcessRunning}
+                                        disabled={isTrainingModeSwitchBlocked}
                                         onClick={() => onTrainingExecutionModeChange(mode)}
                                         data-ann-training-mode={mode}
                                     >
@@ -888,13 +897,13 @@ const ANNControlsPanel: React.FC<ANNControlsPanelProps> = ({
                                 enableTilt={true}
                                 data-ann-start-training={trainingExecutionMode}
                             >
-                                {isTraining ? 'Training...' : trainingExecutionMode === 'automatic' ? 'Train Network' : 'Start Training Session'}
+                                {isTraining ? 'Training...' : trainingExecutionMode === 'automatic' ? 'Train Automatic' : 'Start Training Session'}
                             </Button>
                         ) : (
                             <div className="space-y-2 border-t border-[var(--foreground)]/20 pt-2" data-ann-training-session="active">
                                 <div className="flex items-center justify-between gap-2 text-xs">
                                     <span className="font-semibold text-cyan-200">
-                                        {trainingPhaseSnapshot?.label ?? (trainingExecutionMode === 'step' ? 'Internal training ready' : 'Epoch training ready')}
+                                        {trainingPhaseSnapshot?.label ?? (trainingExecutionMode === 'step' ? 'Internal training ready' : trainingExecutionMode === 'epoch' ? 'Epoch training ready' : 'Automatic training ready')}
                                     </span>
                                     <span className="tabular-nums text-[var(--text-secondary)]">
                                         {trainingSessionStatus?.completedEpochs ?? 0} / {trainingSessionStatus?.targetEpochs ?? localConfig.epochs} epochs
@@ -916,16 +925,25 @@ const ANNControlsPanel: React.FC<ANNControlsPanelProps> = ({
                                     </div>
                                 )}
                                 <Button
-                                    onClick={onAdvanceTraining}
-                                    disabled={isTraining}
+                                    onClick={trainingExecutionMode === 'automatic' ? onStartAutomaticTraining : onAdvanceTraining}
+                                    disabled={isTraining || (trainingExecutionMode === 'automatic' && isAutomaticTrainingArmed)}
                                     className="w-full py-1.5 text-sm font-semibold"
                                     variant="primary"
                                     data-ann-advance-training={trainingExecutionMode}
+                                    data-ann-start-automatic={trainingExecutionMode === 'automatic' ? 'true' : undefined}
                                 >
-                                    {isTraining ? 'Advancing...' : trainingExecutionMode === 'step' ? 'Next Training Phase' : 'Train Next Epoch'}
+                                    {trainingExecutionMode === 'automatic'
+                                        ? isTraining || isAutomaticTrainingArmed ? 'Training Automatically...' : 'Train Automatic'
+                                        : isTraining
+                                            ? 'Advancing...'
+                                            : trainingExecutionMode === 'step'
+                                                ? 'Next Training Phase'
+                                                : 'Train Next Epoch'}
                                 </Button>
                                 <p className="text-[10px] leading-snug text-[var(--text-secondary)]">
-                                    {trainingSessionStatus?.nextAction ?? 'Advance the paused training session.'}
+                                    {trainingExecutionMode === 'automatic' && !isAutomaticTrainingArmed
+                                        ? 'Automatic mode is selected. Start it explicitly when you are ready.'
+                                        : trainingSessionStatus?.nextAction ?? 'Advance the paused training session.'}
                                 </p>
                             </div>
                         )}
@@ -1147,7 +1165,7 @@ const ANNControlsPanel: React.FC<ANNControlsPanelProps> = ({
                     <div className="space-y-2">
                          <Button
                             onClick={onInfer}
-                            disabled={isAnyProcessRunning || !mlpWorkerReady || !canInfer}
+                            disabled={isInferenceActionBlocked || !mlpWorkerReady || !canInfer}
                             title={inferDisabledReason ?? undefined}
                             className="w-full py-1.5 text-sm font-semibold"
                             variant="primary"
@@ -1931,6 +1949,14 @@ const ANNControlsPanel: React.FC<ANNControlsPanelProps> = ({
                                                     <TrashIcon className="h-4 w-4" />
                                                 </button>
                                             </div>
+                                            {run.modelEpoch !== undefined && run.modelEpoch !== null && (
+                                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-cyan-200/90" data-ann-model-checkpoint={run.checkpointKind ?? 'completed'}>
+                                                    <span>{run.checkpointKind === 'intermediate' ? 'Inference checkpoint' : 'Completed model'}</span>
+                                                    <span>Epoch {run.modelEpoch}</span>
+                                                    <span>{formatExecutionMode(run.executionMode)}</span>
+                                                    {run.trainingPhase && <span>{run.trainingPhase.replace('-', ' ')}</span>}
+                                                </div>
+                                            )}
                                             {pendingModelComparisonDeleteId === run.id && (
                                                 <div
                                                     role="alertdialog"
@@ -2083,7 +2109,7 @@ const ANNControlsPanel: React.FC<ANNControlsPanelProps> = ({
                             )}
                             <Button
                                 onClick={onInferUploadedAudio}
-                                disabled={isAnyProcessRunning || !canInferUploadedAudio}
+                                disabled={isInferenceActionBlocked || !canInferUploadedAudio}
                                 title={uploadedInferDisabledReason ?? undefined}
                                 className="mt-2 w-full py-1.5 text-sm font-semibold"
                                 variant="secondary"

@@ -9,6 +9,7 @@ import {
     Squares2X2Icon,
 } from '@heroicons/react/24/outline';
 import BasePanel from './ui/BasePanel';
+import Network3DView from './Network3DView';
 import type {
     ActivationSnapshot,
     AnnModelStateSnapshot,
@@ -30,6 +31,7 @@ interface MLPConfig {
 
 interface NetworkVisualizationPanelProps {
     className?: string;
+    isVisible?: boolean;
     networkConfig: MLPConfig | null;
     inputDimension: number;
     outputDimension: number;
@@ -59,6 +61,19 @@ interface ViewTransform {
     scale: number;
 }
 
+interface Network2DViewProps {
+    graph: AnnNetworkGraph;
+    phase?: AnnTrainingPhaseSnapshot | null;
+    activeNodeId: string | null;
+    activeConnectionId: string | null;
+    selectedNodeId: string | null;
+    selectedConnectionId: string | null;
+    onHoverNode: (nodeId: string | null) => void;
+    onHoverConnection: (connectionId: string | null) => void;
+    onSelectNode: (nodeId: string | null) => void;
+    onSelectConnection: (connectionId: string | null) => void;
+}
+
 const layerColors = ['#22d3ee', '#4ade80', '#f59e0b', '#fb7185', '#c084fc'];
 const defaultTransform: ViewTransform = { x: 0, y: 0, scale: 1 };
 
@@ -76,6 +91,11 @@ function getConnectionColor(connection: AnnNetworkGraphConnection): string {
 function getConnectionWidth(connection: AnnNetworkGraphConnection, maxAbsoluteWeight: number): number {
     if (connection.weight === null || maxAbsoluteWeight <= 0) return 0.7;
     return 0.8 + (connection.magnitude / maxAbsoluteWeight) * 2.4;
+}
+
+function getConnectionLabel(connection: AnnNetworkGraphConnection): string {
+    const weight = connection.weight === null ? 'uninitialized' : connection.weight.toFixed(4);
+    return `${connection.sourceId} to ${connection.targetId}, weight ${weight}`;
 }
 
 function build2dLayout(graph: AnnNetworkGraph): NetworkLayout {
@@ -114,19 +134,35 @@ function isPhaseConnection(
     return sourceName === activeName || targetName === activeName;
 }
 
-const Network2DView: React.FC<{
-    graph: AnnNetworkGraph;
-    phase?: AnnTrainingPhaseSnapshot | null;
-    hoveredNodeId: string | null;
-    onHoverNode: (nodeId: string | null) => void;
-}> = ({ graph, phase, hoveredNodeId, onHoverNode }) => {
+const Network2DView: React.FC<Network2DViewProps> = ({
+    graph,
+    phase,
+    activeNodeId,
+    activeConnectionId,
+    selectedNodeId,
+    selectedConnectionId,
+    onHoverNode,
+    onHoverConnection,
+    onSelectNode,
+    onSelectConnection,
+}) => {
     const svgRef = useRef<SVGSVGElement | null>(null);
-    const dragRef = useRef<{ pointerId: number; x: number; y: number } | null>(null);
+    const dragRef = useRef<{ pointerId: number; x: number; y: number; moved: boolean } | null>(null);
     const [transform, setTransform] = useState<ViewTransform>(defaultTransform);
     const layout = useMemo(() => build2dLayout(graph), [graph]);
     const incidentIds = useMemo(() => new Set(
-        getAnnNetworkIncidentConnections(graph, hoveredNodeId).map(connection => connection.id)
-    ), [graph, hoveredNodeId]);
+        getAnnNetworkIncidentConnections(graph, activeNodeId).map(connection => connection.id)
+    ), [activeNodeId, graph]);
+    const activeConnectionIds = useMemo(() => (
+        activeConnectionId ? new Set([activeConnectionId]) : incidentIds
+    ), [activeConnectionId, incidentIds]);
+    const labelConnections = useMemo(() => (
+        activeConnectionId
+            ? graph.connections.filter(connection => connection.id === activeConnectionId)
+            : activeNodeId
+                ? getAnnNetworkIncidentConnections(graph, activeNodeId)
+                : []
+    ), [activeConnectionId, activeNodeId, graph]);
 
     const zoomAtCenter = useCallback((factor: number) => {
         setTransform(previous => ({ ...previous, scale: Math.max(0.2, Math.min(8, previous.scale * factor)) }));
@@ -157,20 +193,60 @@ const Network2DView: React.FC<{
         return () => svg.removeEventListener('wheel', handleWheel);
     }, [handleWheel]);
 
-    const handlePointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
-        const drag = dragRef.current;
-        if (!drag || drag.pointerId !== event.pointerId) return;
-        const bounds = event.currentTarget.getBoundingClientRect();
-        const dx = (event.clientX - drag.x) * (layout.width / bounds.width);
-        const dy = (event.clientY - drag.y) * (layout.height / bounds.height);
-        dragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
-        setTransform(previous => ({ ...previous, x: previous.x + dx, y: previous.y + dy }));
+    const renderNode = (node: AnnNetworkGraphNode) => {
+        const position = layout.nodePositions.get(node.id);
+        if (!position) return null;
+        const isActive = activeNodeId === node.id;
+        const isSelected = selectedNodeId === node.id;
+        const activeLayerName = phase?.activeLayerName ? normalizeAnnLayerName(phase.activeLayerName) : null;
+        const isPhaseActive = activeLayerName === node.layerName;
+        const radius = isActive ? 10.5 : isPhaseActive ? 8.5 : 7;
+        const color = layerColors[node.layerIndex % layerColors.length];
+        return (
+            <circle
+                key={node.id}
+                cx={position.x}
+                cy={position.y}
+                r={radius}
+                fill={color}
+                fillOpacity={0.28 + node.normalizedValue * 0.72}
+                stroke={isActive ? '#ffffff' : isPhaseActive ? '#fbbf24' : color}
+                strokeWidth={isActive ? 2.4 : isPhaseActive ? 1.8 : 1}
+                data-ann-network-node={`${node.layerName}-${node.nodeIndex + 1}`}
+                data-ann-network-node-active={node.value !== null ? 'true' : 'false'}
+                data-ann-network-node-focused={isSelected ? 'true' : 'false'}
+                {...({ title: getNodeTitle(node) } as Record<string, string>)}
+                tabIndex={0}
+                role="button"
+                aria-pressed={isSelected}
+                aria-label={getNodeTitle(node)}
+                onPointerDown={event => event.stopPropagation()}
+                onPointerUp={event => event.stopPropagation()}
+                onClick={event => {
+                    event.stopPropagation();
+                    onSelectNode(node.id);
+                }}
+                onKeyDown={event => {
+                    if (event.key !== 'Enter' && event.key !== ' ') return;
+                    event.preventDefault();
+                    onSelectNode(node.id);
+                }}
+                onMouseEnter={() => onHoverNode(node.id)}
+                onMouseLeave={() => onHoverNode(null)}
+                onFocus={() => onHoverNode(node.id)}
+                onBlur={() => onHoverNode(null)}
+                style={{ cursor: 'pointer' }}
+            />
+        );
     };
 
-    const weightLabels = hoveredNodeId ? getAnnNetworkIncidentConnections(graph, hoveredNodeId) : [];
-
     return (
-        <div className="relative h-full min-h-0 overflow-hidden bg-black/20" data-ann-network-view="2d">
+        <div
+            className="relative h-full min-h-0 overflow-hidden bg-black/20"
+            data-ann-network-view="2d"
+            data-ann-network-focused-node={selectedNodeId ?? ''}
+            data-ann-network-focused-connection={selectedConnectionId ?? ''}
+        >
             <div className="absolute right-3 top-3 z-20 flex gap-1">
                 <button type="button" className="network-tool-button" title="Zoom in" aria-label="Zoom in" onClick={() => zoomAtCenter(1.25)}>
                     <MagnifyingGlassPlusIcon className="h-4 w-4" />
@@ -190,13 +266,31 @@ const Network2DView: React.FC<{
                 aria-label="Interactive two-dimensional neural network"
                 onPointerDown={event => {
                     if (event.button !== 0) return;
-                    dragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+                    dragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
                     event.currentTarget.setPointerCapture(event.pointerId);
                 }}
-                onPointerMove={handlePointerMove}
+                onPointerMove={event => {
+                    const drag = dragRef.current;
+                    if (!drag || drag.pointerId !== event.pointerId) return;
+                    const bounds = event.currentTarget.getBoundingClientRect();
+                    const dx = (event.clientX - drag.x) * (layout.width / bounds.width);
+                    const dy = (event.clientY - drag.y) * (layout.height / bounds.height);
+                    dragRef.current = {
+                        pointerId: event.pointerId,
+                        x: event.clientX,
+                        y: event.clientY,
+                        moved: drag.moved || Math.abs(dx) + Math.abs(dy) > 2,
+                    };
+                    setTransform(previous => ({ ...previous, x: previous.x + dx, y: previous.y + dy }));
+                }}
                 onPointerUp={event => {
+                    const moved = dragRef.current?.moved;
                     dragRef.current = null;
                     event.currentTarget.releasePointerCapture(event.pointerId);
+                    if (!moved) {
+                        onSelectNode(null);
+                        onSelectConnection(null);
+                    }
                 }}
                 onPointerCancel={() => { dragRef.current = null; }}
                 onDoubleClick={() => setTransform(defaultTransform)}
@@ -204,36 +298,90 @@ const Network2DView: React.FC<{
                 <g transform={`translate(${transform.x} ${transform.y}) scale(${transform.scale})`}>
                     {graph.connections.map(connection => {
                         const source = layout.nodePositions.get(connection.sourceId);
-                        const target = layout.nodePositions.get(connection.targetId);
-                        if (!source || !target) return null;
-                        const isHovered = incidentIds.has(connection.id);
-                        const isPhaseActive = !hoveredNodeId && isPhaseConnection(connection, graph, phase);
+                        const destination = layout.nodePositions.get(connection.targetId);
+                        if (!source || !destination) return null;
+                        const interactionActive = activeConnectionIds.has(connection.id);
+                        const phaseActive = isPhaseConnection(connection, graph, phase);
                         return (
-                            <line
-                                key={connection.id}
-                                data-ann-network-connection={connection.id}
-                                data-ann-network-connection-active={isHovered || isPhaseActive ? 'true' : 'false'}
-                                x1={source.x}
-                                y1={source.y}
-                                x2={target.x}
-                                y2={target.y}
-                                stroke={getConnectionColor(connection)}
-                                strokeWidth={isHovered || isPhaseActive ? getConnectionWidth(connection, graph.maxAbsoluteWeight) + 1.3 : getConnectionWidth(connection, graph.maxAbsoluteWeight)}
-                                strokeOpacity={isHovered ? 0.95 : isPhaseActive ? 0.72 : 0.11}
-                                vectorEffect="non-scaling-stroke"
-                            />
+                            <React.Fragment key={connection.id}>
+                                <line
+                                    data-ann-network-connection={connection.id}
+                                    data-ann-network-connection-active={interactionActive || phaseActive ? 'true' : 'false'}
+                                    data-ann-network-connection-focused={selectedConnectionId === connection.id ? 'true' : 'false'}
+                                    data-ann-network-flow={phaseActive && phase?.direction !== 'none' ? phase?.direction : undefined}
+                                    x1={source.x}
+                                    y1={source.y}
+                                    x2={destination.x}
+                                    y2={destination.y}
+                                    stroke={getConnectionColor(connection)}
+                                    strokeWidth={interactionActive ? getConnectionWidth(connection, graph.maxAbsoluteWeight) + 1.3 : getConnectionWidth(connection, graph.maxAbsoluteWeight)}
+                                    strokeOpacity={interactionActive ? 0.98 : 0.1}
+                                    vectorEffect="non-scaling-stroke"
+                                    pointerEvents="none"
+                                />
+                                {phaseActive && (phase?.direction === 'forward' || phase?.direction === 'backward') && (
+                                    <line
+                                        className={`network-phase-segment network-phase-segment-${phase.direction}`}
+                                        data-ann-network-phase-segment={connection.id}
+                                        data-ann-network-flow={phase.direction}
+                                        x1={source.x}
+                                        y1={source.y}
+                                        x2={destination.x}
+                                        y2={destination.y}
+                                        pathLength="100"
+                                        stroke={getConnectionColor(connection)}
+                                        strokeWidth={getConnectionWidth(connection, graph.maxAbsoluteWeight) + 1.5}
+                                        strokeOpacity="0.96"
+                                        strokeDasharray="26 100"
+                                        strokeLinecap="round"
+                                        vectorEffect="non-scaling-stroke"
+                                        pointerEvents="none"
+                                    />
+                                )}
+                                <line
+                                    x1={source.x}
+                                    y1={source.y}
+                                    x2={destination.x}
+                                    y2={destination.y}
+                                    stroke="transparent"
+                                    strokeWidth="14"
+                                    vectorEffect="non-scaling-stroke"
+                                    pointerEvents="stroke"
+                                    tabIndex={0}
+                                    role="button"
+                                    aria-pressed={selectedConnectionId === connection.id}
+                                    aria-label={getConnectionLabel(connection)}
+                                    data-ann-network-connection-hit={connection.id}
+                                    onPointerDown={event => event.stopPropagation()}
+                                    onPointerUp={event => event.stopPropagation()}
+                                    onClick={event => {
+                                        event.stopPropagation();
+                                        onSelectConnection(connection.id);
+                                    }}
+                                    onKeyDown={event => {
+                                        if (event.key !== 'Enter' && event.key !== ' ') return;
+                                        event.preventDefault();
+                                        onSelectConnection(connection.id);
+                                    }}
+                                    onMouseEnter={() => onHoverConnection(connection.id)}
+                                    onMouseLeave={() => onHoverConnection(null)}
+                                    onFocus={() => onHoverConnection(connection.id)}
+                                    onBlur={() => onHoverConnection(null)}
+                                    style={{ cursor: 'pointer' }}
+                                />
+                            </React.Fragment>
                         );
                     })}
-                    {weightLabels.map(connection => {
+                    {labelConnections.map(connection => {
                         const source = layout.nodePositions.get(connection.sourceId);
-                        const target = layout.nodePositions.get(connection.targetId);
-                        if (!source || !target) return null;
+                        const destination = layout.nodePositions.get(connection.targetId);
+                        if (!source || !destination) return null;
                         return (
                             <text
                                 key={`weight-${connection.id}`}
                                 data-ann-network-weight-label={connection.id}
-                                x={(source.x + target.x) / 2}
-                                y={(source.y + target.y) / 2 - 3}
+                                x={source.x * 0.54 + destination.x * 0.46}
+                                y={source.y * 0.54 + destination.y * 0.46 - 3}
                                 fill={getConnectionColor(connection)}
                                 stroke="#020617"
                                 strokeWidth="3"
@@ -241,422 +389,34 @@ const Network2DView: React.FC<{
                                 fontSize="10"
                                 textAnchor="middle"
                                 vectorEffect="non-scaling-stroke"
+                                pointerEvents="none"
                             >
                                 {connection.weight === null ? 'uninitialized' : connection.weight.toFixed(4)}
                             </text>
                         );
                     })}
-                    {graph.layers.map((layer, layerIndex) => {
+                    {graph.layers.map(layer => {
                         const layerX = layout.nodePositions.get(layer.nodes[0]?.id)?.x ?? 0;
-                        const activeLayerName = phase?.activeLayerName ? normalizeAnnLayerName(phase.activeLayerName) : null;
                         return (
-                            <g
-                                key={layer.id}
-                                data-ann-network-layer={layer.name}
-                                data-ann-network-layer-active={layer.activationMean !== null ? 'true' : 'false'}
-                            >
-                                <text x={layerX} y="30" textAnchor="middle" fill="var(--accent-primary)" fontSize="17" fontWeight="700">
-                                    {layer.name}
-                                </text>
+                            <g key={layer.id} data-ann-network-layer={layer.name} data-ann-network-layer-active={layer.activationMean !== null ? 'true' : 'false'} pointerEvents="none">
+                                <text x={layerX} y="30" textAnchor="middle" fill="var(--accent-primary)" fontSize="17" fontWeight="700">{layer.name}</text>
                                 <text x={layerX} y="51" textAnchor="middle" fill="var(--text-secondary)" fontSize="11">
                                     {layer.units} units{layer.activationMean === null ? '' : ` | mean ${layer.activationMean.toFixed(3)}`}
                                 </text>
-                                {layer.nodes.map(node => {
-                                    const position = layout.nodePositions.get(node.id);
-                                    if (!position) return null;
-                                    const isHovered = hoveredNodeId === node.id;
-                                    const isPhaseActive = activeLayerName === node.layerName;
-                                    const radius = isHovered ? 10 : isPhaseActive ? 8.5 : 7;
-                                    return (
-                                        <g key={node.id}>
-                                            <circle
-                                                cx={position.x}
-                                                cy={position.y}
-                                                r={radius}
-                                                fill={layerColors[layerIndex % layerColors.length]}
-                                                fillOpacity={0.28 + node.normalizedValue * 0.72}
-                                                stroke={isHovered ? '#ffffff' : isPhaseActive ? '#fbbf24' : layerColors[layerIndex % layerColors.length]}
-                                                strokeWidth={isHovered ? 2.2 : isPhaseActive ? 1.8 : 1}
-                                                data-ann-network-node={`${node.layerName}-${node.nodeIndex + 1}`}
-                                                data-ann-network-node-active={node.value !== null ? 'true' : 'false'}
-                                                {...({ title: getNodeTitle(node) } as Record<string, string>)}
-                                                tabIndex={0}
-                                                role="button"
-                                                aria-label={getNodeTitle(node)}
-                                                onMouseEnter={() => onHoverNode(node.id)}
-                                                onMouseLeave={() => onHoverNode(null)}
-                                                onFocus={() => onHoverNode(node.id)}
-                                                onBlur={() => onHoverNode(null)}
-                                            />
-                                            {layer.name === 'Output' && (
-                                                <text
-                                                    x={position.x + 14}
-                                                    y={position.y + 4}
-                                                    fill="var(--text-primary)"
-                                                    fontSize="11"
-                                                    data-ann-network-output-label={node.label}
-                                                >
-                                                    {node.label}
-                                                </text>
-                                            )}
-                                        </g>
-                                    );
-                                })}
                             </g>
                         );
                     })}
+                    {graph.nodes.filter(node => node.layerName === 'Output').map(node => {
+                        const position = layout.nodePositions.get(node.id);
+                        return position ? (
+                            <text key={`label-${node.id}`} x={position.x + 14} y={position.y + 4} fill="var(--text-primary)" fontSize="11" data-ann-network-output-label={node.label} pointerEvents="none">
+                                {node.label}
+                            </text>
+                        ) : null;
+                    })}
+                    {graph.nodes.map(renderNode)}
                 </g>
             </svg>
-        </div>
-    );
-};
-
-function build3dPositions(graph: AnnNetworkGraph): Map<string, NetworkPoint> {
-    const positions = new Map<string, NetworkPoint>();
-    graph.layers.forEach((layer, layerIndex) => {
-        const columns = Math.max(1, Math.ceil(Math.sqrt(layer.units)));
-        const rows = Math.max(1, Math.ceil(layer.units / columns));
-        layer.nodes.forEach(node => {
-            const row = Math.floor(node.nodeIndex / columns);
-            const column = node.nodeIndex % columns;
-            positions.set(node.id, {
-                x: (layerIndex - (graph.layers.length - 1) / 2) * 220,
-                y: ((rows - 1) / 2 - row) * 28,
-                z: (column - (columns - 1) / 2) * 28,
-            });
-        });
-    });
-    return positions;
-}
-
-const Network3DView: React.FC<{
-    graph: AnnNetworkGraph;
-    phase?: AnnTrainingPhaseSnapshot | null;
-    onHoverNode: (nodeId: string | null) => void;
-}> = ({ graph, phase, onHoverNode }) => {
-    const containerRef = useRef<HTMLDivElement | null>(null);
-    const canvasHostRef = useRef<HTMLDivElement | null>(null);
-    const overlayRef = useRef<HTMLDivElement | null>(null);
-    const [resetVersion, setResetVersion] = useState(0);
-    const [zoomCommand, setZoomCommand] = useState<{ id: number; factor: number } | null>(null);
-    const [renderError, setRenderError] = useState<string | null>(null);
-
-    useEffect(() => {
-        let disposed = false;
-        let cleanup = () => {};
-        setRenderError(null);
-
-        void import('three').then(THREE => {
-            if (disposed || !containerRef.current || !canvasHostRef.current || !overlayRef.current) return;
-            const container = containerRef.current;
-            const canvasHost = canvasHostRef.current;
-            const overlay = overlayRef.current;
-            const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-            renderer.setClearColor(0x020617, 0.18);
-            renderer.domElement.setAttribute('data-ann-network-canvas', 'true');
-            renderer.domElement.setAttribute('aria-label', 'Interactive three-dimensional neural network');
-            canvasHost.replaceChildren(renderer.domElement);
-
-            const scene = new THREE.Scene();
-            const camera = new THREE.PerspectiveCamera(48, 1, 1, 10000);
-            const group = new THREE.Group();
-            scene.add(group);
-            const positions = build3dPositions(graph);
-            const maxSpan = Math.max(
-                300,
-                (graph.layers.length - 1) * 220,
-                ...graph.layers.map(layer => Math.ceil(Math.sqrt(layer.units)) * 28)
-            );
-            const target = new THREE.Vector3(0, 0, 0);
-            let yaw = 0.72;
-            let pitch = 0.28;
-            const baseDistance = maxSpan * 1.7;
-            let distance = baseDistance;
-            let lastAspect: number | null = null;
-            let hoveredNodeId: string | null = null;
-            let pointerDrag: { id: number; x: number; y: number; mode: 'rotate' | 'pan'; moved: boolean } | null = null;
-
-            const nodeMeshes: any[] = [];
-            const nodeById = new Map<string, any>();
-            graph.nodes.forEach(node => {
-                const position = positions.get(node.id);
-                if (!position) return;
-                const color = layerColors[node.layerIndex % layerColors.length];
-                const geometry = new THREE.SphereGeometry(7, 16, 12);
-                const material = new THREE.MeshBasicMaterial({
-                    color,
-                    transparent: true,
-                    opacity: 0.36 + node.normalizedValue * 0.64,
-                });
-                const mesh = new THREE.Mesh(geometry, material);
-                mesh.position.set(position.x, position.y, position.z);
-                mesh.userData.nodeId = node.id;
-                mesh.userData.baseOpacity = 0.36 + node.normalizedValue * 0.64;
-                group.add(mesh);
-                nodeMeshes.push(mesh);
-                nodeById.set(node.id, mesh);
-            });
-
-            const lineGroups: any[] = [];
-            const addLineGroup = (connections: AnnNetworkGraphConnection[], color: number, opacity: number) => {
-                if (connections.length === 0) return null;
-                const vertices: number[] = [];
-                connections.forEach(connection => {
-                    const source = positions.get(connection.sourceId);
-                    const targetPosition = positions.get(connection.targetId);
-                    if (!source || !targetPosition) return;
-                    vertices.push(source.x, source.y, source.z, targetPosition.x, targetPosition.y, targetPosition.z);
-                });
-                const geometry = new THREE.BufferGeometry();
-                geometry.addAttribute('position', new THREE.BufferAttribute(new Float32Array(vertices), 3));
-                const material = new THREE.LineBasicMaterial({ color, transparent: true, opacity });
-                const lines = new THREE.LineSegments(geometry, material);
-                group.add(lines);
-                lineGroups.push(lines);
-                return lines;
-            };
-            addLineGroup(graph.connections.filter(connection => connection.weight === null), 0x64748b, 0.12);
-            addLineGroup(graph.connections.filter(connection => (connection.weight ?? 0) >= 0 && connection.weight !== null), 0x22d3ee, 0.12);
-            addLineGroup(graph.connections.filter(connection => (connection.weight ?? 0) < 0), 0xfb7185, 0.12);
-            let highlightGroups: any[] = [];
-            const clearHighlights = () => {
-                highlightGroups.forEach(lines => {
-                    group.remove(lines);
-                    lines.geometry.dispose();
-                    lines.material.dispose();
-                });
-                highlightGroups = [];
-            };
-
-            const layerLabels = graph.layers.map(layer => {
-                const element = document.createElement('div');
-                element.className = 'network-3d-layer-label';
-                element.textContent = `${layer.name} | ${layer.units}`;
-                overlay.appendChild(element);
-                const x = (layer.index - (graph.layers.length - 1) / 2) * 220;
-                const maxRows = Math.ceil(layer.units / Math.max(1, Math.ceil(Math.sqrt(layer.units))));
-                return { element, position: new THREE.Vector3(x, maxRows * 15 + 34, 0) };
-            });
-            let weightLabels: Array<{ element: HTMLDivElement; position: any }> = [];
-
-            const rebuildHighlights = (nodeId: string | null) => {
-                clearHighlights();
-                weightLabels.forEach(label => label.element.remove());
-                weightLabels = [];
-                const activeConnections = nodeId
-                    ? getAnnNetworkIncidentConnections(graph, nodeId)
-                    : graph.connections.filter(connection => isPhaseConnection(connection, graph, phase));
-                const positive = activeConnections.filter(connection => (connection.weight ?? 0) >= 0);
-                const negative = activeConnections.filter(connection => (connection.weight ?? 0) < 0);
-                const positiveLines = addLineGroup(positive, 0x67e8f9, 0.95);
-                const negativeLines = addLineGroup(negative, 0xfda4af, 0.95);
-                highlightGroups = [positiveLines, negativeLines].filter(Boolean);
-                nodeMeshes.forEach(mesh => {
-                    const id = mesh.userData.nodeId as string;
-                    const connected = nodeId && activeConnections.some(connection => connection.sourceId === id || connection.targetId === id);
-                    const activeLayer = phase?.activeLayerName && normalizeAnnLayerName(phase.activeLayerName) === graph.nodes.find(node => node.id === id)?.layerName;
-                    mesh.scale.setScalar(id === nodeId ? 1.55 : connected || activeLayer ? 1.22 : 1);
-                    mesh.material.opacity = nodeId && !connected && id !== nodeId ? 0.26 : mesh.userData.baseOpacity;
-                });
-                if (nodeId) {
-                    activeConnections.forEach(connection => {
-                        const source = positions.get(connection.sourceId);
-                        const targetPosition = positions.get(connection.targetId);
-                        if (!source || !targetPosition) return;
-                        const element = document.createElement('div');
-                        element.className = 'network-3d-weight-label';
-                        element.dataset.annNetworkWeightLabel = connection.id;
-                        element.textContent = connection.weight === null ? 'uninitialized' : connection.weight.toFixed(4);
-                        element.style.color = getConnectionColor(connection);
-                        overlay.appendChild(element);
-                        weightLabels.push({
-                            element,
-                            position: new THREE.Vector3(
-                                (source.x + targetPosition.x) / 2,
-                                (source.y + targetPosition.y) / 2,
-                                (source.z + targetPosition.z) / 2
-                            ),
-                        });
-                    });
-                }
-            };
-
-            const updateCamera = () => {
-                const cosPitch = Math.cos(pitch);
-                camera.position.set(
-                    target.x + distance * cosPitch * Math.sin(yaw),
-                    target.y + distance * Math.sin(pitch),
-                    target.z + distance * cosPitch * Math.cos(yaw)
-                );
-                camera.lookAt(target);
-            };
-            const projectElement = (element: HTMLElement, position: any, bounds: DOMRect) => {
-                const projected = position.clone().project(camera);
-                const visible = projected.z > -1 && projected.z < 1;
-                element.style.display = visible ? 'block' : 'none';
-                element.style.transform = `translate(-50%, -50%) translate(${((projected.x + 1) / 2) * bounds.width}px, ${((-projected.y + 1) / 2) * bounds.height}px)`;
-            };
-            const render = () => {
-                const bounds = container.getBoundingClientRect();
-                layerLabels.forEach(label => projectElement(label.element, label.position, bounds));
-                weightLabels.forEach(label => projectElement(label.element, label.position, bounds));
-                renderer.render(scene, camera);
-            };
-            const resize = () => {
-                const width = Math.max(1, container.clientWidth);
-                const height = Math.max(1, container.clientHeight);
-                renderer.setSize(width, height, false);
-                const nextAspect = width / height;
-                camera.aspect = nextAspect;
-                camera.updateProjectionMatrix();
-                if (lastAspect === null || Math.abs(nextAspect - lastAspect) > 0.1) {
-                    distance = baseDistance * Math.max(1, 0.9 / nextAspect);
-                    updateCamera();
-                    lastAspect = nextAspect;
-                }
-                render();
-            };
-            updateCamera();
-            rebuildHighlights(null);
-            resize();
-            const resizeObserver = new ResizeObserver(resize);
-            resizeObserver.observe(container);
-
-            const raycaster = new THREE.Raycaster();
-            const pointer = new THREE.Vector2();
-            const setHoveredNode = (nodeId: string | null) => {
-                if (hoveredNodeId === nodeId) return;
-                hoveredNodeId = nodeId;
-                renderer.domElement.style.cursor = nodeId ? 'pointer' : 'grab';
-                rebuildHighlights(nodeId);
-                onHoverNode(nodeId);
-                render();
-            };
-            const updateHover = (event: PointerEvent) => {
-                const bounds = renderer.domElement.getBoundingClientRect();
-                pointer.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
-                pointer.y = -((event.clientY - bounds.top) / bounds.height) * 2 + 1;
-                raycaster.setFromCamera(pointer, camera);
-                const hit = raycaster.intersectObjects(nodeMeshes)[0];
-                setHoveredNode(hit?.object?.userData?.nodeId ?? null);
-            };
-            const handlePointerDown = (event: PointerEvent) => {
-                pointerDrag = {
-                    id: event.pointerId,
-                    x: event.clientX,
-                    y: event.clientY,
-                    mode: event.button === 2 || event.shiftKey ? 'pan' : 'rotate',
-                    moved: false,
-                };
-                renderer.domElement.setPointerCapture(event.pointerId);
-                renderer.domElement.style.cursor = 'grabbing';
-            };
-            const handlePointerMove = (event: PointerEvent) => {
-                if (!pointerDrag || pointerDrag.id !== event.pointerId) {
-                    updateHover(event);
-                    return;
-                }
-                const dx = event.clientX - pointerDrag.x;
-                const dy = event.clientY - pointerDrag.y;
-                pointerDrag.x = event.clientX;
-                pointerDrag.y = event.clientY;
-                pointerDrag.moved ||= Math.abs(dx) + Math.abs(dy) > 2;
-                if (pointerDrag.mode === 'rotate') {
-                    yaw -= dx * 0.008;
-                    pitch = Math.max(-1.25, Math.min(1.25, pitch + dy * 0.008));
-                } else {
-                    const scale = distance / Math.max(300, container.clientHeight);
-                    target.x -= dx * scale;
-                    target.y += dy * scale;
-                }
-                updateCamera();
-                render();
-            };
-            const handlePointerUp = (event: PointerEvent) => {
-                const moved = pointerDrag?.moved;
-                pointerDrag = null;
-                renderer.domElement.releasePointerCapture(event.pointerId);
-                renderer.domElement.style.cursor = hoveredNodeId ? 'pointer' : 'grab';
-                if (!moved) updateHover(event);
-            };
-            const handleWheel = (event: WheelEvent) => {
-                event.preventDefault();
-                distance = Math.max(100, Math.min(maxSpan * 8, distance * Math.exp(event.deltaY * 0.0015)));
-                updateCamera();
-                render();
-            };
-            const handleContextMenu = (event: MouseEvent) => event.preventDefault();
-            renderer.domElement.addEventListener('pointerdown', handlePointerDown);
-            renderer.domElement.addEventListener('pointermove', handlePointerMove);
-            renderer.domElement.addEventListener('pointerup', handlePointerUp);
-            renderer.domElement.addEventListener('pointercancel', handlePointerUp);
-            renderer.domElement.addEventListener('pointerleave', (event: PointerEvent) => {
-                if (!pointerDrag) setHoveredNode(null);
-                if (pointerDrag && pointerDrag.id === event.pointerId) handlePointerUp(event);
-            });
-            renderer.domElement.addEventListener('wheel', handleWheel, { passive: false });
-            renderer.domElement.addEventListener('contextmenu', handleContextMenu);
-
-            const handleZoomCommand = (event: Event) => {
-                const detail = (event as CustomEvent<number>).detail;
-                distance = Math.max(100, Math.min(maxSpan * 8, distance * detail));
-                updateCamera();
-                render();
-            };
-            container.addEventListener('ann-network-zoom', handleZoomCommand);
-
-            cleanup = () => {
-                resizeObserver.disconnect();
-                container.removeEventListener('ann-network-zoom', handleZoomCommand);
-                onHoverNode(null);
-                clearHighlights();
-                layerLabels.forEach(label => label.element.remove());
-                weightLabels.forEach(label => label.element.remove());
-                scene.traverse((object: any) => {
-                    object.geometry?.dispose?.();
-                    if (Array.isArray(object.material)) object.material.forEach((material: any) => material.dispose?.());
-                    else object.material?.dispose?.();
-                });
-                renderer.dispose();
-                renderer.forceContextLoss?.();
-                renderer.domElement.remove();
-            };
-        }).catch(error => {
-            if (!disposed) setRenderError(error instanceof Error ? error.message : String(error));
-        });
-
-        return () => {
-            disposed = true;
-            cleanup();
-        };
-    }, [graph, onHoverNode, phase, resetVersion]);
-
-    useEffect(() => {
-        if (!zoomCommand || !containerRef.current) return;
-        containerRef.current.dispatchEvent(new CustomEvent('ann-network-zoom', { detail: zoomCommand.factor }));
-    }, [zoomCommand]);
-
-    return (
-        <div ref={containerRef} className="relative h-full min-h-0 overflow-hidden bg-black/25" data-ann-network-view="3d">
-            <div ref={canvasHostRef} className="absolute inset-0" />
-            <div ref={overlayRef} className="pointer-events-none absolute inset-0 overflow-hidden" />
-            <div className="absolute right-3 top-3 z-20 flex gap-1">
-                <button type="button" className="network-tool-button" title="Zoom in" aria-label="Zoom in" onClick={() => setZoomCommand(command => ({ id: (command?.id ?? 0) + 1, factor: 0.8 }))}>
-                    <MagnifyingGlassPlusIcon className="h-4 w-4" />
-                </button>
-                <button type="button" className="network-tool-button" title="Zoom out" aria-label="Zoom out" onClick={() => setZoomCommand(command => ({ id: (command?.id ?? 0) + 1, factor: 1.25 }))}>
-                    <MagnifyingGlassMinusIcon className="h-4 w-4" />
-                </button>
-                <button type="button" className="network-tool-button" title="Reset view" aria-label="Reset view" onClick={() => setResetVersion(version => version + 1)}>
-                    <ArrowPathIcon className="h-4 w-4" />
-                </button>
-            </div>
-            {renderError && (
-                <div className="absolute inset-0 flex items-center justify-center p-6 text-sm text-red-300">
-                    3D renderer unavailable: {renderError}
-                </div>
-            )}
         </div>
     );
 };
@@ -672,9 +432,13 @@ const NetworkVisualizationPanel: React.FC<NetworkVisualizationPanelProps> = ({
     trainingPhaseSnapshot,
     isTraining = false,
     isModelTrained = false,
+    isVisible = true,
 }) => {
-    const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
+    const [viewMode, setViewMode] = useState<'2d' | '3d'>('3d');
     const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+    const [hoveredConnectionId, setHoveredConnectionId] = useState<string | null>(null);
+    const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+    const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
     const graph = useMemo(() => buildAnnNetworkGraph({
         networkConfig,
         inputDimension,
@@ -683,7 +447,20 @@ const NetworkVisualizationPanel: React.FC<NetworkVisualizationPanelProps> = ({
         activationSnapshot,
         modelStateSnapshot,
     }), [activationSnapshot, inputDimension, labelNames, modelStateSnapshot, networkConfig, outputDimension]);
-    const hoveredNode = hoveredNodeId ? graph.nodes.find(node => node.id === hoveredNodeId) ?? null : null;
+
+    useEffect(() => {
+        if (selectedNodeId && !graph.nodes.some(node => node.id === selectedNodeId)) setSelectedNodeId(null);
+        if (selectedConnectionId && !graph.connections.some(connection => connection.id === selectedConnectionId)) setSelectedConnectionId(null);
+    }, [graph, selectedConnectionId, selectedNodeId]);
+
+    const activeConnectionId = hoveredConnectionId ?? (hoveredNodeId ? null : selectedConnectionId);
+    const activeNodeId = hoveredConnectionId
+        ? null
+        : hoveredNodeId ?? (selectedConnectionId ? null : selectedNodeId);
+    const activeNode = activeNodeId ? graph.nodes.find(node => node.id === activeNodeId) ?? null : null;
+    const activeConnection = activeConnectionId
+        ? graph.connections.find(connection => connection.id === activeConnectionId) ?? null
+        : null;
     const statusText = graph.layers.length === 0
         ? 'Configure labels, extract features, and prepare data to visualize the network.'
         : trainingPhaseSnapshot
@@ -693,53 +470,64 @@ const NetworkVisualizationPanel: React.FC<NetworkVisualizationPanelProps> = ({
                 : isModelTrained
                     ? 'Trained model'
                     : 'Waiting for training activations';
-    const handleHoverNode = useCallback((nodeId: string | null) => setHoveredNodeId(nodeId), []);
+
+    const handleSelectNode = useCallback((nodeId: string | null) => {
+        setSelectedConnectionId(null);
+        setSelectedNodeId(nodeId);
+    }, []);
+    const handleSelectConnection = useCallback((connectionId: string | null) => {
+        setSelectedNodeId(null);
+        setSelectedConnectionId(connectionId);
+    }, []);
+
+    const visiblePhase = isVisible ? trainingPhaseSnapshot : null;
+    const interactionProps = {
+        graph,
+        phase: visiblePhase,
+        activeNodeId,
+        activeConnectionId,
+        selectedNodeId,
+        selectedConnectionId,
+        onHoverNode: setHoveredNodeId,
+        onHoverConnection: setHoveredConnectionId,
+        onSelectNode: handleSelectNode,
+        onSelectConnection: handleSelectConnection,
+    };
 
     return (
-        <BasePanel className={`min-h-[780px] ${className ?? ''}`} title="Model Structure & Internal State">
+        <BasePanel className={`flex h-full min-h-0 flex-col ${className ?? ''}`} title="Model Inspection">
             <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
                 <div>
-                    <h2 className="ml-2 text-lg font-semibold text-[var(--accent-secondary)]">Model Structure &amp; Internal State</h2>
-                    <p className="ml-2 mt-1 text-xs text-[var(--text-secondary)]" data-ann-network-status>
-                        {statusText}
-                    </p>
+                    <h2 className="ml-2 text-lg font-semibold text-[var(--accent-secondary)]">Model Inspection</h2>
+                    <p className="ml-2 mt-1 text-xs text-[var(--text-secondary)]" data-ann-network-status>{statusText}</p>
                 </div>
                 <div className="flex border border-[var(--foreground)]/35 bg-black/25 p-0.5" role="group" aria-label="Network visualization mode">
-                    <button
-                        type="button"
-                        className={`network-mode-button ${viewMode === '2d' ? 'network-mode-button-active' : ''}`}
-                        aria-pressed={viewMode === '2d'}
-                        onClick={() => setViewMode('2d')}
-                    >
+                    <button type="button" className={`network-mode-button ${viewMode === '2d' ? 'network-mode-button-active' : ''}`} aria-pressed={viewMode === '2d'} onClick={() => setViewMode('2d')}>
                         <Squares2X2Icon className="h-4 w-4" />
                         <span>2D</span>
                     </button>
-                    <button
-                        type="button"
-                        className={`network-mode-button ${viewMode === '3d' ? 'network-mode-button-active' : ''}`}
-                        aria-pressed={viewMode === '3d'}
-                        onClick={() => setViewMode('3d')}
-                    >
+                    <button type="button" className={`network-mode-button ${viewMode === '3d' ? 'network-mode-button-active' : ''}`} aria-pressed={viewMode === '3d'} onClick={() => setViewMode('3d')}>
                         <CubeIcon className="h-4 w-4" />
                         <span>3D</span>
                     </button>
                 </div>
             </div>
             {graph.layers.length === 0 ? (
-                <div className="flex h-[680px] items-center justify-center p-4 text-center text-sm italic text-[var(--text-secondary)]">
-                    No network structure available yet.
-                </div>
+                <div className="flex min-h-0 flex-1 items-center justify-center p-4 text-center text-sm italic text-[var(--text-secondary)]">No network structure available yet.</div>
             ) : (
-                <div className="relative h-[680px] overflow-hidden border border-[var(--foreground)]/18">
-                    {viewMode === '2d' ? (
-                        <Network2DView graph={graph} phase={trainingPhaseSnapshot} hoveredNodeId={hoveredNodeId} onHoverNode={handleHoverNode} />
-                    ) : (
-                        <Network3DView graph={graph} phase={trainingPhaseSnapshot} onHoverNode={handleHoverNode} />
-                    )}
-                    <div className="pointer-events-none absolute bottom-2 left-2 z-20 max-w-[calc(100%-1rem)] bg-black/75 px-2 py-1 text-[10px] text-[var(--text-secondary)]">
-                        {hoveredNode
-                            ? `${hoveredNode.label}${hoveredNode.value === null ? '' : ` | activation ${hoveredNode.value.toFixed(4)}`}${hoveredNode.bias === null ? '' : ` | bias ${hoveredNode.bias.toFixed(4)}`}`
-                            : `${graph.nodes.length} nodes | ${graph.connections.length} connections | drag to navigate, wheel to zoom`}
+                <div className="relative min-h-0 flex-1 overflow-hidden border border-[var(--foreground)]/18">
+                    <div className={`absolute inset-0 ${viewMode === '2d' ? 'visible' : 'invisible pointer-events-none'}`} aria-hidden={viewMode !== '2d'}>
+                        <Network2DView {...interactionProps} phase={viewMode === '2d' ? visiblePhase : null} />
+                    </div>
+                    <div className={`absolute inset-0 ${viewMode === '3d' ? 'visible' : 'invisible pointer-events-none'}`} aria-hidden={viewMode !== '3d'}>
+                        <Network3DView {...interactionProps} isVisible={isVisible && viewMode === '3d'} phase={viewMode === '3d' ? visiblePhase : null} />
+                    </div>
+                    <div className="pointer-events-none absolute bottom-2 left-2 z-20 max-w-[calc(100%-1rem)] bg-black/75 px-2 py-1 text-[10px] text-[var(--text-secondary)]" data-ann-network-inspection>
+                        {activeNode
+                            ? `${selectedNodeId === activeNode.id ? 'Focused: ' : ''}${activeNode.label}${activeNode.value === null ? '' : ` | activation ${activeNode.value.toFixed(4)}`}${activeNode.bias === null ? '' : ` | bias ${activeNode.bias.toFixed(4)}`}`
+                            : activeConnection
+                                ? `${selectedConnectionId === activeConnection.id ? 'Focused: ' : ''}${getConnectionLabel(activeConnection)}`
+                                : `${graph.nodes.length} nodes | ${graph.connections.length} connections | select a node or connection to keep it focused`}
                     </div>
                 </div>
             )}
@@ -772,6 +560,25 @@ const NetworkVisualizationPanel: React.FC<NetworkVisualizationPanelProps> = ({
                     border-color: var(--accent-primary);
                     color: var(--accent-primary);
                 }
+                .network-phase-segment {
+                    animation-duration: 1.2s;
+                    animation-iteration-count: infinite;
+                    animation-timing-function: linear;
+                }
+                .network-phase-segment-forward {
+                    animation-name: ann-connection-segment-forward;
+                }
+                .network-phase-segment-backward {
+                    animation-name: ann-connection-segment-backward;
+                }
+                @keyframes ann-connection-segment-forward {
+                    from { stroke-dashoffset: 26; }
+                    to { stroke-dashoffset: -100; }
+                }
+                @keyframes ann-connection-segment-backward {
+                    from { stroke-dashoffset: -100; }
+                    to { stroke-dashoffset: 26; }
+                }
                 .network-3d-layer-label,
                 .network-3d-weight-label {
                     position: absolute;
@@ -782,15 +589,20 @@ const NetworkVisualizationPanel: React.FC<NetworkVisualizationPanelProps> = ({
                     text-shadow: 0 1px 3px #000, 0 0 4px #000;
                 }
                 .network-3d-layer-label {
+                    z-index: 8;
                     color: var(--accent-primary);
                     font-size: 12px;
                     font-weight: 700;
                 }
                 .network-3d-weight-label {
+                    z-index: 12;
                     border: 1px solid rgba(148, 163, 184, 0.24);
                     background: rgba(2, 6, 23, 0.88);
                     padding: 1px 3px;
                     font-size: 9px;
+                }
+                @media (prefers-reduced-motion: reduce) {
+                    .network-phase-segment { animation: none; stroke-dashoffset: -37; }
                 }
             `}</style>
         </BasePanel>

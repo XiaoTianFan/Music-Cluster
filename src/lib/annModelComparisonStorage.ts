@@ -1,5 +1,5 @@
 import type { AnnTrainingSummaryWarningCode } from './annTrainingSummary';
-import type { TrainingInputKind } from './annPipeline';
+import type { AnnTrainingExecutionMode, AnnTrainingPhaseKind, TrainingInputKind } from './annPipeline';
 import {
   annModelComparisonReviewStatuses,
   normalizeAnnModelComparisonNote,
@@ -42,6 +42,8 @@ const warningCodes = new Set<AnnTrainingSummaryWarningCode>([
   'small-training-set',
   'under-sampled-labels',
 ]);
+const executionModes = new Set<AnnTrainingExecutionMode>(['automatic', 'epoch', 'step']);
+const trainingPhases = new Set<AnnTrainingPhaseKind>(['input', 'forward', 'loss', 'backward', 'update', 'epoch-complete']);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -111,6 +113,10 @@ function parseComparisonRun(value: unknown): AnnModelComparisonRun | null {
     reviewStatus,
     note,
     warningCodes: rawWarningCodes,
+    checkpointKind,
+    modelEpoch,
+    executionMode,
+    trainingPhase,
   } = value;
 
   if (typeof id !== 'string' || id.trim() === '') return null;
@@ -138,6 +144,10 @@ function parseComparisonRun(value: unknown): AnnModelComparisonRun | null {
   if (!isNullableNonNegativeInteger(validationLowConfidenceCount)) return null;
   if (reviewStatus !== undefined && (typeof reviewStatus !== 'string' || !reviewStatuses.has(reviewStatus as AnnModelComparisonReviewStatus))) return null;
   if (note !== undefined && typeof note !== 'string') return null;
+  if (checkpointKind !== undefined && checkpointKind !== 'completed' && checkpointKind !== 'intermediate') return null;
+  if (modelEpoch !== undefined && modelEpoch !== null && !isNullableNonNegativeInteger(modelEpoch)) return null;
+  if (executionMode !== undefined && executionMode !== null && (typeof executionMode !== 'string' || !executionModes.has(executionMode as AnnTrainingExecutionMode))) return null;
+  if (trainingPhase !== undefined && trainingPhase !== null && (typeof trainingPhase !== 'string' || !trainingPhases.has(trainingPhase as AnnTrainingPhaseKind))) return null;
 
   return {
     id,
@@ -161,6 +171,10 @@ function parseComparisonRun(value: unknown): AnnModelComparisonRun | null {
     reviewStatus: reviewStatus === undefined ? 'unreviewed' : reviewStatus as AnnModelComparisonReviewStatus,
     note: note === undefined ? '' : normalizeAnnModelComparisonNote(note),
     warningCodes: parsedWarningCodes,
+    ...(checkpointKind !== undefined ? { checkpointKind: checkpointKind as 'completed' | 'intermediate' } : {}),
+    ...(modelEpoch !== undefined ? { modelEpoch: modelEpoch as number | null } : {}),
+    ...(executionMode !== undefined ? { executionMode: executionMode as AnnTrainingExecutionMode | null } : {}),
+    ...(trainingPhase !== undefined ? { trainingPhase: trainingPhase as AnnTrainingPhaseKind | null } : {}),
   };
 }
 

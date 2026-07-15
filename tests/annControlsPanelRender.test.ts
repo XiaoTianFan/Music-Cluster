@@ -137,7 +137,7 @@ test('ANNControlsPanel renders label distribution and disabled reasons', () => {
   assert.match(html, /Export Labels &amp; Setup/);
   assert.match(html, /Import Labels &amp; Setup/);
 
-  const trainButton = html.match(/<button[^>]*>Train Network<\/button>/)?.[0] ?? '';
+  const trainButton = html.match(/<button[^>]*>Train Automatic<\/button>/)?.[0] ?? '';
   assert.match(trainButton, /disabled=""/);
   assert.match(trainButton, /title="Each non-empty label needs at least 2 songs\."/);
 });
@@ -557,6 +557,61 @@ test('ANNControlsPanel renders internal training phases and an explicit advance 
   assert.match(html, /0.4100/);
   assert.match(html, /Next Training Phase/);
   assert.doesNotMatch(html, /data-ann-start-training="step"/);
+});
+
+test('ANNControlsPanel keeps mode switching and inference available while training is paused', () => {
+  const html = renderPanel({
+    isTrainingSessionActive: true,
+    trainingExecutionMode: 'step',
+    trainingSessionStatus: {
+      mode: 'step',
+      completedEpochs: 1,
+      targetEpochs: 4,
+      batchIndex: 0,
+      batchCount: 2,
+      nextAction: 'Advance the next internal training phase.',
+    },
+    canInfer: true,
+    inferDisabledReason: null,
+  });
+
+  for (const mode of ['automatic', 'step', 'epoch']) {
+    const modeButton = html.match(new RegExp(`<button[^>]*data-ann-training-mode="${mode}"[^>]*>`))?.[0] ?? '';
+    assert.notEqual(modeButton, '');
+    assert.doesNotMatch(modeButton, /disabled=""/);
+  }
+  const inferButton = html.match(/<button[^>]*>Infer Labels<\/button>/)?.[0] ?? '';
+  assert.notEqual(inferButton, '');
+  assert.doesNotMatch(inferButton, /disabled=""/);
+});
+
+test('ANNControlsPanel requires an explicit click before a paused session runs automatically', () => {
+  const waitingHtml = renderPanel({
+    isTrainingSessionActive: true,
+    trainingExecutionMode: 'automatic',
+    isAutomaticTrainingArmed: false,
+    trainingSessionStatus: {
+      mode: 'automatic',
+      completedEpochs: 1,
+      targetEpochs: 4,
+      batchIndex: 0,
+      batchCount: 2,
+      nextAction: 'Train automatically.',
+    },
+  });
+  const waitingButton = waitingHtml.match(/<button[^>]*data-ann-start-automatic="true"[^>]*>Train Automatic<\/button>/)?.[0] ?? '';
+  assert.notEqual(waitingButton, '');
+  assert.doesNotMatch(waitingButton, /disabled=""/);
+  assert.match(waitingHtml, /Start it explicitly when you are ready/);
+
+  const runningHtml = renderPanel({
+    isTrainingSessionActive: true,
+    trainingExecutionMode: 'automatic',
+    isAutomaticTrainingArmed: true,
+  });
+  const runningButton = runningHtml.match(/<button[^>]*data-ann-start-automatic="true"[^>]*>Training Automatically[.][.][.]<\/button>/)?.[0] ?? '';
+  assert.notEqual(runningButton, '');
+  assert.match(runningButton, /disabled=""/);
 });
 
 test('ANNControlsPanel renders feature signal analysis for trained inputs', () => {
@@ -1278,6 +1333,10 @@ test('ANNControlsPanel renders model comparison rows for training and evaluated 
       reviewStatus: 'review-later',
       note: 'Raw baseline needs validation before comparing.',
       warningCodes: [],
+      checkpointKind: 'intermediate',
+      modelEpoch: 1,
+      executionMode: 'step',
+      trainingPhase: 'backward',
     },
     {
       id: 'ann-train-2',
@@ -1341,6 +1400,11 @@ test('ANNControlsPanel renders model comparison rows for training and evaluated 
   assert.match(html, /Review later/);
   assert.match(html, /raw \/ 2 dims/);
   assert.match(html, /Raw baseline needs validation before comparing\./);
+  assert.match(html, /data-ann-model-checkpoint="intermediate"/);
+  assert.match(html, /Inference checkpoint/);
+  assert.match(html, /Epoch 1/);
+  assert.match(html, /Internal steps/);
+  assert.match(html, /backward/);
   assert.match(html, /Test 75\.0%/);
   assert.match(html, /Dataset pending/);
   assert.match(html, /Run 2/);

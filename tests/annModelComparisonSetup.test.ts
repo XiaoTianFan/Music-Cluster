@@ -45,7 +45,7 @@ test('getAnnModelComparisonSetupSuggestion starts a new comparison with raw trai
   });
   assert.equal(suggestion.clearsProcessedData, true);
   assert.equal(suggestion.clearsReducedData, true);
-  assert.match(suggestion.nextStep, /Train Network/);
+  assert.match(suggestion.nextStep, /Train Automatic/);
 });
 
 test('getAnnModelComparisonSetupSuggestion recommends PCA reduced setup for missing reduced coverage', () => {

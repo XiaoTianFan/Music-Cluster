@@ -60,9 +60,9 @@ const summaryByInputKind: Record<TrainingInputKind, string> = {
 };
 
 const nextStepByInputKind: Record<TrainingInputKind, string> = {
-  raw: 'After applying this setup, click Train Network to create the raw comparison run.',
-  processed: 'After applying this setup, click Process Data, then Train Network to create the processed comparison run.',
-  reduced: 'After applying this setup, click Process Data, Reduce Dimensions, then Train Network to create the PCA comparison run.',
+  raw: 'After applying this setup, click Train Automatic to create the raw comparison run.',
+  processed: 'After applying this setup, click Process Data, then Train Automatic to create the processed comparison run.',
+  reduced: 'After applying this setup, click Process Data, Reduce Dimensions, then Train Automatic to create the PCA comparison run.',
 };
 
 export function getAnnModelComparisonSetupSuggestion(

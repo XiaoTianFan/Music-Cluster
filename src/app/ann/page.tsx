@@ -2,6 +2,12 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { DndContext, DragEndEvent } from '@dnd-kit/core';
+import {
+    ChartBarIcon,
+    CommandLineIcon,
+    CpuChipIcon,
+    TagIcon,
+} from '@heroicons/react/24/outline';
 
 // Import components using alias paths (assuming @/ maps to src/)
 import LogPanel from '@/components/LogPanel';
@@ -231,6 +237,7 @@ interface TrainPayload {
     seed: number;
     activationSampleSongId?: string;
     executionMode?: AnnTrainingExecutionMode;
+    managedExecution?: boolean;
 }
 
 interface TrainingRunContext {
@@ -272,12 +279,19 @@ type ProcessingMethod = 'none' | 'standardize' | 'normalize';
 type ReductionMethod = 'pca' | 'tsne' | 'umap';
 // Define possible stages for visualization control
 type ProcessingStage = 'features' | 'processed' | 'reduced' | 'kmeans' | null;
+type AnnWorkspacePage = 'data' | 'model' | 'performance' | 'logs';
 
 // Data structure types
 type UnprocessedDataType = { vectors: number[][], songIds: string[], isOHEColumn: boolean[], columnLabels: string[] };
 type ProcessedDataType = { vectors: number[][], songIds: string[] };
 // Placeholder for K-Means assignments (not used in ANN page)
 const placeholderKmeansAssignments: Record<string, number> = {};
+const ANN_WORKSPACE_TABS = [
+    { id: 'data', label: 'Data & Labels', icon: TagIcon },
+    { id: 'model', label: 'Model Inspection', icon: CpuChipIcon },
+    { id: 'performance', label: 'Performance', icon: ChartBarIcon },
+    { id: 'logs', label: 'Program Logs', icon: CommandLineIcon },
+] as const;
 
 // --- Define needed types locally (mirroring those in VisualizationPanel) ---
 interface InferenceResult {
@@ -291,6 +305,25 @@ interface InferenceResult {
 const DEFAULT_SELECTED_FEATURES = ['mfcc', 'energy'];
 const INFERENCE_SONG_ID = '__ann_uploaded_inference__';
 const ANN_PERMUTATION_IMPORTANCE_CANCELLED_MESSAGE = 'Feature impact analysis cancelled.';
+
+function getTrainingModeLabel(mode: AnnTrainingExecutionMode): string {
+    if (mode === 'step') return 'Internal Steps';
+    if (mode === 'epoch') return 'By Epoch';
+    return 'Automatic';
+}
+
+function formatTrainingPhaseLog(snapshot: AnnTrainingPhaseSnapshot): string {
+    const details = [
+        `[ANN Train][Internal Steps] Epoch ${snapshot.epoch}/${snapshot.targetEpochs}, batch ${snapshot.batchIndex}/${snapshot.batchCount} | ${snapshot.label}`,
+    ];
+    if (snapshot.predictedLabel) {
+        details.push(`prediction ${snapshot.predictedLabel} (${((snapshot.predictionConfidence ?? 0) * 100).toFixed(1)}%)`);
+    }
+    if (snapshot.loss !== undefined) details.push(`sample loss ${snapshot.loss.toFixed(4)}`);
+    if (snapshot.meanAbsoluteWeightDelta !== undefined) details.push(`mean |weight delta| ${snapshot.meanAbsoluteWeightDelta.toExponential(2)}`);
+    return details.join(' | ');
+}
+
 function getTrainingUploadSkipMessage(name: string, reason: TrainingSongUploadSkipReason): string {
     switch (reason) {
         case 'duplicate-name':
@@ -402,6 +435,8 @@ export default function ANNPage() {
     const [trainingPhaseSnapshot, setTrainingPhaseSnapshot] = useState<AnnTrainingPhaseSnapshot | null>(null);
     const [trainingSessionStatus, setTrainingSessionStatus] = useState<AnnTrainingSessionStatus | null>(null);
     const [trainingExecutionMode, setTrainingExecutionMode] = useState<AnnTrainingExecutionMode>('automatic');
+    const [automaticAdvanceError, setAutomaticAdvanceError] = useState<boolean>(false);
+    const [isAutomaticTrainingArmed, setIsAutomaticTrainingArmed] = useState<boolean>(false);
     const [isTrainingSessionActive, setIsTrainingSessionActive] = useState<boolean>(false);
     const [latestFeatureStructure, setLatestFeatureStructure] = useState<FeatureMatrixStructure | null>(null);
     const [inferenceMode, setInferenceMode] = useState<'dataset' | 'uploaded' | null>(null);
@@ -410,6 +445,7 @@ export default function ANNPage() {
     const [inputDimension, setInputDimension] = useState<number>(0);
     const [outputDimension, setOutputDimension] = useState<number>(0);
     const [isModelTrained, setIsModelTrained] = useState<boolean>(false);
+    const hasUsableModel = isModelTrained || isTrainingSessionActive;
     const [trainedModelContextSource, setTrainedModelContextSource] = useState<'trained' | 'imported' | null>(null);
     // --- Initialize selectedFeatures state with the local default --- 
     const [selectedFeatures, setSelectedFeatures] = useState<Set<string>>(new Set(DEFAULT_SELECTED_FEATURES));
@@ -423,6 +459,7 @@ export default function ANNPage() {
     const [targetDimensions, setTargetDimensions] = useState<number>(2);
     const [latestCompletedStage, setLatestCompletedStage] = useState<ProcessingStage>(null);
     const [visualizationTargetStage, setVisualizationTargetStage] = useState<ProcessingStage>(null);
+    const [workspacePage, setWorkspacePage] = useState<AnnWorkspacePage>('data');
 
     // --- NEW: Audio Player State ---
     const [currentlyPlayingSongId, setCurrentlyPlayingSongId] = useState<string | null>(null);
@@ -446,6 +483,7 @@ export default function ANNPage() {
     const annModelComparisonLoadAttemptedRef = useRef<boolean>(false);
     const annUploadedDatasetReattachmentLoadAttemptedRef = useRef<boolean>(false);
     const trainingRunContextRef = useRef<TrainingRunContext | null>(null);
+    const trainingExecutionModeRef = useRef<AnnTrainingExecutionMode>('automatic');
 
     // --- Other Refs ---
     const audioContextRef = useRef<AudioContext | null>(null);
@@ -628,6 +666,7 @@ export default function ANNPage() {
         setModelStateSnapshot(null);
         setTrainingPhaseSnapshot(null);
         setTrainingSessionStatus(null);
+        setIsAutomaticTrainingArmed(false);
         setIsTrainingSessionActive(false);
         trainingRunContextRef.current = null;
         setTrainedModelContextSource(null);
@@ -667,6 +706,12 @@ export default function ANNPage() {
                         valLoss: [...prev.valLoss, { x: payload.epoch, y: payload.metrics.valLoss ?? 0 }],
                         valAcc: [...prev.valAcc, { x: payload.epoch, y: payload.metrics.valAcc ?? 0 }],
                     }));
+                    const mode = trainingExecutionModeRef.current;
+                    const targetEpochs = trainingRunContextRef.current?.networkConfig.epochs ?? payload.epoch;
+                    addLogMessage(
+                        `[ANN Train][${getTrainingModeLabel(mode)}] Epoch ${payload.epoch}/${targetEpochs} | loss ${payload.metrics.loss.toFixed(4)} | accuracy ${(payload.metrics.acc * 100).toFixed(1)}% | validation loss ${(payload.metrics.valLoss ?? 0).toFixed(4)} | validation accuracy ${((payload.metrics.valAcc ?? 0) * 100).toFixed(1)}%`,
+                        'info'
+                    );
                 } else {
                     console.warn('Received malformed epochMetrics:', payload);
                     addLogMessage('Received malformed epoch metrics from MLP worker.', 'warn');
@@ -678,8 +723,15 @@ export default function ANNPage() {
             case 'modelStateSnapshot':
                 setModelStateSnapshot(payload as AnnModelStateSnapshot);
                 break;
+            case 'trainingSnapshot':
+                if (payload?.activationSnapshot) setActivationSnapshot(payload.activationSnapshot as ActivationSnapshot);
+                if (payload?.modelStateSnapshot) setModelStateSnapshot(payload.modelStateSnapshot as AnnModelStateSnapshot);
+                break;
             case 'trainingPhase':
                 setTrainingPhaseSnapshot(payload as AnnTrainingPhaseSnapshot);
+                if (trainingExecutionModeRef.current === 'step' && payload) {
+                    addLogMessage(formatTrainingPhaseLog(payload as AnnTrainingPhaseSnapshot), 'info');
+                }
                 break;
             default:
                 break;
@@ -880,6 +932,10 @@ export default function ANNPage() {
                         case 'activationSnapshot':
                             setActivationSnapshot(payload as ActivationSnapshot);
                             break;
+                        case 'trainingSnapshot':
+                            if (payload?.activationSnapshot) setActivationSnapshot(payload.activationSnapshot as ActivationSnapshot);
+                            if (payload?.modelStateSnapshot) setModelStateSnapshot(payload.modelStateSnapshot as AnnModelStateSnapshot);
+                            break;
                         case 'inferenceComplete':
                             clearScopedMlpRequest();
                             setIsInferring(false);
@@ -947,11 +1003,11 @@ export default function ANNPage() {
     }), [featureExtractionSongs, featureStatus, songFeatures]);
     const hasCurrentFeatureRows = currentFeatureRows.hasRows;
     const selectedFeaturesMatchTrainedSnapshot = useMemo(() => {
-        if (!isModelTrained || !trainingPipelineSnapshot) return false;
+        if (!hasUsableModel || !trainingPipelineSnapshot) return false;
         const persistedFeatureIds = trainingPipelineSnapshot.selectedFeatureIds;
         return selectedFeatures.size === persistedFeatureIds.length
             && persistedFeatureIds.every(featureId => selectedFeatures.has(featureId));
-    }, [isModelTrained, selectedFeatures, trainingPipelineSnapshot]);
+    }, [hasUsableModel, selectedFeatures, trainingPipelineSnapshot]);
 
     // --- Data Preparation/Derivation Logic ---
     useEffect(() => {
@@ -1290,9 +1346,12 @@ export default function ANNPage() {
         });
 
         trainingRunContextRef.current = { ...context, networkConfig: completedNetworkConfig };
-        setNetworkConfig(previous => previous ? { ...previous, epochs: completedEpochs } : previous);
+        setNetworkConfig(previous => previous && previous.epochs !== completedEpochs
+            ? { ...previous, epochs: completedEpochs }
+            : previous);
         setIsTraining(false);
         setIsTrainingSessionActive(false);
+        setIsAutomaticTrainingArmed(false);
         setIsModelTrained(true);
         setTrainedModelContextSource('trained');
         setTrainingPhaseSnapshot(null);
@@ -1314,11 +1373,51 @@ export default function ANNPage() {
                 runNumber: Math.max(0, ...previousRuns.map(run => run.runNumber)) + 1,
                 trainedAt: new Date().toISOString(),
                 trainingSummary: nextTrainingSummary,
+                checkpoint: {
+                    kind: 'completed',
+                    epoch: completedEpochs,
+                    executionMode: trainingExecutionModeRef.current,
+                    phase: 'epoch-complete',
+                },
             }),
         ]);
         const finalAccuracy = payload.finalMetrics?.accuracy;
         addLogMessage(`${logPrefix}${finalAccuracy !== undefined ? ` Final Test Accuracy: ${(finalAccuracy * 100).toFixed(2)}%` : ''}`, 'complete');
     }, [addLogMessage]);
+
+    const handleTrainingExecutionModeChange = useCallback((executionMode: AnnTrainingExecutionMode) => {
+        if (executionMode === trainingExecutionModeRef.current) return;
+        const previousExecutionMode = trainingExecutionModeRef.current;
+        setAutomaticAdvanceError(false);
+        setIsAutomaticTrainingArmed(false);
+        trainingExecutionModeRef.current = executionMode;
+        setTrainingExecutionMode(executionMode);
+        if (!isTrainingSessionActive || !trainingRunContextRef.current || !mlpWorkerRef.current) {
+            addLogMessage(`[ANN Train] Execution mode selected: ${getTrainingModeLabel(executionMode)}.`, 'info');
+            return;
+        }
+
+        const requestId = createWorkerRequestId('ann-training-mode');
+        sendWorkerRequest<AnnWorkerReply, unknown, TrainingWorkerResult>({
+            worker: mlpWorkerRef.current as unknown as WorkerRequestTarget<AnnWorkerReply, unknown>,
+            requestId,
+            message: { type: 'setTrainingMode', requestId, payload: { executionMode } },
+            successTypes: ['trainingModeChanged'],
+            errorTypes: ['mlpError'],
+            getResult: message => message.payload ?? {},
+            getErrorMessage: message => getAnnWorkerErrorMessage(message, 'Could not change the training execution mode.'),
+            timeoutMs: 30000,
+        }).then(payload => {
+            setTrainingSessionStatus(payload.status ?? null);
+            addLogMessage(executionMode === 'automatic'
+                ? '[ANN Train] Automatic mode selected. Click Train Automatic to resume this session.'
+                : `[ANN Train] Training execution mode changed to ${getTrainingModeLabel(executionMode)}.`, 'complete');
+        }).catch(error => {
+            trainingExecutionModeRef.current = previousExecutionMode;
+            setTrainingExecutionMode(previousExecutionMode);
+            addLogMessage(`Could not change training mode: ${error instanceof Error ? error.message : String(error)}`, 'error');
+        });
+    }, [addLogMessage, isTrainingSessionActive]);
 
     const handleTrain = useCallback((executionMode: AnnTrainingExecutionMode = trainingExecutionMode) => {
         if (isTraining) {
@@ -1389,7 +1488,10 @@ export default function ANNPage() {
         setOutputDimension(localLabelMap.size);
         setInputDimension(dataDimension); // Ensure input dimension matches training data
 
-        addLogMessage(`Starting training with ${trainingVectors.length} labeled songs across ${localLabelMap.size} classes...`, 'info');
+        addLogMessage(
+            `[ANN Train][${getTrainingModeLabel(executionMode)}] Starting ${networkConfig.hiddenLayers}-hidden-layer network | ${trainingVectors.length} songs, ${localLabelMap.size} labels, ${dataDimension} inputs | ${networkConfig.nodesPerLayer.join(' -> ') || 'direct output'} | ${networkConfig.activation}, ${networkConfig.optimizer}, learning rate ${networkConfig.learningRate}, batch ${networkConfig.batchSize}, ${networkConfig.epochs} epochs, ${Math.round(networkConfig.splitRatio * 100)}% train, seed ${networkConfig.randomSeed ?? 'generated'}.`,
+            'info'
+        );
 
         // 3. Prepare Worker Payload
         const workerConfig: WorkerMLPConfig = {
@@ -1414,6 +1516,7 @@ export default function ANNPage() {
             seed: trainingSeed,
             activationSampleSongId,
             executionMode,
+            managedExecution: true,
         };
         trainingRunContextRef.current = {
             inputKind,
@@ -1432,15 +1535,19 @@ export default function ANNPage() {
 
         // 4. Send to Worker & Set Flags
         setTrainingHistory({ loss: [], acc: [], valLoss: [], valAcc: [] }); // Clear previous history
+        setAutomaticAdvanceError(false);
+        setIsAutomaticTrainingArmed(executionMode === 'automatic');
         setCurrentEpoch(0);
         setActivationSnapshot(null);
         setModelStateSnapshot(null);
         setTrainingPhaseSnapshot(null);
         setTrainingSessionStatus(null);
-        setIsTrainingSessionActive(false);
+        setIsTrainingSessionActive(true);
+        trainingExecutionModeRef.current = executionMode;
         setTrainingExecutionMode(executionMode);
         setIsTraining(true); 
         setIsModelTrained(false);
+        setTrainedModelContextSource('trained');
         setInferenceResults({});
         setUploadedInferenceResult(null);
         setUploadedInferenceError(null);
@@ -1460,9 +1567,9 @@ export default function ANNPage() {
             worker: mlpWorkerRef.current as unknown as WorkerRequestTarget<AnnWorkerReply, unknown>,
             requestId,
             message: { type: 'train', requestId, payload: trainPayload },
-            successTypes: executionMode === 'automatic' ? ['trainingComplete'] : ['trainingSessionReady'],
+            successTypes: ['trainingSessionReady', 'trainingComplete'],
             errorTypes: ['mlpError'],
-            progressTypes: ['epochMetrics', 'activationSnapshot', 'modelStateSnapshot', 'trainingPhase'],
+            progressTypes: ['epochMetrics', 'activationSnapshot', 'modelStateSnapshot', 'trainingSnapshot', 'trainingPhase'],
             onProgress: handleMlpProgress,
             getResult: message => {
                 if (!message.payload) throw new Error('MLP training returned no payload.');
@@ -1472,7 +1579,7 @@ export default function ANNPage() {
             isRequestActive: isActiveMlpRequest,
             onSettled: clearActiveMlpRequest,
         }).then(payload => {
-            if (executionMode === 'automatic') {
+            if (payload.finalMetrics) {
                 finalizeTrainingRun(payload, requestId);
                 return;
             }
@@ -1483,7 +1590,9 @@ export default function ANNPage() {
             if (payload.modelStateSnapshot) setModelStateSnapshot(payload.modelStateSnapshot);
             addLogMessage(executionMode === 'step'
                 ? 'Internal step training is ready. Advance the input propagation phase when ready.'
-                : 'Epoch-by-epoch training is ready. Train the first epoch when ready.', 'complete');
+                : executionMode === 'epoch'
+                    ? 'Epoch-by-epoch training is ready. Train the first epoch when ready.'
+                    : 'Automatic training session is ready and will advance epoch by epoch.', 'complete');
         }).catch(error => {
             const errorMessage = error instanceof Error ? error.message : String(error);
             setIsTraining(false);
@@ -1500,6 +1609,7 @@ export default function ANNPage() {
             setPermutationImportanceSummary(null);
             setPermutationImportanceError(null);
             setTrainedModelContextSource(null);
+            setIsAutomaticTrainingArmed(false);
             trainingRunContextRef.current = null;
             addLogMessage(`MLP training failed: ${errorMessage}`, 'error');
         });
@@ -1507,7 +1617,14 @@ export default function ANNPage() {
     }, [addLogMessage, clearActiveMlpRequest, finalizeTrainingRun, handleMlpProgress, isActiveMlpRequest, isTraining, latestFeatureStructure, namedLists, networkConfig, processedData, processingStats, reducedDataPoints, reductionDimensions, reductionMethod, selectedFeatures, trainingExecutionMode, unprocessedData, useDimensionalityReduction]);
 
     const handleAdvanceTraining = useCallback(() => {
-        if (isTraining || !isTrainingSessionActive || !mlpWorkerRef.current) return;
+        if (isTraining || activeMlpRequestIdRef.current || !isTrainingSessionActive || !mlpWorkerRef.current) return;
+        const mode = trainingExecutionModeRef.current;
+        const status = trainingSessionStatus;
+        addLogMessage(mode === 'automatic'
+            ? `[ANN Train][Automatic] Running epochs ${(status?.completedEpochs ?? 0) + 1}-${status?.targetEpochs ?? trainingRunContextRef.current?.networkConfig.epochs ?? '?'}.`
+            : mode === 'epoch'
+                ? `[ANN Train][By Epoch] Training epoch ${(status?.completedEpochs ?? 0) + 1}/${status?.targetEpochs ?? trainingRunContextRef.current?.networkConfig.epochs ?? '?'}.`
+                : `[ANN Train][Internal Steps] Advancing from ${trainingPhaseSnapshot?.label ?? 'session start'}.`, 'info');
         setIsTraining(true);
         const requestId = createWorkerRequestId('ann-advance-training');
         activeMlpRequestIdRef.current = requestId;
@@ -1517,7 +1634,7 @@ export default function ANNPage() {
             message: { type: 'advanceTraining', requestId },
             successTypes: ['trainingPaused', 'trainingComplete'],
             errorTypes: ['mlpError'],
-            progressTypes: ['epochMetrics', 'activationSnapshot', 'modelStateSnapshot', 'trainingPhase'],
+            progressTypes: ['epochMetrics', 'activationSnapshot', 'modelStateSnapshot', 'trainingSnapshot', 'trainingPhase'],
             onProgress: handleMlpProgress,
             getResult: message => message.payload ?? {},
             getErrorMessage: message => getAnnWorkerErrorMessage(message, 'Could not advance training.'),
@@ -1532,39 +1649,90 @@ export default function ANNPage() {
             setIsTrainingSessionActive(true);
             setTrainingSessionStatus(payload.status ?? null);
             if (payload.phaseSnapshot) setTrainingPhaseSnapshot(payload.phaseSnapshot);
+            if (payload.status) {
+                addLogMessage(`[ANN Train][${getTrainingModeLabel(mode)}] Paused at ${payload.status.completedEpochs}/${payload.status.targetEpochs} epochs. ${payload.status.nextAction}`, 'complete');
+            }
         }).catch(error => {
             setIsTraining(false);
+            if (trainingExecutionModeRef.current === 'automatic') {
+                setAutomaticAdvanceError(true);
+                setIsAutomaticTrainingArmed(false);
+            }
             addLogMessage(`Could not advance training: ${error instanceof Error ? error.message : String(error)}`, 'error');
         });
-    }, [addLogMessage, clearActiveMlpRequest, finalizeTrainingRun, handleMlpProgress, isActiveMlpRequest, isTraining, isTrainingSessionActive]);
+    }, [addLogMessage, clearActiveMlpRequest, finalizeTrainingRun, handleMlpProgress, isActiveMlpRequest, isTraining, isTrainingSessionActive, trainingPhaseSnapshot, trainingSessionStatus]);
+
+    const handleStartAutomaticTraining = useCallback(() => {
+        if (!isTrainingSessionActive || trainingExecutionModeRef.current !== 'automatic' || isTraining) return;
+        setAutomaticAdvanceError(false);
+        setIsAutomaticTrainingArmed(true);
+        addLogMessage('[ANN Train][Automatic] Train Automatic requested; resuming the active session.', 'info');
+    }, [addLogMessage, isTraining, isTrainingSessionActive]);
+
+    useEffect(() => {
+        if (
+            trainingExecutionMode !== 'automatic'
+            || !isAutomaticTrainingArmed
+            || automaticAdvanceError
+            || isTraining
+            || isInferring
+            || !isTrainingSessionActive
+            || !trainingSessionStatus
+            || trainingSessionStatus.completedEpochs >= trainingSessionStatus.targetEpochs
+        ) return;
+        const timeoutId = window.setTimeout(() => handleAdvanceTraining(), 0);
+        return () => window.clearTimeout(timeoutId);
+    }, [
+        automaticAdvanceError,
+        handleAdvanceTraining,
+        isAutomaticTrainingArmed,
+        isInferring,
+        isTraining,
+        isTrainingSessionActive,
+        trainingExecutionMode,
+        trainingSessionStatus,
+    ]);
 
     const handleContinueTraining = useCallback((additionalEpochs: number, executionMode: AnnTrainingExecutionMode) => {
-        if (isTraining || isTrainingSessionActive || !mlpWorkerRef.current || trainedModelContextSource !== 'trained' || !trainingRunContextRef.current) return;
+        if (isTraining || activeMlpRequestIdRef.current || isTrainingSessionActive || !mlpWorkerRef.current || trainedModelContextSource !== 'trained' || !trainingRunContextRef.current) return;
         setIsTraining(true);
+        setAutomaticAdvanceError(false);
+        setIsAutomaticTrainingArmed(executionMode === 'automatic');
         setIsModelTrained(false);
+        setIsTrainingSessionActive(true);
+        trainingExecutionModeRef.current = executionMode;
         setTrainingExecutionMode(executionMode);
+        const currentEpochs = trainingRunContextRef.current.networkConfig.epochs;
+        trainingRunContextRef.current = {
+            ...trainingRunContextRef.current,
+            networkConfig: {
+                ...trainingRunContextRef.current.networkConfig,
+                epochs: currentEpochs + additionalEpochs,
+            },
+        };
         setTrainingPhaseSnapshot(null);
         setInferenceResults({});
         setUploadedInferenceResult(null);
         setPermutationImportanceSummary(null);
         setValidationRunSummary(null);
         setValidationRunFoldResults(null);
+        addLogMessage(`[ANN Train][${getTrainingModeLabel(executionMode)}] Continuing from epoch ${currentEpochs} for ${additionalEpochs} more epoch${additionalEpochs === 1 ? '' : 's'}.`, 'info');
         const requestId = createWorkerRequestId('ann-continue-training');
         activeMlpRequestIdRef.current = requestId;
         sendWorkerRequest<AnnWorkerReply, unknown, TrainingWorkerResult>({
             worker: mlpWorkerRef.current as unknown as WorkerRequestTarget<AnnWorkerReply, unknown>,
             requestId,
-            message: { type: 'continueTraining', requestId, payload: { additionalEpochs, executionMode } },
-            successTypes: executionMode === 'automatic' ? ['trainingComplete'] : ['trainingSessionReady'],
+            message: { type: 'continueTraining', requestId, payload: { additionalEpochs, executionMode, managedExecution: true } },
+            successTypes: ['trainingSessionReady', 'trainingComplete'],
             errorTypes: ['mlpError'],
-            progressTypes: ['epochMetrics', 'activationSnapshot', 'modelStateSnapshot', 'trainingPhase'],
+            progressTypes: ['epochMetrics', 'activationSnapshot', 'modelStateSnapshot', 'trainingSnapshot', 'trainingPhase'],
             onProgress: handleMlpProgress,
             getResult: message => message.payload ?? {},
             getErrorMessage: message => getAnnWorkerErrorMessage(message, 'Could not continue training.'),
             isRequestActive: isActiveMlpRequest,
             onSettled: clearActiveMlpRequest,
         }).then(payload => {
-            if (executionMode === 'automatic') {
+            if (payload.finalMetrics) {
                 finalizeTrainingRun(payload, requestId, 'Further training complete.');
                 return;
             }
@@ -1576,7 +1744,15 @@ export default function ANNPage() {
             addLogMessage(`Further training is ready for ${additionalEpochs} more epoch${additionalEpochs === 1 ? '' : 's'}.`, 'complete');
         }).catch(error => {
             setIsTraining(false);
+            setIsTrainingSessionActive(false);
+            setIsAutomaticTrainingArmed(false);
             setIsModelTrained(true);
+            if (trainingRunContextRef.current) {
+                trainingRunContextRef.current = {
+                    ...trainingRunContextRef.current,
+                    networkConfig: { ...trainingRunContextRef.current.networkConfig, epochs: currentEpochs },
+                };
+            }
             addLogMessage(`Could not continue training: ${error instanceof Error ? error.message : String(error)}`, 'error');
         });
     }, [addLogMessage, clearActiveMlpRequest, finalizeTrainingRun, handleMlpProgress, isActiveMlpRequest, isTraining, isTrainingSessionActive, trainedModelContextSource]);
@@ -1590,7 +1766,7 @@ export default function ANNPage() {
             addLogMessage('MLP worker not ready.', 'error');
             return;
         }
-        if (!isModelTrained) {
+        if (!hasUsableModel) {
             addLogMessage('Cannot infer: Model is not trained yet.', 'error');
             return;
         }
@@ -1618,7 +1794,7 @@ export default function ANNPage() {
         const dataSource = inferenceInput.selection;
         addLogMessage(inferenceInput.selection.logMessage, 'info');
 
-        addLogMessage(`Starting inference on ${dataSource.songIds.length} songs...`, 'info');
+        addLogMessage(`[ANN Infer][Dataset] Starting inference on ${dataSource.songIds.length} songs using ${trainingPipelineSnapshot.inputKind} inputs (${trainingPipelineSnapshot.inputDimension} dimensions).`, 'info');
 
         // 2. Prepare Worker Payload
         const inferPayload: InferPayload = {
@@ -1651,14 +1827,65 @@ export default function ANNPage() {
         }).then(formattedResults => {
             setIsInferring(false);
             setInferenceResults(formattedResults);
-            setModelComparisonRuns(previousRuns => updateAnnModelComparisonRunEvaluation({
-                runs: previousRuns,
-                runId: latestModelComparisonRunIdRef.current,
-                evaluationSummary: getAnnEvaluationSummary({ namedLists, inferenceResults: formattedResults }),
-            }));
+            const nextEvaluationSummary = getAnnEvaluationSummary({ namedLists, inferenceResults: formattedResults });
+            const context = trainingRunContextRef.current;
+            const checkpointStatus = trainingSessionStatus;
+            if (isTrainingSessionActive && context && checkpointStatus) {
+                const checkpointSummary = getAnnTrainingSummary({
+                    inputKind: context.inputKind,
+                    selectedFeatureIds: context.selectedFeatureIds,
+                    inputDimension: context.inputDimension,
+                    trainingLabels: context.trainingLabels,
+                    networkConfig: {
+                        ...context.networkConfig,
+                        epochs: checkpointStatus.completedEpochs,
+                    },
+                    seed: context.seed,
+                });
+                latestModelComparisonRunIdRef.current = requestId;
+                setModelComparisonRuns(previousRuns => updateAnnModelComparisonRunEvaluation({
+                    runs: [
+                        ...previousRuns,
+                        createAnnModelComparisonRun({
+                            id: requestId,
+                            runNumber: Math.max(0, ...previousRuns.map(run => run.runNumber)) + 1,
+                            trainedAt: new Date().toISOString(),
+                            trainingSummary: checkpointSummary,
+                            checkpoint: {
+                                kind: 'intermediate',
+                                epoch: checkpointStatus.completedEpochs,
+                                executionMode: trainingExecutionModeRef.current,
+                                phase: trainingPhaseSnapshot?.phase ?? null,
+                            },
+                        }),
+                    ],
+                    runId: requestId,
+                    evaluationSummary: nextEvaluationSummary,
+                }));
+                addLogMessage(`Recorded an inference checkpoint at epoch ${checkpointStatus.completedEpochs} (${trainingExecutionModeRef.current}).`, 'complete');
+            } else {
+                setModelComparisonRuns(previousRuns => updateAnnModelComparisonRunEvaluation({
+                    runs: previousRuns,
+                    runId: latestModelComparisonRunIdRef.current,
+                    evaluationSummary: nextEvaluationSummary,
+                }));
+            }
             setInferenceMode(null);
             inferenceModeRef.current = null;
-            addLogMessage('Dataset inference complete.', 'complete');
+            const resultRows = Object.values(formattedResults);
+            const predictionCounts = resultRows.reduce<Record<string, number>>((counts, result) => {
+                counts[result.predictedLabel] = (counts[result.predictedLabel] ?? 0) + 1;
+                return counts;
+            }, {});
+            const distribution = Object.entries(predictionCounts)
+                .sort(([left], [right]) => left.localeCompare(right))
+                .map(([label, count]) => `${label}: ${count}`)
+                .join(', ');
+            const confidenceRows = resultRows.filter(result => typeof result.confidence === 'number');
+            const meanConfidence = confidenceRows.length > 0
+                ? confidenceRows.reduce((sum, result) => sum + (result.confidence ?? 0), 0) / confidenceRows.length
+                : null;
+            addLogMessage(`[ANN Infer][Dataset] Complete | ${resultRows.length} predictions${meanConfidence === null ? '' : ` | mean confidence ${(meanConfidence * 100).toFixed(1)}%`}${distribution ? ` | ${distribution}` : ''}.`, 'complete');
             console.log("Inference results:", formattedResults);
         }).catch(error => {
             const errorMessage = error instanceof Error ? error.message : String(error);
@@ -1669,7 +1896,7 @@ export default function ANNPage() {
             addLogMessage(`Dataset inference failed: ${errorMessage}`, 'error');
         });
 
-    }, [isInferring, isModelTrained, labelMap, mlpWorkerRef.current, reducedDataPoints, processedData, unprocessedData, addLogMessage, trainingPipelineSnapshot, handleMlpProgress, isActiveMlpRequest, clearActiveMlpRequest, namedLists]);
+    }, [isInferring, hasUsableModel, labelMap, reducedDataPoints, processedData, unprocessedData, addLogMessage, trainingPipelineSnapshot, handleMlpProgress, isActiveMlpRequest, clearActiveMlpRequest, namedLists, isTrainingSessionActive, trainingPhaseSnapshot, trainingSessionStatus]);
 
     const transformDataForInference = useCallback((matrix: FeatureMatrix, stats: ProcessingStats) => new Promise<number[][]>((resolve, reject) => {
         const worker = dataProcessingWorkerRef.current;
@@ -1765,6 +1992,7 @@ export default function ANNPage() {
         setInferenceMode('uploaded');
         inferenceModeRef.current = 'uploaded';
         setIsInferring(true);
+        addLogMessage(`[ANN Infer][Uploaded] Starting "${uploadedInferenceFile.name}" (${(uploadedInferenceFile.size / 1024 / 1024).toFixed(2)} MB) using ${trainingPipelineSnapshot.inputKind} inputs.`, 'info');
         try {
             const audioBuffer = await audioContextRef.current.decodeAudioData(await uploadedInferenceFile.arrayBuffer());
             const features = await extractFeaturesWithWorker(
@@ -1828,7 +2056,9 @@ export default function ANNPage() {
             setIsInferring(false);
             setInferenceMode(null);
             inferenceModeRef.current = null;
-            addLogMessage('Uploaded inference complete.', 'complete');
+            addLogMessage(uploadedResult
+                ? `[ANN Infer][Uploaded] Complete | predicted ${uploadedResult.predictedLabel} with ${((uploadedResult.confidence ?? 0) * 100).toFixed(1)}% confidence.`
+                : '[ANN Infer][Uploaded] Complete, but no prediction was returned.', uploadedResult ? 'complete' : 'warn');
             console.log("Inference results:", formattedResults);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
@@ -1839,6 +2069,15 @@ export default function ANNPage() {
             addLogMessage(`Uploaded inference failed: ${errorMessage}`, 'error');
         }
     }, [addLogMessage, clearActiveMlpRequest, extractFeaturesWithWorker, handleMlpProgress, isActiveMlpRequest, trainingPipelineSnapshot, transformDataForInference, transformReductionForInference, uploadedInferenceFile]);
+
+    const handleInferenceFileChange = useCallback((file: File | null) => {
+        setUploadedInferenceFile(file);
+        setUploadedInferenceResult(null);
+        setUploadedInferenceError(null);
+        addLogMessage(file
+            ? `[ANN Infer][Uploaded] Selected "${file.name}" (${(file.size / 1024 / 1024).toFixed(2)} MB).`
+            : '[ANN Infer][Uploaded] Cleared the selected audio file.', 'info');
+    }, [addLogMessage]);
 
     // --- Labeling Panel Callbacks ---
     const handleCreateList = useCallback((listName: string) => {
@@ -2086,6 +2325,7 @@ export default function ANNPage() {
     // --- Memoized Values ---
     const allWorkersReady = useMemo(() => essentiaWorkerReady && dataProcessingWorkerReady && druidWorkerReady && mlpWorkerReady, [essentiaWorkerReady, dataProcessingWorkerReady, druidWorkerReady, mlpWorkerReady]);
     const annRouteLabelState = useMemo(() => getAnnRouteLabelState({ songs, namedLists }), [songs, namedLists]);
+    const networkLabelNames = useMemo(() => Array.from(labelMap.keys()), [labelMap]);
     const nonEmptyLabelCount = annRouteLabelState.nonEmptyLabelCount;
     const assignedSongCount = annRouteLabelState.assignedSongCount;
     const labelsHaveEnoughExamples = annRouteLabelState.labelsHaveEnoughExamples;
@@ -2132,7 +2372,7 @@ export default function ANNPage() {
         isReducing,
         isTraining,
         isInferring,
-        isModelTrained,
+        isModelTrained: hasUsableModel,
         labelMapSize: labelMap.size,
         hasTrainingPipelineSnapshot: trainingPipelineSnapshot !== null,
         trainingInputKind: trainingPipelineSnapshot?.inputKind ?? null,
@@ -2149,7 +2389,7 @@ export default function ANNPage() {
         isReducing,
         isTraining,
         isInferring,
-        isModelTrained,
+        hasUsableModel,
         labelMap.size,
         trainingPipelineSnapshot,
         unprocessedData,
@@ -3148,7 +3388,9 @@ export default function ANNPage() {
             reviewStatus,
             note,
         }));
-    }, []);
+        const run = modelComparisonRuns.find(candidate => candidate.id === runId);
+        addLogMessage(`[ANN Comparison] Marked Run ${run?.runNumber ?? runId} as ${reviewStatus}${note.trim() ? ' and updated its review note' : ''}.`, 'complete');
+    }, [addLogMessage, modelComparisonRuns]);
 
     const handleDeleteModelComparisonRun = useCallback((runId: string) => {
         const run = modelComparisonRuns.find(candidate => candidate.id === runId);
@@ -3177,7 +3419,7 @@ export default function ANNPage() {
         isReducing,
         isTraining,
         isInferring: isInferring || isAnalyzingPermutationImportance,
-        isModelTrained,
+        isModelTrained: hasUsableModel,
         hasTrainingPipelineSnapshot: trainingPipelineSnapshot !== null,
         trainingInputKind: trainingPipelineSnapshot?.inputKind ?? null,
         hasAudioContext: audioContextRef.current !== null,
@@ -3444,68 +3686,143 @@ export default function ANNPage() {
             </div>
             )}
 
-            <div className='h-auto md:h-[85vh]'>
-                 <div className="px-2 py-2 grid grid-cols-1 md:grid-cols-[3fr_1fr] grid-rows-none md:grid-rows-[3fr_1fr] min-h-full md:max-h-full gap-2 flex-grow">
-                     <div className="col-span-1 flex flex-col gap-4 overflow-visible h-auto pr-0 md:overflow-y-auto md:h-[85vh] md:pr-2 hide-scrollbar">
-                         <DndContext onDragEnd={handleDragEnd}>
-                             <LabelingPanel
-                                 songs={songs}
-                                 namedLists={namedLists}
-                                 onCreateList={handleCreateList}
-                                 onRenameList={handleRenameList}
-                                 onRemoveSongFromList={handleRemoveSongFromList}
-                                 onRemoveSongFromSession={handleRemoveSongFromSession}
-                                 onShowDetails={setDetailsSongId}
-                                 onPlayRequest={handlePlayRequest}
-                                 currentlyPlayingSongId={currentlyPlayingSongId}
-                                 isPlaying={isPlaying}
-                                 onUploadSongs={handleUploadClick}
-                                 uploadDisabled={isAnyProcessRunning}
-                                 interactionDisabled={isAnyProcessRunning}
-                             />
-                         </DndContext>
-                         <ANNDataVisualizationPanel
-                             className="min-h-[400px] lg:min-h-[500px]"
-                             activeSongIds={new Set(songs.map(s => s.id))}
-                             songs={songs}
-                             songFeatures={songFeatures}
-                             unprocessedData={unprocessedData}
-                             processedData={processedData}
-                             reducedDataPoints={reducedDataPoints}
-                             reductionDimensions={reductionDimensions}
-                             trueLabels={annRouteLabelState.trueLabels}
-                             predictedLabels={inferenceResults}
-                             showPredictions={isModelTrained}
-                             availableFeatureKeys={availableFeatureKeys}
-                             visualizationDisplayStage={visualizationTargetStage}
-                             onStageSelect={setVisualizationTargetStage}
-                             latestSuccessfulStage={latestCompletedStage}
-                             kmeansAssignments={placeholderKmeansAssignments}
-                             kmeansCentroids={[]}
-                             kmeansIteration={0}
-                          />
-                         <NetworkVisualizationPanel
-                             networkConfig={networkConfig}
-                             inputDimension={inputDimension}
-                             outputDimension={outputDimension}
-                             labelNames={Array.from(labelMap.keys())}
-                             activationSnapshot={activationSnapshot}
-                             modelStateSnapshot={modelStateSnapshot}
-                             trainingPhaseSnapshot={trainingPhaseSnapshot}
-                             isTraining={isTraining || isTrainingSessionActive}
-                             isModelTrained={isModelTrained}
-                         />
-                          <ANNTrainingPerformancePanel
-                              history={trainingHistory}
-                              isTraining={isTraining}
-                              currentEpoch={currentEpoch}
-                         />
-                         <LogPanel 
-                            className="col-span-1 row-span-1 h-[30vh]" // Updated spans
-                            logs={logMessages} />
+            <div className="h-auto md:h-[85vh]">
+                 <div className="grid min-h-full grid-cols-1 gap-2 px-2 py-2 md:h-full md:grid-cols-[3fr_1fr]">
+                     <div className="flex h-[980px] min-w-0 flex-col pr-0 md:h-full md:pr-2" data-ann-workspace>
+                         <div className="relative min-h-0 flex-1 overflow-hidden" data-ann-workspace-pages>
+                             <section
+                                 id="ann-workspace-page-data"
+                                 role="tabpanel"
+                                 aria-labelledby="ann-workspace-tab-data"
+                                 aria-hidden={workspacePage !== 'data'}
+                                 className={`absolute inset-0 grid min-h-0 grid-rows-[24rem_minmax(0,1fr)] gap-4 ${workspacePage === 'data' ? 'visible' : 'invisible pointer-events-none'}`}
+                                 data-ann-workspace-page="data"
+                             >
+                                 <DndContext onDragEnd={handleDragEnd}>
+                                     <LabelingPanel
+                                         songs={songs}
+                                         namedLists={namedLists}
+                                         onCreateList={handleCreateList}
+                                         onRenameList={handleRenameList}
+                                         onRemoveSongFromList={handleRemoveSongFromList}
+                                         onRemoveSongFromSession={handleRemoveSongFromSession}
+                                         onShowDetails={setDetailsSongId}
+                                         onPlayRequest={handlePlayRequest}
+                                         currentlyPlayingSongId={currentlyPlayingSongId}
+                                         isPlaying={isPlaying}
+                                         onUploadSongs={handleUploadClick}
+                                         uploadDisabled={isAnyProcessRunning}
+                                         interactionDisabled={isAnyProcessRunning}
+                                     />
+                                 </DndContext>
+                                 <ANNDataVisualizationPanel
+                                     className="h-full min-h-0"
+                                     activeSongIds={new Set(songs.map(s => s.id))}
+                                     songs={songs}
+                                     songFeatures={songFeatures}
+                                     unprocessedData={unprocessedData}
+                                     processedData={processedData}
+                                     reducedDataPoints={reducedDataPoints}
+                                     reductionDimensions={reductionDimensions}
+                                     trueLabels={annRouteLabelState.trueLabels}
+                                     predictedLabels={inferenceResults}
+                                     showPredictions={Object.keys(inferenceResults).length > 0}
+                                     availableFeatureKeys={availableFeatureKeys}
+                                     visualizationDisplayStage={visualizationTargetStage}
+                                     onStageSelect={setVisualizationTargetStage}
+                                     latestSuccessfulStage={latestCompletedStage}
+                                     kmeansAssignments={placeholderKmeansAssignments}
+                                     kmeansCentroids={[]}
+                                     kmeansIteration={0}
+                                 />
+                             </section>
+                             <section
+                                 id="ann-workspace-page-model"
+                                 role="tabpanel"
+                                 aria-labelledby="ann-workspace-tab-model"
+                                 aria-hidden={workspacePage !== 'model'}
+                                 className={`absolute inset-0 min-h-0 ${workspacePage === 'model' ? 'visible' : 'invisible pointer-events-none'}`}
+                                 data-ann-workspace-page="model"
+                             >
+                                 <NetworkVisualizationPanel
+                                     className="h-full"
+                                     isVisible={workspacePage === 'model'}
+                                     networkConfig={networkConfig}
+                                     inputDimension={inputDimension}
+                                     outputDimension={outputDimension}
+                                     labelNames={networkLabelNames}
+                                     activationSnapshot={activationSnapshot}
+                                     modelStateSnapshot={modelStateSnapshot}
+                                     trainingPhaseSnapshot={trainingPhaseSnapshot}
+                                     isTraining={isTraining || isTrainingSessionActive}
+                                     isModelTrained={hasUsableModel}
+                                 />
+                             </section>
+                             <section
+                                 id="ann-workspace-page-performance"
+                                 role="tabpanel"
+                                 aria-labelledby="ann-workspace-tab-performance"
+                                 aria-hidden={workspacePage !== 'performance'}
+                                 className={`absolute inset-0 min-h-0 ${workspacePage === 'performance' ? 'visible' : 'invisible pointer-events-none'}`}
+                                 data-ann-workspace-page="performance"
+                             >
+                                 <ANNTrainingPerformancePanel
+                                     className="h-full"
+                                     history={trainingHistory}
+                                     isTraining={isTraining}
+                                     currentEpoch={currentEpoch}
+                                 />
+                             </section>
+                             <section
+                                 id="ann-workspace-page-logs"
+                                 role="tabpanel"
+                                 aria-labelledby="ann-workspace-tab-logs"
+                                 aria-hidden={workspacePage !== 'logs'}
+                                 className={`absolute inset-0 min-h-0 ${workspacePage === 'logs' ? 'visible' : 'invisible pointer-events-none'}`}
+                                 data-ann-workspace-page="logs"
+                             >
+                                 <LogPanel className="h-full min-h-0" logs={logMessages} />
+                             </section>
+                         </div>
+                         <div className="flex flex-shrink-0 justify-center pt-2" role="tablist" aria-label="ANN workspace pages" data-ann-workspace-tabs>
+                             <div className="inline-grid max-w-full grid-cols-4 border border-[var(--foreground)]/25 bg-black/30 p-0.5">
+                                 {ANN_WORKSPACE_TABS.map((tab, tabIndex) => {
+                                     const Icon = tab.icon;
+                                     return (
+                                         <button
+                                             key={tab.id}
+                                             id={`ann-workspace-tab-${tab.id}`}
+                                             type="button"
+                                             role="tab"
+                                             aria-controls={`ann-workspace-page-${tab.id}`}
+                                             aria-selected={workspacePage === tab.id}
+                                             tabIndex={workspacePage === tab.id ? 0 : -1}
+                                             title={tab.label}
+                                             className={`flex min-h-10 min-w-10 items-center justify-center gap-1.5 px-2 text-[10px] transition-colors sm:min-h-9 sm:min-w-0 sm:px-3 sm:text-xs ${workspacePage === tab.id ? 'bg-cyan-400/15 text-cyan-200' : 'text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)]'}`}
+                                             onClick={() => setWorkspacePage(tab.id)}
+                                             onKeyDown={(event) => {
+                                                 if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && event.key !== 'Home' && event.key !== 'End') return;
+                                                 event.preventDefault();
+                                                 const nextIndex = event.key === 'Home'
+                                                     ? 0
+                                                     : event.key === 'End'
+                                                         ? ANN_WORKSPACE_TABS.length - 1
+                                                         : (tabIndex + (event.key === 'ArrowRight' ? 1 : -1) + ANN_WORKSPACE_TABS.length) % ANN_WORKSPACE_TABS.length;
+                                                 const nextTab = ANN_WORKSPACE_TABS[nextIndex];
+                                                 setWorkspacePage(nextTab.id);
+                                                 window.requestAnimationFrame(() => document.getElementById(`ann-workspace-tab-${nextTab.id}`)?.focus());
+                                             }}
+                                             data-ann-workspace-tab={tab.id}
+                                         >
+                                             <Icon className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                             <span className="hidden sm:inline">{tab.label}</span>
+                                         </button>
+                                     );
+                                 })}
+                             </div>
+                         </div>
                      </div>
 
-                     {/* Right Column (Fixed) - MODIFIED col-span */}
                      <div className="col-span-1 md:col-span-1 flex flex-col">
                          <ANNControlsPanel
                              essentiaWorkerReady={essentiaWorkerReady}
@@ -3526,9 +3843,10 @@ export default function ANNPage() {
                              canInfer={canInfer}
                              inferDisabledReason={inferDisabledReason}
                              trainingSummary={trainingSummary}
-                             trainingExecutionMode={trainingExecutionMode}
-                             trainingSessionStatus={trainingSessionStatus}
-                             trainingPhaseSnapshot={trainingPhaseSnapshot}
+                              trainingExecutionMode={trainingExecutionMode}
+                              trainingSessionStatus={trainingSessionStatus}
+                              trainingPhaseSnapshot={trainingPhaseSnapshot}
+                              isAutomaticTrainingArmed={isAutomaticTrainingArmed}
                              canContinueTraining={canContinueTraining}
                              continueTrainingDisabledReason={continueTrainingDisabledReason}
                              featureSignalSummary={featureSignalSummary}
@@ -3554,8 +3872,8 @@ export default function ANNPage() {
                              canExportTrainedModel={canExportTrainedModel}
                              trainedModelExportDisabledReason={trainedModelExportDisabledReason}
                              trainedModelImportDisabledReason={trainedModelImportDisabledReason}
-                             trainedModelContextSource={isModelTrained ? trainedModelContextSource : null}
-                             activeModelComparisonRunId={isModelTrained ? latestModelComparisonRunIdRef.current : null}
+                             trainedModelContextSource={hasUsableModel ? trainedModelContextSource : null}
+                             activeModelComparisonRunId={hasUsableModel ? latestModelComparisonRunIdRef.current : null}
                              modelComparisonRuns={modelComparisonRuns}
                              annSetupImportDisabledReason={null}
                              pendingUploadedDatasetCount={pendingUploadedDatasetManifest?.userSongCount ?? 0}
@@ -3580,8 +3898,9 @@ export default function ANNPage() {
                              targetDimensions={targetDimensions}
                              onTargetDimensionsChange={handleTargetDimensionsChange}
                              onTrain={handleTrain}
-                             onTrainingExecutionModeChange={setTrainingExecutionMode}
-                             onAdvanceTraining={handleAdvanceTraining}
+                              onTrainingExecutionModeChange={handleTrainingExecutionModeChange}
+                              onAdvanceTraining={handleAdvanceTraining}
+                              onStartAutomaticTraining={handleStartAutomaticTraining}
                              onContinueTraining={handleContinueTraining}
                              onInfer={handleInfer}
                              onRunPermutationImportance={handleRunPermutationImportance}
@@ -3603,7 +3922,7 @@ export default function ANNPage() {
                              inferenceFile={uploadedInferenceFile}
                              inferenceError={uploadedInferenceError}
                              uploadedInferenceResult={uploadedInferenceResult}
-                             onInferenceFileChange={setUploadedInferenceFile}
+                              onInferenceFileChange={handleInferenceFileChange}
                              onInferUploadedAudio={handleInferUploadedAudio}
                              canChooseInferenceFile={canChooseInferenceFile}
                              inferenceFileDisabledReason={inferenceFileDisabledReason}

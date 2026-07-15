@@ -43,6 +43,7 @@ export interface TrainPayload {
   seed?: number;
   activationSampleSongId?: string;
   executionMode?: AnnTrainingExecutionMode;
+  managedExecution?: boolean;
 }
 
 export interface InferPayload {
@@ -53,6 +54,11 @@ export interface InferPayload {
 
 export interface ContinueTrainingPayload {
   additionalEpochs: number;
+  executionMode: AnnTrainingExecutionMode;
+  managedExecution?: boolean;
+}
+
+export interface SetTrainingModePayload {
   executionMode: AnnTrainingExecutionMode;
 }
 
@@ -85,6 +91,10 @@ interface TrainingSession {
   stepBatchIndex: number;
   stepPhaseIndex: number;
   stepActivationSnapshot: ActivationSnapshot | null;
+  trainXs: tf.Tensor2D;
+  trainYs: tf.Tensor2D;
+  validationXs: tf.Tensor2D;
+  validationYs: tf.Tensor2D;
 }
 
 type WithRequestId<T> = T & { requestId?: string };
@@ -94,6 +104,7 @@ export type MlpWorkerRecvMessage = WithRequestId<
   | { type: 'train'; payload: TrainPayload }
   | { type: 'advanceTraining'; payload?: unknown }
   | { type: 'continueTraining'; payload: ContinueTrainingPayload }
+  | { type: 'setTrainingMode'; payload: SetTrainingModePayload }
   | { type: 'infer'; payload: InferPayload }
   | { type: 'exportModel'; payload?: unknown }
   | { type: 'importModel'; payload: MlpModelPersistencePayload }
@@ -105,8 +116,10 @@ export type MlpWorkerSendMessage = WithRequestId<
   | { type: 'epochMetrics'; payload: { epoch: number; metrics: { loss: number; acc: number; valLoss: number; valAcc: number } } }
   | { type: 'activationSnapshot'; payload: ActivationSnapshot }
   | { type: 'modelStateSnapshot'; payload: AnnModelStateSnapshot }
+  | { type: 'trainingSnapshot'; payload: { activationSnapshot: ActivationSnapshot; modelStateSnapshot: AnnModelStateSnapshot } }
   | { type: 'trainingPhase'; payload: AnnTrainingPhaseSnapshot }
   | { type: 'trainingSessionReady'; payload: { status: AnnTrainingSessionStatus; activationSnapshot: ActivationSnapshot; modelStateSnapshot: AnnModelStateSnapshot } }
+  | { type: 'trainingModeChanged'; payload: { status: AnnTrainingSessionStatus } }
   | { type: 'trainingPaused'; payload: { status: AnnTrainingSessionStatus; phaseSnapshot?: AnnTrainingPhaseSnapshot } }
   | { type: 'trainingComplete'; payload: { finalMetrics: { loss: number; accuracy: number }; activationSnapshot: ActivationSnapshot; modelStateSnapshot: AnnModelStateSnapshot; status: AnnTrainingSessionStatus } }
   | { type: 'inferenceComplete'; payload: { results: Record<string, { predictedLabel: string; confidence: number }> } }
@@ -299,6 +312,12 @@ function getSessionStatus(session: TrainingSession, nextAction: string): AnnTrai
   };
 }
 
+function shouldEmitAutomaticSnapshot(session: TrainingSession): boolean {
+  if (session.mode !== 'automatic') return true;
+  const interval = Math.max(1, Math.ceil(session.targetEpochs / 10));
+  return session.completedEpochs === 1 || session.completedEpochs % interval === 0;
+}
+
 function getBatch(session: TrainingSession): { vectors: number[][]; labelIndices: number[] } {
   const start = session.stepBatchIndex * session.batchSize;
   const end = Math.min(session.trainVectors.length, start + session.batchSize);
@@ -356,6 +375,10 @@ export class MlpWorkerController {
   private trainingSession: TrainingSession | null = null;
 
   dispose(): void {
+    this.trainingSession?.trainXs.dispose();
+    this.trainingSession?.trainYs.dispose();
+    this.trainingSession?.validationXs.dispose();
+    this.trainingSession?.validationYs.dispose();
     this.trainedModel?.dispose();
     this.trainedModel = null;
     this.outputLabels = [];
@@ -371,6 +394,7 @@ export class MlpWorkerController {
         case 'train': await this.startTraining(message.payload, reply); break;
         case 'advanceTraining': await this.advanceTraining(reply); break;
         case 'continueTraining': await this.continueTraining(message.payload, reply); break;
+        case 'setTrainingMode': this.setTrainingMode(message.payload, reply); break;
         case 'infer': await this.infer(message.payload, reply); break;
         case 'exportModel': await this.exportModel(reply); break;
         case 'importModel': await this.importModel(message.payload, reply); break;
@@ -409,11 +433,15 @@ export class MlpWorkerController {
 
     this.outputLabels = validation.outputLabels;
     this.trainedModel = createModel(validation.inputDimension, validation.numClasses, config);
+    const trainVectors = trainPairs.map(pair => [...pair.vector]);
+    const trainLabelIndices = trainPairs.map(pair => labelMap[pair.label]);
+    const validationVectorsCopy = validationPairs.map(pair => [...pair.vector]);
+    const validationLabelIndices = validationPairs.map(pair => labelMap[pair.label]);
     this.trainingSession = {
-      trainVectors: trainPairs.map(pair => [...pair.vector]),
-      trainLabelIndices: trainPairs.map(pair => labelMap[pair.label]),
-      validationVectors: validationPairs.map(pair => [...pair.vector]),
-      validationLabelIndices: validationPairs.map(pair => labelMap[pair.label]),
+      trainVectors,
+      trainLabelIndices,
+      validationVectors: validationVectorsCopy,
+      validationLabelIndices,
       outputLabels: [...validation.outputLabels],
       batchSize,
       batchCount: Math.ceil(trainPairs.length / batchSize),
@@ -424,25 +452,17 @@ export class MlpWorkerController {
       stepBatchIndex: 0,
       stepPhaseIndex: 0,
       stepActivationSnapshot: null,
+      trainXs: tf.tensor2d(trainVectors),
+      trainYs: tf.oneHot(trainLabelIndices, validation.outputLabels.length) as tf.Tensor2D,
+      validationXs: tf.tensor2d(validationVectorsCopy),
+      validationYs: tf.oneHot(validationLabelIndices, validation.outputLabels.length) as tf.Tensor2D,
     };
 
-    if (this.trainingSession.mode === 'automatic') {
+    if (this.trainingSession.mode === 'automatic' && !payload.managedExecution) {
       await this.runAutomatic(postMessage);
       return;
     }
-
-    const activationSnapshot = await getActivationSnapshot(this.trainedModel, this.trainingSession.trainVectors[0], 0, activationSampleSongId);
-    const modelStateSnapshot = await getModelStateSnapshot(this.trainedModel, 0);
-    postMessage({ type: 'activationSnapshot', payload: activationSnapshot });
-    postMessage({ type: 'modelStateSnapshot', payload: modelStateSnapshot });
-    postMessage({
-      type: 'trainingSessionReady',
-      payload: {
-        status: getSessionStatus(this.trainingSession, this.trainingSession.mode === 'step' ? 'Advance the input propagation step.' : 'Train the next epoch.'),
-        activationSnapshot,
-        modelStateSnapshot,
-      },
-    });
+    await this.sendTrainingSessionReady(postMessage, this.trainingSession.completedEpochs);
   }
 
   private async continueTraining(payload: ContinueTrainingPayload, postMessage: (message: MlpWorkerSendMessage) => void): Promise<void> {
@@ -457,32 +477,61 @@ export class MlpWorkerController {
     this.trainingSession.stepPhaseIndex = 0;
     this.trainingSession.stepActivationSnapshot = null;
 
-    if (payload.executionMode === 'automatic') {
+    if (payload.executionMode === 'automatic' && !payload.managedExecution) {
       await this.runAutomatic(postMessage);
       return;
     }
+    await this.sendTrainingSessionReady(postMessage, this.trainingSession.completedEpochs);
+  }
 
+  private async sendTrainingSessionReady(
+    postMessage: (message: MlpWorkerSendMessage) => void,
+    epoch: number
+  ): Promise<void> {
+    const model = this.trainedModel;
+    const session = this.trainingSession;
+    if (!model || !session) throw new Error('Training session is missing.');
     const activationSnapshot = await getActivationSnapshot(
-      this.trainedModel,
-      this.trainingSession.trainVectors[0],
-      this.trainingSession.completedEpochs,
-      this.trainingSession.activationSampleSongId
+      model,
+      session.trainVectors[0],
+      epoch,
+      session.activationSampleSongId
     );
-    const modelStateSnapshot = await getModelStateSnapshot(this.trainedModel, this.trainingSession.completedEpochs);
+    const modelStateSnapshot = await getModelStateSnapshot(model, epoch);
     postMessage({
       type: 'trainingSessionReady',
       payload: {
-        status: getSessionStatus(this.trainingSession, payload.executionMode === 'step' ? 'Advance the next internal training phase.' : 'Train the next epoch.'),
+        status: getSessionStatus(session, session.mode === 'step' ? 'Advance the next internal training phase.' : 'Train the next epoch.'),
         activationSnapshot,
         modelStateSnapshot,
       },
     });
   }
 
+  private setTrainingMode(
+    payload: SetTrainingModePayload,
+    postMessage: (message: MlpWorkerSendMessage) => void
+  ): void {
+    const session = this.trainingSession;
+    if (!this.trainedModel || !session) throw new Error('Start a local training session before changing its execution mode.');
+    if (!['automatic', 'epoch', 'step'].includes(payload.executionMode)) {
+      throw new Error('Training execution mode is invalid.');
+    }
+    session.mode = payload.executionMode;
+    const targetReached = session.completedEpochs >= session.targetEpochs;
+    const nextAction = targetReached
+      ? 'Training target reached. Add epochs to continue in the selected mode.'
+      : payload.executionMode === 'step'
+        ? 'Advance the next internal training phase.'
+        : payload.executionMode === 'epoch'
+          ? 'Train the next epoch.'
+          : 'Automatic training will continue from the current model state.';
+    postMessage({ type: 'trainingModeChanged', payload: { status: getSessionStatus(session, nextAction) } });
+  }
+
   private async advanceTraining(postMessage: (message: MlpWorkerSendMessage) => void): Promise<void> {
     if (!this.trainedModel || !this.trainingSession) throw new Error('Start an interactive training session before advancing it.');
-    if (this.trainingSession.mode === 'automatic') throw new Error('Automatic training cannot be advanced manually.');
-    if (this.trainingSession.mode === 'epoch') {
+    if (this.trainingSession.mode === 'automatic' || this.trainingSession.mode === 'epoch') {
       await this.runEpoch(postMessage);
       return;
     }
@@ -504,16 +553,11 @@ export class MlpWorkerController {
     const model = this.trainedModel;
     const session = this.trainingSession;
     if (!model || !session) throw new Error('Training session is missing.');
-    const trainXs = tf.tensor2d(session.trainVectors);
-    const trainYs = tf.oneHot(session.trainLabelIndices, session.outputLabels.length);
-    const validationXs = tf.tensor2d(session.validationVectors);
-    const validationYs = tf.oneHot(session.validationLabelIndices, session.outputLabels.length);
-    try {
-      const history = await model.fit(trainXs, trainYs, {
+    const history = await model.fit(session.trainXs, session.trainYs, {
         epochs: 1,
         batchSize: session.batchSize,
         shuffle: true,
-        validationData: [validationXs, validationYs],
+        validationData: [session.validationXs, session.validationYs],
         verbose: 0,
       });
       session.completedEpochs++;
@@ -523,11 +567,15 @@ export class MlpWorkerController {
         valLoss: Number(history.history.val_loss?.[0] ?? 0),
         valAcc: Number((history.history.val_acc ?? history.history.val_accuracy)?.[0] ?? 0),
       };
-      postMessage({ type: 'epochMetrics', payload: { epoch: session.completedEpochs, metrics } });
+    postMessage({ type: 'epochMetrics', payload: { epoch: session.completedEpochs, metrics } });
+    if (session.completedEpochs >= session.targetEpochs) {
+      await this.completeTraining(postMessage, metrics);
+      return true;
+    }
+    if (shouldEmitAutomaticSnapshot(session)) {
       const activationSnapshot = await getActivationSnapshot(model, session.trainVectors[0], session.completedEpochs, session.activationSampleSongId);
       const modelStateSnapshot = await getModelStateSnapshot(model, session.completedEpochs, 'epoch-complete');
-      postMessage({ type: 'activationSnapshot', payload: activationSnapshot });
-      postMessage({ type: 'modelStateSnapshot', payload: modelStateSnapshot });
+      postMessage({ type: 'trainingSnapshot', payload: { activationSnapshot, modelStateSnapshot } });
       postMessage({
         type: 'trainingPhase',
         payload: {
@@ -541,20 +589,9 @@ export class MlpWorkerController {
           direction: 'none',
         },
       });
-      if (session.completedEpochs >= session.targetEpochs) {
-        await this.completeTraining(postMessage);
-        return true;
-      }
-      if (pauseWhenIncomplete) {
-        postMessage({ type: 'trainingPaused', payload: { status: getSessionStatus(session, 'Train the next epoch.') } });
-      }
-      return false;
-    } finally {
-      trainXs.dispose();
-      trainYs.dispose();
-      validationXs.dispose();
-      validationYs.dispose();
     }
+    if (pauseWhenIncomplete) postMessage({ type: 'trainingPaused', payload: { status: getSessionStatus(session, 'Train the next epoch.') } });
+    return false;
   }
 
   private async runStep(postMessage: (message: MlpWorkerSendMessage) => void): Promise<void> {
@@ -575,8 +612,13 @@ export class MlpWorkerController {
 
     if (session.stepPhaseIndex === inputPhaseIndex) {
       session.stepActivationSnapshot = await getActivationSnapshot(model, sampleVector, epoch, session.activationSampleSongId);
-      postMessage({ type: 'activationSnapshot', payload: session.stepActivationSnapshot });
-      postMessage({ type: 'modelStateSnapshot', payload: await getModelStateSnapshot(model, session.completedEpochs, 'input') });
+      postMessage({
+        type: 'trainingSnapshot',
+        payload: {
+          activationSnapshot: session.stepActivationSnapshot,
+          modelStateSnapshot: await getModelStateSnapshot(model, session.completedEpochs, 'input'),
+        },
+      });
       phaseSnapshot = {
         phase: 'input', label: 'Load training batch',
         description: 'The selected batch enters the input layer before forward propagation.',
@@ -623,8 +665,7 @@ export class MlpWorkerController {
       const after = await getModelStateSnapshot(model, session.completedEpochs, 'update');
       const meanAbsoluteWeightDelta = getMeanAbsoluteWeightDelta(before, after);
       const activationSnapshot = await getActivationSnapshot(model, sampleVector, epoch, session.activationSampleSongId);
-      postMessage({ type: 'activationSnapshot', payload: activationSnapshot });
-      postMessage({ type: 'modelStateSnapshot', payload: after });
+      postMessage({ type: 'trainingSnapshot', payload: { activationSnapshot, modelStateSnapshot: after } });
       phaseSnapshot = {
         phase: 'update', label: 'Apply optimizer update',
         description: 'The optimizer applies the computed gradients to every connected weight and bias in this batch.',
@@ -642,7 +683,7 @@ export class MlpWorkerController {
         const metrics = await this.evaluateMetrics();
         postMessage({ type: 'epochMetrics', payload: { epoch: session.completedEpochs, metrics } });
         if (session.completedEpochs >= session.targetEpochs) {
-          await this.completeTraining(postMessage);
+          await this.completeTraining(postMessage, metrics);
           return;
         }
       }
@@ -659,10 +700,7 @@ export class MlpWorkerController {
     const model = this.trainedModel;
     const session = this.trainingSession;
     if (!model || !session) throw new Error('Training session is missing.');
-    const evaluateRows = async (vectors: number[][], labels: number[]) => {
-      const xs = tf.tensor2d(vectors);
-      const ys = tf.oneHot(labels, session.outputLabels.length);
-      try {
+    const evaluateRows = async (xs: tf.Tensor2D, ys: tf.Tensor2D) => {
         const result = model.evaluate(xs, ys) as tf.Tensor | tf.Tensor[];
         const tensors = Array.isArray(result) ? result : [result];
         try {
@@ -673,21 +711,20 @@ export class MlpWorkerController {
         } finally {
           tensors.forEach(tensor => tensor.dispose());
         }
-      } finally {
-        xs.dispose();
-        ys.dispose();
-      }
     };
-    const train = await evaluateRows(session.trainVectors, session.trainLabelIndices);
-    const validation = await evaluateRows(session.validationVectors, session.validationLabelIndices);
+    const train = await evaluateRows(session.trainXs, session.trainYs);
+    const validation = await evaluateRows(session.validationXs, session.validationYs);
     return { loss: train.loss, acc: train.accuracy, valLoss: validation.loss, valAcc: validation.accuracy };
   }
 
-  private async completeTraining(postMessage: (message: MlpWorkerSendMessage) => void): Promise<void> {
+  private async completeTraining(
+    postMessage: (message: MlpWorkerSendMessage) => void,
+    completedMetrics?: { loss: number; acc: number; valLoss: number; valAcc: number }
+  ): Promise<void> {
     const model = this.trainedModel;
     const session = this.trainingSession;
     if (!model || !session) throw new Error('Training session is missing.');
-    const metrics = await this.evaluateMetrics();
+    const metrics = completedMetrics ?? await this.evaluateMetrics();
     const activationSnapshot = await getActivationSnapshot(model, session.trainVectors[0], session.completedEpochs, session.activationSampleSongId);
     const modelStateSnapshot = await getModelStateSnapshot(model, session.completedEpochs, 'epoch-complete');
     postMessage({
@@ -726,7 +763,6 @@ export class MlpWorkerController {
         results[songIds[index]] = { predictedLabel: this.outputLabels[bestIndex] ?? 'Unknown', confidence: row[bestIndex] ?? 0 };
       });
       postMessage({ type: 'activationSnapshot', payload: await getActivationSnapshot(this.trainedModel, vectors[0], undefined, songIds[0]) });
-      postMessage({ type: 'modelStateSnapshot', payload: await getModelStateSnapshot(this.trainedModel, this.trainingSession?.completedEpochs ?? 0) });
       postMessage({ type: 'inferenceComplete', payload: { results } });
     } finally {
       predictions?.dispose();

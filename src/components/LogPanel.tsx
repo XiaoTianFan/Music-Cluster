@@ -28,19 +28,20 @@ const levelColors: Record<LogLevel, string> = {
 const LogPanel: React.FC<LogPanelProps> = ({ logs, className }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // Scroll to the bottom when new logs arrive
+  // Logs are stored newest-first, so keep the latest operation in view.
   useEffect(() => {
     if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+      scrollContainerRef.current.scrollTop = 0;
     }
   }, [logs]);
 
   // Combine original classes, removing p-4 and relative which BasePanel provides
-  const panelClassName = `flex flex-col mt-2 ${className}`.replace('p-4', '').replace('relative', '').trim();
+  const panelClassName = `flex min-h-0 flex-col ${className ?? ''}`.replace('p-4', '').replace('relative', '').trim();
 
   return (
     <BasePanel
       className={panelClassName}
+      title="Program Logs"
       data-augmented-ui="tl-clip tr-clip br-clip bl-clip border"
       style={{ '--aug-border-bg': 'var(--foreground)', 
         '--aug-border-x': '1px' } as React.CSSProperties}
@@ -48,7 +49,7 @@ const LogPanel: React.FC<LogPanelProps> = ({ logs, className }) => {
       <h2 className="ml-2 text-lg font-semibold mb-2 text-[var(--accent-secondary)]">Program Logs</h2>
       <div
         ref={scrollContainerRef}
-        className="flex-grow overflow-y-auto bg-grey/90 p-2 text-xs font-mono hide-scrollbar"
+        className="min-h-0 flex-grow overflow-y-auto bg-grey/90 p-2 text-xs font-mono hide-scrollbar"
       >
         {logs.length === 0 ? (
           <p className="text-gray-500 italic">No logs yet...</p>
@@ -64,4 +65,4 @@ const LogPanel: React.FC<LogPanelProps> = ({ logs, className }) => {
   );
 };
 
-export default LogPanel; 
+export default LogPanel;

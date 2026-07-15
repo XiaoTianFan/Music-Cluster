@@ -649,7 +649,7 @@ async function captureActivationPaintSummary(client: CdpClient, sessionId: strin
 
 function routeStateExpression(): string {
   return `(() => {
-    const text = document.body?.innerText ?? '';
+    const text = document.body?.textContent ?? '';
     const html = document.documentElement?.innerHTML ?? '';
     const buttons = Array.from(document.querySelectorAll('button')).map(button => ({
       text: (button.textContent ?? '').replace(/\\s+/g, ' ').trim(),
@@ -675,12 +675,12 @@ function routeStateExpression(): string {
       hasTrainInfer: text.includes('5. Training') && text.includes('6. Inference'),
       hasProgramLogs: text.includes('Program Logs'),
       hasExtractButton: !!findButton('Extract Features'),
-      hasTrainButton: !!findButton('Train Network'),
+      hasTrainButton: !!findButton('Train Automatic'),
       hasInferButton: !!findButton('Infer Labels'),
       hasUploadedInferButton: !!findButton('Infer Uploaded Audio'),
       hasProcessButton: !!findButton('Process Data'),
       hasReduceButton: !!findButton('Reduce Dimensions'),
-      trainButtonDisabled: findButton('Train Network')?.disabled ?? null,
+      trainButtonDisabled: findButton('Train Automatic')?.disabled ?? null,
       inferButtonDisabled: findButton('Infer Labels')?.disabled ?? null,
       uploadedInferButtonDisabled: findButton('Infer Uploaded Audio')?.disabled ?? null,
       processButtonDisabled: findButton('Process Data')?.disabled ?? null,
@@ -2056,8 +2056,8 @@ async function runTrainingInferenceRouteSmoke(chromePath: string, url: string): 
       !state.hasStaleProcessErrorLog
     ), 'processed matrix to enable training');
 
-    const trainClick = await clickButtonByText(client, sessionId, 'Train Network');
-    assert.equal(trainClick.disabledBeforeClick, false, 'Train Network should be enabled once labels and processed data are ready.');
+    const trainClick = await clickButtonByText(client, sessionId, 'Train Automatic');
+    assert.equal(trainClick.disabledBeforeClick, false, 'Train Automatic should be enabled once labels and processed data are ready.');
 
     await waitForRouteState(client, sessionId, state => (
       state.hasProcessedTrainingInputLog &&
@@ -2207,8 +2207,8 @@ async function runUploadedInferenceRouteSmoke(chromePath: string, url: string): 
       !state.hasStaleProcessErrorLog
     ), 'processed matrix to enable uploaded-inference training');
 
-    const trainClick = await clickButtonByText(client, sessionId, 'Train Network');
-    assert.equal(trainClick.disabledBeforeClick, false, 'Train Network should be enabled before uploaded inference.');
+    const trainClick = await clickButtonByText(client, sessionId, 'Train Automatic');
+    assert.equal(trainClick.disabledBeforeClick, false, 'Train Automatic should be enabled before uploaded inference.');
 
     await waitForRouteState(client, sessionId, state => (
       state.hasProcessedTrainingInputLog &&
@@ -2309,8 +2309,8 @@ async function runRealAudioUploadedInferenceRouteSmoke(chromePath: string, url: 
       state.trainButtonDisabled === false
     ), 'seeded raw matrix to prepare from cache before real uploaded-inference audio');
 
-    const trainClick = await clickButtonByText(client, sessionId, 'Train Network');
-    assert.equal(trainClick.disabledBeforeClick, false, 'Train Network should be enabled before real uploaded-inference audio.');
+    const trainClick = await clickButtonByText(client, sessionId, 'Train Automatic');
+    assert.equal(trainClick.disabledBeforeClick, false, 'Train Automatic should be enabled before real uploaded-inference audio.');
 
     await waitForRouteState(client, sessionId, state => (
       state.hasRawTrainingInputLog &&
@@ -2429,8 +2429,8 @@ async function runProcessedRealAudioUploadedInferenceRouteSmoke(chromePath: stri
       !state.hasStaleProcessErrorLog
     ), 'real data-processing worker to process the training matrix before uploaded inference');
 
-    const trainClick = await clickButtonByText(client, sessionId, 'Train Network');
-    assert.equal(trainClick.disabledBeforeClick, false, 'Train Network should be enabled after real processing.');
+    const trainClick = await clickButtonByText(client, sessionId, 'Train Automatic');
+    assert.equal(trainClick.disabledBeforeClick, false, 'Train Automatic should be enabled after real processing.');
 
     await waitForRouteState(client, sessionId, state => (
       state.hasProcessedTrainingInputLog &&
@@ -2538,8 +2538,8 @@ async function runRawUploadedInferenceRouteSmoke(chromePath: string, url: string
       state.trainButtonDisabled === false
     ), 'seeded raw feature matrix to prepare from cache and enable training');
 
-    const trainClick = await clickButtonByText(client, sessionId, 'Train Network');
-    assert.equal(trainClick.disabledBeforeClick, false, 'Train Network should be enabled for raw uploaded inference.');
+    const trainClick = await clickButtonByText(client, sessionId, 'Train Automatic');
+    assert.equal(trainClick.disabledBeforeClick, false, 'Train Automatic should be enabled for raw uploaded inference.');
 
     await waitForRouteState(client, sessionId, state => (
       state.hasRawTrainingInputLog &&
@@ -2660,8 +2660,8 @@ async function runPcaUploadedInferenceRouteSmoke(chromePath: string, url: string
       !state.hasStaleReductionErrorLog
     ), 'processed matrix to auto-reduce with PCA and enable training');
 
-    const trainClick = await clickButtonByText(client, sessionId, 'Train Network');
-    assert.equal(trainClick.disabledBeforeClick, false, 'Train Network should be enabled after PCA reduction.');
+    const trainClick = await clickButtonByText(client, sessionId, 'Train Automatic');
+    assert.equal(trainClick.disabledBeforeClick, false, 'Train Automatic should be enabled after PCA reduction.');
 
     await waitForRouteState(client, sessionId, state => (
       state.hasReducedTrainingInputLog &&
@@ -2786,8 +2786,8 @@ async function runRealPcaUploadedInferenceRouteSmoke(chromePath: string, url: st
       !state.hasStaleReductionErrorLog
     ), 'real data-processing and Druid workers to process and reduce the training matrix', 120000);
 
-    const trainClick = await clickButtonByText(client, sessionId, 'Train Network');
-    assert.equal(trainClick.disabledBeforeClick, false, 'Train Network should be enabled after real PCA reduction.');
+    const trainClick = await clickButtonByText(client, sessionId, 'Train Automatic');
+    assert.equal(trainClick.disabledBeforeClick, false, 'Train Automatic should be enabled after real PCA reduction.');
 
     await waitForRouteState(client, sessionId, state => (
       state.hasReducedTrainingInputLog &&

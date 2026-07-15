@@ -20,7 +20,7 @@ test('ANNTrainingPerformancePanel renders four enlarged charts with labeled axes
   );
 
   assert.match(html, /Training Performance/);
-  assert.match(html, /min-h-\[660px\]/);
+  assert.match(html, /h-full min-h-0/);
   assert.equal((html.match(/data-ann-training-chart=/g) ?? []).length, 4);
   assert.equal((html.match(/aria-label="[^"]+ by epoch"/g) ?? []).length, 4);
   assert.equal((html.match(/>Epoch</g) ?? []).length, 4);
@@ -40,6 +40,6 @@ test('ANNTrainingPerformancePanel keeps the enlarged empty state before training
   );
 
   assert.match(html, /Waiting for a training run/);
-  assert.match(html, /min-h-\[560px\]/);
+  assert.match(html, /min-h-0 flex-1/);
   assert.match(html, /Train the network to see loss and accuracy history\./);
 });

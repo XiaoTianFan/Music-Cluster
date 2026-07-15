@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import NetworkVisualizationPanel from '../src/components/NetworkVisualizationPanel';
@@ -27,8 +29,12 @@ test('NetworkVisualizationPanel renders active layer hooks and node values after
     })
   );
 
-  assert.match(html, /Model Structure &amp; Internal State/);
+  assert.match(html, /Model Inspection/);
   assert.match(html, /data-ann-network-status="true">Trained model/);
+  assert.match(html, /data-ann-network-view="2d"/);
+  assert.match(html, /data-ann-network-view="3d"/);
+  assert.match(html, /network-mode-button-active" aria-pressed="true"[^>]*>.*?<span>3D<\/span>/);
+  assert.match(html, /data-ann-network-connection-hit="Input:0-&gt;Hidden 1:0"/);
   assert.match(html, /data-ann-network-layer="Input"[^>]+data-ann-network-layer-active="true"/);
   assert.match(html, /data-ann-network-layer="Hidden 1"[^>]+data-ann-network-layer-active="true"/);
   assert.match(html, /data-ann-network-layer="Output"[^>]+data-ann-network-layer-active="true"/);
@@ -54,4 +60,22 @@ test('NetworkVisualizationPanel renders a configuration hint before a model is r
 
   assert.match(html, /Configure labels, extract features, and prepare data to visualize the network\./);
   assert.match(html, /No network structure available yet\./);
+});
+
+test('network renderers use synchronized directional segments without particle or phantom-node overlays', () => {
+  const panelSource = readFileSync(resolve(process.cwd(), 'src/components/NetworkVisualizationPanel.tsx'), 'utf8');
+  const threeDSource = readFileSync(resolve(process.cwd(), 'src/components/Network3DView.tsx'), 'utf8');
+
+  assert.match(panelSource, /network-phase-segment-forward/);
+  assert.match(panelSource, /network-phase-segment-backward/);
+  assert.match(panelSource, /strokeDasharray="26 100"/);
+  assert.match(panelSource, /animation-timing-function: linear/);
+  assert.doesNotMatch(panelSource, /network-phase-pulse|ann-connection-pulse|animation-delay|network-3d-node-marker/);
+  assert.match(threeDSource, /THREE\.LineSegments/);
+  assert.match(threeDSource, /annNetworkConnectionObjects/);
+  assert.match(threeDSource, /annNetworkPhaseSegmentObjects/);
+  assert.match(threeDSource, /updatePhaseSegments/);
+  assert.match(threeDSource, /pulseDirection === 'backward' \? record\.target : record\.source/);
+  assert.match(threeDSource, /phaseConnectionIndices\.forEach/);
+  assert.doesNotMatch(threeDSource, /THREE\.Points|focusedNodeMarker|network-3d-node-marker|preserveDrawingBuffer/);
 });

@@ -163,7 +163,7 @@ const ANNTrainingPerformancePanel: React.FC<ANNTrainingPerformancePanelProps> = 
     const hasHistory = history.loss.length > 0 || history.acc.length > 0 || history.valLoss.length > 0 || history.valAcc.length > 0;
 
     return (
-        <BasePanel className={`min-h-[660px] ${className}`} title="Training Performance">
+        <BasePanel className={`flex h-full min-h-0 flex-col ${className}`} title="Training Performance">
             <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
                 <h2 className="ml-2 text-lg font-semibold text-[var(--accent-secondary)]">Training Performance</h2>
                 <p className="text-xs text-[var(--text-secondary)]">
@@ -171,11 +171,11 @@ const ANNTrainingPerformancePanel: React.FC<ANNTrainingPerformancePanelProps> = 
                 </p>
             </div>
             {!hasHistory ? (
-                <div className="flex min-h-[560px] items-center justify-center text-sm italic text-[var(--text-secondary)]">
+                <div className="flex min-h-0 flex-1 items-center justify-center text-sm italic text-[var(--text-secondary)]">
                     Train the network to see loss and accuracy history.
                 </div>
             ) : (
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto lg:grid-cols-2 hide-scrollbar">
                     <MetricChart label="Training Loss" points={history.loss} color="#ef4444" scale="loss" />
                     <MetricChart label="Training Accuracy" points={history.acc} color="#22c55e" scale="accuracy" />
                     <MetricChart label="Validation Loss" points={history.valLoss} color="#f97316" scale="loss" />

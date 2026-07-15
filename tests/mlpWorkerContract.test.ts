@@ -63,7 +63,6 @@ test('MlpWorkerController emits training metrics, activations, and completion fo
   await controller.handleMessage({ type: 'train', payload: trainingPayload }, sink.postMessage);
 
   assert.ok(sink.messages.some(message => message.type === 'epochMetrics'));
-  assert.ok(sink.messages.some(message => message.type === 'activationSnapshot'));
   const complete = sink.messages.find(message => message.type === 'trainingComplete');
   assert.ok(complete);
   assert.equal(Number.isFinite(complete.payload.finalMetrics.loss), true);
@@ -121,7 +120,7 @@ test('MlpWorkerController echoes requestId across the training lifecycle', async
     payload: trainingPayload,
   } as any, sink.postMessage);
 
-  assert.ok(sink.messages.length >= 3);
+  assert.ok(sink.messages.length >= 2);
   assert.ok(sink.messages.every(message => (message as any).requestId === 'train-123'));
 
   controller.dispose();
@@ -223,7 +222,7 @@ test('MlpWorkerController rejects model export and import without complete artif
   controller.dispose();
 });
 
-test('MlpWorkerController echoes requestId across the inference lifecycle', async () => {
+test('MlpWorkerController avoids resending unchanged weights during inference', async () => {
   const controller = new MlpWorkerController();
   const trainSink = collectMessages();
   const inferSink = collectMessages();
@@ -238,9 +237,28 @@ test('MlpWorkerController echoes requestId across the inference lifecycle', asyn
     },
   } as any, inferSink.postMessage);
 
-  assert.equal(inferSink.messages.length, 3);
-  assert.ok(inferSink.messages.some(message => message.type === 'modelStateSnapshot'));
+  assert.equal(inferSink.messages.length, 2);
+  assert.ok(inferSink.messages.some(message => message.type === 'activationSnapshot'));
+  assert.equal(inferSink.messages.some(message => message.type === 'modelStateSnapshot'), false);
   assert.ok(inferSink.messages.every(message => (message as any).requestId === 'infer-123'));
+
+  controller.dispose();
+});
+
+test('MlpWorkerController bounds heavy visualization snapshots in automatic training', async () => {
+  const controller = new MlpWorkerController();
+  const sink = collectMessages();
+
+  await controller.handleMessage({
+    type: 'train',
+    payload: { ...trainingPayload, trainIterations: 25 },
+  }, sink.postMessage);
+
+  assert.equal(sink.messages.filter(message => message.type === 'epochMetrics').length, 25);
+  assert.ok(sink.messages.filter(message => message.type === 'trainingSnapshot').length <= 10);
+  assert.equal(sink.messages.filter(message => message.type === 'activationSnapshot').length, 0);
+  assert.equal(sink.messages.filter(message => message.type === 'modelStateSnapshot').length, 0);
+  assert.ok(sink.messages.some(message => message.type === 'trainingComplete'));
 
   controller.dispose();
 });
@@ -371,6 +389,89 @@ test('MlpWorkerController advances exactly one epoch and can continue beyond the
   const thirdComplete = thirdEpochSink.messages.find(message => message.type === 'trainingComplete');
   assert.ok(thirdComplete);
   assert.equal(thirdComplete.payload.status.completedEpochs, 3);
+
+  controller.dispose();
+});
+
+test('MlpWorkerController switches managed execution modes and infers from a paused session', async () => {
+  const controller = new MlpWorkerController();
+  const startSink = collectMessages();
+
+  await controller.handleMessage({
+    type: 'train',
+    payload: {
+      ...trainingPayload,
+      trainIterations: 2,
+      executionMode: 'automatic',
+      managedExecution: true,
+    },
+  }, startSink.postMessage);
+
+  const ready = startSink.messages.find(message => message.type === 'trainingSessionReady');
+  assert.ok(ready);
+  assert.equal(ready.payload.status.completedEpochs, 0);
+  assert.equal(startSink.messages.some(message => message.type === 'trainingComplete'), false);
+
+  const automaticEpochSink = collectMessages();
+  await controller.handleMessage({ type: 'advanceTraining' }, automaticEpochSink.postMessage);
+  const automaticPause = automaticEpochSink.messages.find(message => message.type === 'trainingPaused');
+  assert.ok(automaticPause);
+  assert.equal(automaticPause.payload.status.completedEpochs, 1);
+
+  const stepModeSink = collectMessages();
+  await controller.handleMessage({
+    type: 'setTrainingMode',
+    payload: { executionMode: 'step' },
+  }, stepModeSink.postMessage);
+  const stepMode = stepModeSink.messages.find(message => message.type === 'trainingModeChanged');
+  assert.ok(stepMode);
+  assert.equal(stepMode.payload.status.mode, 'step');
+
+  const inferSink = collectMessages();
+  await controller.handleMessage({
+    type: 'infer',
+    payload: {
+      vectors: [[0, 0], [1, 1]],
+      songIds: ['song-a', 'song-b'],
+    },
+  }, inferSink.postMessage);
+  assert.ok(inferSink.messages.some(message => message.type === 'inferenceComplete'));
+
+  const epochModeSink = collectMessages();
+  await controller.handleMessage({
+    type: 'setTrainingMode',
+    payload: { executionMode: 'epoch' },
+  }, epochModeSink.postMessage);
+  const epochMode = epochModeSink.messages.find(message => message.type === 'trainingModeChanged');
+  assert.ok(epochMode);
+  assert.equal(epochMode.payload.status.mode, 'epoch');
+
+  const completionSink = collectMessages();
+  await controller.handleMessage({ type: 'advanceTraining' }, completionSink.postMessage);
+  const complete = completionSink.messages.find(message => message.type === 'trainingComplete');
+  assert.ok(complete);
+  assert.equal(complete.payload.status.completedEpochs, 2);
+
+  const targetModeSink = collectMessages();
+  await controller.handleMessage({
+    type: 'setTrainingMode',
+    payload: { executionMode: 'step' },
+  }, targetModeSink.postMessage);
+  const targetMode = targetModeSink.messages.find(message => message.type === 'trainingModeChanged');
+  assert.ok(targetMode);
+  assert.equal(targetMode.payload.status.mode, 'step');
+  assert.match(targetMode.payload.status.nextAction, /Add epochs/);
+
+  const continueSink = collectMessages();
+  await controller.handleMessage({
+    type: 'continueTraining',
+    payload: { additionalEpochs: 1, executionMode: 'step', managedExecution: true },
+  }, continueSink.postMessage);
+  const continued = continueSink.messages.find(message => message.type === 'trainingSessionReady');
+  assert.ok(continued);
+  assert.equal(continued.payload.status.completedEpochs, 2);
+  assert.equal(continued.payload.status.targetEpochs, 3);
+  assert.equal(continued.payload.status.mode, 'step');
 
   controller.dispose();
 });

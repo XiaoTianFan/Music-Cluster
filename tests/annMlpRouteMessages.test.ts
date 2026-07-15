@@ -20,7 +20,15 @@ test('getAnnMlpRouteMessageDisposition leaves scoped request-client replies to s
     'request-client'
   );
   assert.equal(
+    getAnnMlpRouteMessageDisposition({ type: 'trainingSnapshot', requestId: 'train-step-1' }, 'train-step-1'),
+    'request-client'
+  );
+  assert.equal(
     getAnnMlpRouteMessageDisposition({ type: 'epochMetrics', requestId: 'train-1' }, 'train-1'),
+    'request-client'
+  );
+  assert.equal(
+    getAnnMlpRouteMessageDisposition({ type: 'trainingModeChanged', requestId: 'mode-1' }, 'train-1'),
     'request-client'
   );
   assert.equal(

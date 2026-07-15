@@ -53,10 +53,10 @@ test('generated MLP worker bundle trains, exports, imports, infers, and resets w
   });
   const trainMessages = worker.messages.slice(trainStartIndex);
 
-  assert.ok(trainMessages.length >= 3);
+  assert.ok(trainMessages.length >= 2);
   assert.ok(trainMessages.every(message => message.requestId === 'bundle-train-123'));
   assert.ok(trainMessages.some(message => message.type === 'epochMetrics'));
-  assert.ok(trainMessages.some(message => message.type === 'activationSnapshot'));
+  assert.equal(trainMessages.some(message => message.type === 'activationSnapshot'), false);
   const trainingComplete = trainMessages.find(message => message.type === 'trainingComplete');
   assert.ok(trainingComplete);
   assert.equal(Number.isFinite(trainingComplete.payload.finalMetrics.loss), true);
@@ -109,13 +109,12 @@ test('generated MLP worker bundle trains, exports, imports, infers, and resets w
   });
   const inferMessages = worker.messages.slice(inferStartIndex);
 
-  assert.equal(inferMessages.length, 3);
+  assert.equal(inferMessages.length, 2);
   assert.ok(inferMessages.every(message => message.requestId === 'bundle-infer-123'));
   assert.equal(inferMessages[0].type, 'activationSnapshot');
-  assert.equal(inferMessages[1].type, 'modelStateSnapshot');
-  assert.equal(inferMessages[2].type, 'inferenceComplete');
-  assert.deepEqual(Object.keys(inferMessages[2].payload.results), ['song-a', 'song-d']);
-  Object.values(inferMessages[2].payload.results).forEach((result: any) => {
+  assert.equal(inferMessages[1].type, 'inferenceComplete');
+  assert.deepEqual(Object.keys(inferMessages[1].payload.results), ['song-a', 'song-d']);
+  Object.values(inferMessages[1].payload.results).forEach((result: any) => {
     assert.match(result.predictedLabel, /left|right/);
     assert.equal(Number.isFinite(result.confidence), true);
     assert.ok(result.confidence >= 0 && result.confidence <= 1);
