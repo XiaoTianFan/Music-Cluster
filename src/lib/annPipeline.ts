@@ -140,6 +140,53 @@ export interface ActivationSnapshot {
   layers: ActivationLayerSnapshot[];
 }
 
+export type AnnTrainingExecutionMode = 'automatic' | 'epoch' | 'step';
+export type AnnTrainingPhaseKind = 'input' | 'forward' | 'loss' | 'backward' | 'update' | 'epoch-complete';
+
+export interface AnnTrainingPhaseSnapshot {
+  phase: AnnTrainingPhaseKind;
+  label: string;
+  description: string;
+  epoch: number;
+  targetEpochs: number;
+  batchIndex: number;
+  batchCount: number;
+  activeLayerName?: string;
+  direction: 'forward' | 'backward' | 'none';
+  sampleLabel?: string;
+  predictedLabel?: string;
+  predictionConfidence?: number;
+  loss?: number;
+  meanAbsoluteWeightDelta?: number;
+}
+
+export interface DenseLayerWeightSnapshot {
+  layerName: string;
+  sourceLayerName: string;
+  inputUnits: number;
+  outputUnits: number;
+  weights: number[][];
+  biases: number[];
+  min: number;
+  max: number;
+  meanAbsolute: number;
+}
+
+export interface AnnModelStateSnapshot {
+  epoch: number;
+  phase?: AnnTrainingPhaseKind;
+  layers: DenseLayerWeightSnapshot[];
+}
+
+export interface AnnTrainingSessionStatus {
+  mode: AnnTrainingExecutionMode;
+  completedEpochs: number;
+  targetEpochs: number;
+  batchIndex: number;
+  batchCount: number;
+  nextAction: string;
+}
+
 export const canonicalFeatureOrder: FeatureDataKey[] = [
   'energy', 'entropy', 'loudness', 'rms', 'dynamicComplexity', 'bpm', 'bpmSlow', 'onsetRate',
   'keyStrength', 'tuningFrequency', 'rhythmConfidence', 'pitchSalienceMean', 'pitchSalienceStdDev',

@@ -62,6 +62,7 @@ test('generated MLP worker bundle trains, exports, imports, infers, and resets w
   assert.equal(Number.isFinite(trainingComplete.payload.finalMetrics.loss), true);
   assert.equal(Number.isFinite(trainingComplete.payload.finalMetrics.accuracy), true);
   assert.ok(trainingComplete.payload.activationSnapshot.layers.length >= 2);
+  assert.ok(trainingComplete.payload.modelStateSnapshot.layers.length >= 1);
 
   await worker.send({
     type: 'exportModel',
@@ -108,12 +109,13 @@ test('generated MLP worker bundle trains, exports, imports, infers, and resets w
   });
   const inferMessages = worker.messages.slice(inferStartIndex);
 
-  assert.equal(inferMessages.length, 2);
+  assert.equal(inferMessages.length, 3);
   assert.ok(inferMessages.every(message => message.requestId === 'bundle-infer-123'));
   assert.equal(inferMessages[0].type, 'activationSnapshot');
-  assert.equal(inferMessages[1].type, 'inferenceComplete');
-  assert.deepEqual(Object.keys(inferMessages[1].payload.results), ['song-a', 'song-d']);
-  Object.values(inferMessages[1].payload.results).forEach((result: any) => {
+  assert.equal(inferMessages[1].type, 'modelStateSnapshot');
+  assert.equal(inferMessages[2].type, 'inferenceComplete');
+  assert.deepEqual(Object.keys(inferMessages[2].payload.results), ['song-a', 'song-d']);
+  Object.values(inferMessages[2].payload.results).forEach((result: any) => {
     assert.match(result.predictedLabel, /left|right/);
     assert.equal(Number.isFinite(result.confidence), true);
     assert.ok(result.confidence >= 0 && result.confidence <= 1);
@@ -128,4 +130,36 @@ test('generated MLP worker bundle trains, exports, imports, infers, and resets w
   assert.ok(reset);
   assert.equal(reset.type, 'mlpResetComplete');
   assert.equal(reset.requestId, 'bundle-reset-123');
+});
+
+test('generated MLP worker bundle pauses by epoch and continues the live model', async () => {
+  const worker = createWorkerBundleHarness('mlp-worker.bundled.js');
+
+  await worker.send({
+    type: 'train',
+    requestId: 'bundle-epoch-start',
+    payload: { ...trainingPayload, trainIterations: 1, executionMode: 'epoch' },
+  });
+  const ready = worker.messages.find(message => message.type === 'trainingSessionReady' && message.requestId === 'bundle-epoch-start');
+  assert.ok(ready);
+  assert.equal(ready.payload.status.completedEpochs, 0);
+
+  await worker.send({ type: 'advanceTraining', requestId: 'bundle-epoch-advance' });
+  const firstComplete = worker.messages.find(message => message.type === 'trainingComplete' && message.requestId === 'bundle-epoch-advance');
+  assert.ok(firstComplete);
+  assert.equal(firstComplete.payload.status.completedEpochs, 1);
+
+  await worker.send({
+    type: 'continueTraining',
+    requestId: 'bundle-epoch-continue',
+    payload: { additionalEpochs: 1, executionMode: 'epoch' },
+  });
+  const continued = worker.messages.find(message => message.type === 'trainingSessionReady' && message.requestId === 'bundle-epoch-continue');
+  assert.ok(continued);
+  assert.equal(continued.payload.status.targetEpochs, 2);
+
+  await worker.send({ type: 'advanceTraining', requestId: 'bundle-epoch-finish' });
+  const secondComplete = worker.messages.find(message => message.type === 'trainingComplete' && message.requestId === 'bundle-epoch-finish');
+  assert.ok(secondComplete);
+  assert.equal(secondComplete.payload.status.completedEpochs, 2);
 });

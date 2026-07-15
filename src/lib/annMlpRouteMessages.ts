@@ -15,6 +15,10 @@ export type AnnMlpRouteMessageDisposition = 'request-client' | 'stale' | 'legacy
 const mlpRequestClientMessageTypes = new Set([
   'epochMetrics',
   'activationSnapshot',
+  'modelStateSnapshot',
+  'trainingPhase',
+  'trainingSessionReady',
+  'trainingPaused',
   'trainingComplete',
   'inferenceComplete',
   'modelExportComplete',

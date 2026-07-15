@@ -135,10 +135,15 @@ import {
 import { createAnnValidationPlan } from '@/lib/annValidationPlan';
 import {
     type ActivationSnapshot,
+    type AnnModelStateSnapshot,
+    type AnnTrainingExecutionMode,
+    type AnnTrainingPhaseSnapshot,
+    type AnnTrainingSessionStatus,
     type FeatureMatrix,
     type FeatureMatrixStructure,
     type InferenceResult as SharedInferenceResult,
     type ProcessingStats,
+    type TrainingInputKind,
     type TrainingPipelineSnapshot,
     prepareFeatureMatrix,
 } from '@/lib/annPipeline';
@@ -225,6 +230,27 @@ interface TrainPayload {
     splitRatio: number;
     seed: number;
     activationSampleSongId?: string;
+    executionMode?: AnnTrainingExecutionMode;
+}
+
+interface TrainingRunContext {
+    inputKind: TrainingInputKind;
+    selectedFeatureIds: string[];
+    inputDimension: number;
+    trainingLabels: string[];
+    trainingVectors: number[][];
+    dataSource: { songIds: string[]; vectors: number[][] };
+    pipelineSnapshot: TrainingPipelineSnapshot;
+    networkConfig: MLPConfig;
+    seed: number;
+}
+
+interface TrainingWorkerResult {
+    finalMetrics?: { loss?: number; accuracy?: number };
+    activationSnapshot?: ActivationSnapshot;
+    modelStateSnapshot?: AnnModelStateSnapshot;
+    phaseSnapshot?: AnnTrainingPhaseSnapshot;
+    status?: AnnTrainingSessionStatus;
 }
 
 interface InferPayload {
@@ -372,6 +398,11 @@ export default function ANNPage() {
     const [modelComparisonRuns, setModelComparisonRuns] = useState<AnnModelComparisonRun[]>([]);
     const [isAnnModelComparisonHydrated, setIsAnnModelComparisonHydrated] = useState<boolean>(false);
     const [activationSnapshot, setActivationSnapshot] = useState<ActivationSnapshot | null>(null);
+    const [modelStateSnapshot, setModelStateSnapshot] = useState<AnnModelStateSnapshot | null>(null);
+    const [trainingPhaseSnapshot, setTrainingPhaseSnapshot] = useState<AnnTrainingPhaseSnapshot | null>(null);
+    const [trainingSessionStatus, setTrainingSessionStatus] = useState<AnnTrainingSessionStatus | null>(null);
+    const [trainingExecutionMode, setTrainingExecutionMode] = useState<AnnTrainingExecutionMode>('automatic');
+    const [isTrainingSessionActive, setIsTrainingSessionActive] = useState<boolean>(false);
     const [latestFeatureStructure, setLatestFeatureStructure] = useState<FeatureMatrixStructure | null>(null);
     const [inferenceMode, setInferenceMode] = useState<'dataset' | 'uploaded' | null>(null);
     const [useDimensionalityReduction, setUseDimensionalityReduction] = useState<boolean>(false);
@@ -414,6 +445,7 @@ export default function ANNPage() {
     const annSetupLoadAttemptedRef = useRef<boolean>(false);
     const annModelComparisonLoadAttemptedRef = useRef<boolean>(false);
     const annUploadedDatasetReattachmentLoadAttemptedRef = useRef<boolean>(false);
+    const trainingRunContextRef = useRef<TrainingRunContext | null>(null);
 
     // --- Other Refs ---
     const audioContextRef = useRef<AudioContext | null>(null);
@@ -593,6 +625,11 @@ export default function ANNPage() {
         setValidationRunFoldResults(null);
         setValidationRunError(null);
         setActivationSnapshot(null);
+        setModelStateSnapshot(null);
+        setTrainingPhaseSnapshot(null);
+        setTrainingSessionStatus(null);
+        setIsTrainingSessionActive(false);
+        trainingRunContextRef.current = null;
         setTrainedModelContextSource(null);
         if (mlpWorkerRef.current) {
             const requestId = createWorkerRequestId('ann-mlp-reset');
@@ -637,6 +674,12 @@ export default function ANNPage() {
                 break;
             case 'activationSnapshot':
                 setActivationSnapshot(payload as ActivationSnapshot);
+                break;
+            case 'modelStateSnapshot':
+                setModelStateSnapshot(payload as AnnModelStateSnapshot);
+                break;
+            case 'trainingPhase':
+                setTrainingPhaseSnapshot(payload as AnnTrainingPhaseSnapshot);
                 break;
             default:
                 break;
@@ -1215,7 +1258,69 @@ export default function ANNPage() {
 
     }, [processedData, unprocessedData, reductionMethod, targetDimensions, isReducing, addLogMessage, invalidateModel]);
 
-    const handleTrain = useCallback(() => { 
+    const finalizeTrainingRun = useCallback((payload: TrainingWorkerResult, runId: string, logPrefix = 'Training complete.') => {
+        const context = trainingRunContextRef.current;
+        if (!context) {
+            throw new Error('Training completed without retained pipeline metadata.');
+        }
+        const completedEpochs = payload.status?.completedEpochs ?? context.networkConfig.epochs;
+        const completedNetworkConfig: MLPConfig = {
+            ...context.networkConfig,
+            epochs: completedEpochs,
+        };
+        const nextTrainingSummary = getAnnTrainingSummary({
+            inputKind: context.inputKind,
+            selectedFeatureIds: context.selectedFeatureIds,
+            inputDimension: context.inputDimension,
+            trainingLabels: context.trainingLabels,
+            networkConfig: completedNetworkConfig,
+            seed: context.seed,
+            finalMetrics: payload.finalMetrics,
+        });
+        const nextFeatureSignalSummary = getAnnFeatureSignalSummary({
+            inputKind: context.inputKind,
+            vectors: context.trainingVectors,
+            labels: context.trainingLabels,
+            dimensionLabels: getAnnFeatureSignalDimensionLabels({
+                inputKind: context.inputKind,
+                inputDimension: context.inputDimension,
+                rawColumnLabels: context.pipelineSnapshot.rawMatrix.columnLabels,
+                reductionMethod: context.pipelineSnapshot.reduction?.method ?? null,
+            }),
+        });
+
+        trainingRunContextRef.current = { ...context, networkConfig: completedNetworkConfig };
+        setNetworkConfig(previous => previous ? { ...previous, epochs: completedEpochs } : previous);
+        setIsTraining(false);
+        setIsTrainingSessionActive(false);
+        setIsModelTrained(true);
+        setTrainedModelContextSource('trained');
+        setTrainingPhaseSnapshot(null);
+        setTrainingSessionStatus(payload.status ?? null);
+        if (payload.activationSnapshot) setActivationSnapshot(payload.activationSnapshot);
+        if (payload.modelStateSnapshot) setModelStateSnapshot(payload.modelStateSnapshot);
+        setTrainingSummary(nextTrainingSummary);
+        setFeatureSignalSummary(nextFeatureSignalSummary);
+        setTrainedModelInputData({
+            inputKind: context.inputKind,
+            songIds: [...context.dataSource.songIds],
+            vectors: context.dataSource.vectors.map(vector => [...vector]),
+        });
+        latestModelComparisonRunIdRef.current = runId;
+        setModelComparisonRuns(previousRuns => [
+            ...previousRuns,
+            createAnnModelComparisonRun({
+                id: runId,
+                runNumber: Math.max(0, ...previousRuns.map(run => run.runNumber)) + 1,
+                trainedAt: new Date().toISOString(),
+                trainingSummary: nextTrainingSummary,
+            }),
+        ]);
+        const finalAccuracy = payload.finalMetrics?.accuracy;
+        addLogMessage(`${logPrefix}${finalAccuracy !== undefined ? ` Final Test Accuracy: ${(finalAccuracy * 100).toFixed(2)}%` : ''}`, 'complete');
+    }, [addLogMessage]);
+
+    const handleTrain = useCallback((executionMode: AnnTrainingExecutionMode = trainingExecutionMode) => {
         if (isTraining) {
             addLogMessage('Training already in progress.', 'warn');
             return;
@@ -1308,12 +1413,32 @@ export default function ANNPage() {
             splitRatio: networkConfig.splitRatio,
             seed: trainingSeed,
             activationSampleSongId,
+            executionMode,
+        };
+        trainingRunContextRef.current = {
+            inputKind,
+            selectedFeatureIds: Array.from(selectedFeatures),
+            inputDimension: dataDimension,
+            trainingLabels: [...trainingLabels],
+            trainingVectors: trainingVectors.map(vector => [...vector]),
+            dataSource: {
+                songIds: [...dataSource.songIds],
+                vectors: dataSource.vectors.map(vector => [...vector]),
+            },
+            pipelineSnapshot: snapshotResult.snapshot,
+            networkConfig: { ...networkConfig, nodesPerLayer: [...networkConfig.nodesPerLayer] },
+            seed: trainingSeed,
         };
 
         // 4. Send to Worker & Set Flags
         setTrainingHistory({ loss: [], acc: [], valLoss: [], valAcc: [] }); // Clear previous history
         setCurrentEpoch(0);
         setActivationSnapshot(null);
+        setModelStateSnapshot(null);
+        setTrainingPhaseSnapshot(null);
+        setTrainingSessionStatus(null);
+        setIsTrainingSessionActive(false);
+        setTrainingExecutionMode(executionMode);
         setIsTraining(true); 
         setIsModelTrained(false);
         setInferenceResults({});
@@ -1331,13 +1456,13 @@ export default function ANNPage() {
         setValidationRunError(null);
         const requestId = createWorkerRequestId('ann-train');
         activeMlpRequestIdRef.current = requestId;
-        sendWorkerRequest<AnnWorkerReply, unknown, { finalMetrics?: { loss?: number; accuracy?: number }; activationSnapshot?: ActivationSnapshot }>({
+        sendWorkerRequest<AnnWorkerReply, unknown, TrainingWorkerResult>({
             worker: mlpWorkerRef.current as unknown as WorkerRequestTarget<AnnWorkerReply, unknown>,
             requestId,
             message: { type: 'train', requestId, payload: trainPayload },
-            successTypes: ['trainingComplete'],
+            successTypes: executionMode === 'automatic' ? ['trainingComplete'] : ['trainingSessionReady'],
             errorTypes: ['mlpError'],
-            progressTypes: ['epochMetrics', 'activationSnapshot'],
+            progressTypes: ['epochMetrics', 'activationSnapshot', 'modelStateSnapshot', 'trainingPhase'],
             onProgress: handleMlpProgress,
             getResult: message => {
                 if (!message.payload) throw new Error('MLP training returned no payload.');
@@ -1347,49 +1472,18 @@ export default function ANNPage() {
             isRequestActive: isActiveMlpRequest,
             onSettled: clearActiveMlpRequest,
         }).then(payload => {
+            if (executionMode === 'automatic') {
+                finalizeTrainingRun(payload, requestId);
+                return;
+            }
             setIsTraining(false);
-            setIsModelTrained(true);
+            setIsTrainingSessionActive(true);
+            setTrainingSessionStatus(payload.status ?? null);
             if (payload.activationSnapshot) setActivationSnapshot(payload.activationSnapshot);
-            const finalAcc = payload.finalMetrics?.accuracy;
-            const nextTrainingSummary = getAnnTrainingSummary({
-                inputKind,
-                selectedFeatureIds: selectedFeatures,
-                inputDimension: dataDimension,
-                trainingLabels,
-                networkConfig,
-                seed: trainingSeed,
-                finalMetrics: payload.finalMetrics,
-            });
-            const nextFeatureSignalSummary = getAnnFeatureSignalSummary({
-                inputKind,
-                vectors: trainingVectors,
-                labels: trainingLabels,
-                dimensionLabels: getAnnFeatureSignalDimensionLabels({
-                    inputKind,
-                    inputDimension: dataDimension,
-                    rawColumnLabels: snapshotResult.snapshot.rawMatrix.columnLabels,
-                    reductionMethod: snapshotResult.snapshot.reduction?.method ?? null,
-                }),
-            });
-            setTrainingSummary(nextTrainingSummary);
-            setFeatureSignalSummary(nextFeatureSignalSummary);
-            setTrainedModelInputData({
-                inputKind,
-                songIds: [...dataSource.songIds],
-                vectors: dataSource.vectors.map(vector => [...vector]),
-            });
-            setTrainedModelContextSource('trained');
-            latestModelComparisonRunIdRef.current = requestId;
-            setModelComparisonRuns(previousRuns => [
-                ...previousRuns,
-                createAnnModelComparisonRun({
-                    id: requestId,
-                    runNumber: Math.max(0, ...previousRuns.map(run => run.runNumber)) + 1,
-                    trainedAt: new Date().toISOString(),
-                    trainingSummary: nextTrainingSummary,
-                }),
-            ]);
-            addLogMessage(`Training complete.${finalAcc !== undefined ? ` Final Test Accuracy: ${(finalAcc * 100).toFixed(2)}%` : ''}`, 'complete');
+            if (payload.modelStateSnapshot) setModelStateSnapshot(payload.modelStateSnapshot);
+            addLogMessage(executionMode === 'step'
+                ? 'Internal step training is ready. Advance the input propagation phase when ready.'
+                : 'Epoch-by-epoch training is ready. Train the first epoch when ready.', 'complete');
         }).catch(error => {
             const errorMessage = error instanceof Error ? error.message : String(error);
             setIsTraining(false);
@@ -1397,16 +1491,95 @@ export default function ANNPage() {
             setInferenceMode(null);
             inferenceModeRef.current = null;
             setIsModelTrained(false);
+            setIsTrainingSessionActive(false);
+            setTrainingSessionStatus(null);
+            setTrainingPhaseSnapshot(null);
             setTrainingSummary(null);
             setFeatureSignalSummary(null);
             setIsAnalyzingPermutationImportance(false);
             setPermutationImportanceSummary(null);
             setPermutationImportanceError(null);
             setTrainedModelContextSource(null);
+            trainingRunContextRef.current = null;
             addLogMessage(`MLP training failed: ${errorMessage}`, 'error');
         });
 
-    }, [isTraining, mlpWorkerRef.current, networkConfig, useDimensionalityReduction, reducedDataPoints, processedData, unprocessedData, namedLists, inputDimension, reductionDimensions, addLogMessage, latestFeatureStructure, processingStats, reductionMethod, selectedFeatures, handleMlpProgress, isActiveMlpRequest, clearActiveMlpRequest]);
+    }, [addLogMessage, clearActiveMlpRequest, finalizeTrainingRun, handleMlpProgress, isActiveMlpRequest, isTraining, latestFeatureStructure, namedLists, networkConfig, processedData, processingStats, reducedDataPoints, reductionDimensions, reductionMethod, selectedFeatures, trainingExecutionMode, unprocessedData, useDimensionalityReduction]);
+
+    const handleAdvanceTraining = useCallback(() => {
+        if (isTraining || !isTrainingSessionActive || !mlpWorkerRef.current) return;
+        setIsTraining(true);
+        const requestId = createWorkerRequestId('ann-advance-training');
+        activeMlpRequestIdRef.current = requestId;
+        sendWorkerRequest<AnnWorkerReply, unknown, TrainingWorkerResult>({
+            worker: mlpWorkerRef.current as unknown as WorkerRequestTarget<AnnWorkerReply, unknown>,
+            requestId,
+            message: { type: 'advanceTraining', requestId },
+            successTypes: ['trainingPaused', 'trainingComplete'],
+            errorTypes: ['mlpError'],
+            progressTypes: ['epochMetrics', 'activationSnapshot', 'modelStateSnapshot', 'trainingPhase'],
+            onProgress: handleMlpProgress,
+            getResult: message => message.payload ?? {},
+            getErrorMessage: message => getAnnWorkerErrorMessage(message, 'Could not advance training.'),
+            isRequestActive: isActiveMlpRequest,
+            onSettled: clearActiveMlpRequest,
+        }).then(payload => {
+            if (payload.finalMetrics) {
+                finalizeTrainingRun(payload, requestId);
+                return;
+            }
+            setIsTraining(false);
+            setIsTrainingSessionActive(true);
+            setTrainingSessionStatus(payload.status ?? null);
+            if (payload.phaseSnapshot) setTrainingPhaseSnapshot(payload.phaseSnapshot);
+        }).catch(error => {
+            setIsTraining(false);
+            addLogMessage(`Could not advance training: ${error instanceof Error ? error.message : String(error)}`, 'error');
+        });
+    }, [addLogMessage, clearActiveMlpRequest, finalizeTrainingRun, handleMlpProgress, isActiveMlpRequest, isTraining, isTrainingSessionActive]);
+
+    const handleContinueTraining = useCallback((additionalEpochs: number, executionMode: AnnTrainingExecutionMode) => {
+        if (isTraining || isTrainingSessionActive || !mlpWorkerRef.current || trainedModelContextSource !== 'trained' || !trainingRunContextRef.current) return;
+        setIsTraining(true);
+        setIsModelTrained(false);
+        setTrainingExecutionMode(executionMode);
+        setTrainingPhaseSnapshot(null);
+        setInferenceResults({});
+        setUploadedInferenceResult(null);
+        setPermutationImportanceSummary(null);
+        setValidationRunSummary(null);
+        setValidationRunFoldResults(null);
+        const requestId = createWorkerRequestId('ann-continue-training');
+        activeMlpRequestIdRef.current = requestId;
+        sendWorkerRequest<AnnWorkerReply, unknown, TrainingWorkerResult>({
+            worker: mlpWorkerRef.current as unknown as WorkerRequestTarget<AnnWorkerReply, unknown>,
+            requestId,
+            message: { type: 'continueTraining', requestId, payload: { additionalEpochs, executionMode } },
+            successTypes: executionMode === 'automatic' ? ['trainingComplete'] : ['trainingSessionReady'],
+            errorTypes: ['mlpError'],
+            progressTypes: ['epochMetrics', 'activationSnapshot', 'modelStateSnapshot', 'trainingPhase'],
+            onProgress: handleMlpProgress,
+            getResult: message => message.payload ?? {},
+            getErrorMessage: message => getAnnWorkerErrorMessage(message, 'Could not continue training.'),
+            isRequestActive: isActiveMlpRequest,
+            onSettled: clearActiveMlpRequest,
+        }).then(payload => {
+            if (executionMode === 'automatic') {
+                finalizeTrainingRun(payload, requestId, 'Further training complete.');
+                return;
+            }
+            setIsTraining(false);
+            setIsTrainingSessionActive(true);
+            setTrainingSessionStatus(payload.status ?? null);
+            if (payload.activationSnapshot) setActivationSnapshot(payload.activationSnapshot);
+            if (payload.modelStateSnapshot) setModelStateSnapshot(payload.modelStateSnapshot);
+            addLogMessage(`Further training is ready for ${additionalEpochs} more epoch${additionalEpochs === 1 ? '' : 's'}.`, 'complete');
+        }).catch(error => {
+            setIsTraining(false);
+            setIsModelTrained(true);
+            addLogMessage(`Could not continue training: ${error instanceof Error ? error.message : String(error)}`, 'error');
+        });
+    }, [addLogMessage, clearActiveMlpRequest, finalizeTrainingRun, handleMlpProgress, isActiveMlpRequest, isTraining, isTrainingSessionActive, trainedModelContextSource]);
 
     const handleInfer = useCallback(() => {
         if (isInferring) {
@@ -2521,7 +2694,7 @@ export default function ANNPage() {
 
             const requestId = createWorkerRequestId('ann-import-trained-model');
             activeMlpRequestIdRef.current = requestId;
-            await sendWorkerRequest<AnnWorkerReply, unknown, { outputLabels: string[] }>({
+            const importResult = await sendWorkerRequest<AnnWorkerReply, unknown, { outputLabels: string[]; modelStateSnapshot?: AnnModelStateSnapshot }>({
                 worker: mlpWorkerRef.current as unknown as WorkerRequestTarget<AnnWorkerReply, unknown>,
                 requestId,
                 message: {
@@ -2642,6 +2815,11 @@ export default function ANNPage() {
             setValidationRunFoldResults(null);
             setValidationRunError(null);
             setActivationSnapshot(null);
+            setModelStateSnapshot(importResult.modelStateSnapshot ?? null);
+            setTrainingPhaseSnapshot(null);
+            setTrainingSessionStatus(null);
+            setIsTrainingSessionActive(false);
+            trainingRunContextRef.current = null;
             setIsModelTrained(true);
             setTrainedModelContextSource('imported');
             const importedComparisonRun = parsed.comparisonRun;
@@ -3023,8 +3201,8 @@ export default function ANNPage() {
 
     // NEW: Memoized variable for any running process
     const isAnyProcessRunning = useMemo(() =>
-        isExtracting || isProcessingData || isReducing || isTraining || isInferring || isValidating || isAnalyzingPermutationImportance,
-        [isAnalyzingPermutationImportance, isExtracting, isProcessingData, isReducing, isTraining, isInferring, isValidating]
+        isExtracting || isProcessingData || isReducing || isTraining || isTrainingSessionActive || isInferring || isValidating || isAnalyzingPermutationImportance,
+        [isAnalyzingPermutationImportance, isExtracting, isProcessingData, isReducing, isTraining, isTrainingSessionActive, isInferring, isValidating]
     );
     const annProcessStatus = useMemo(() => getAnnProcessStatus({
         allWorkersReady,
@@ -3032,10 +3210,24 @@ export default function ANNPage() {
         isProcessingData,
         isReducing,
         isTraining,
+        isTrainingSessionActive,
         isInferring,
         isValidating,
         isAnalyzingPermutationImportance,
-    }), [allWorkersReady, isAnalyzingPermutationImportance, isExtracting, isProcessingData, isReducing, isTraining, isInferring, isValidating]);
+    }), [allWorkersReady, isAnalyzingPermutationImportance, isExtracting, isProcessingData, isReducing, isTraining, isTrainingSessionActive, isInferring, isValidating]);
+
+    const canContinueTraining = isModelTrained
+        && trainedModelContextSource === 'trained'
+        && trainingRunContextRef.current !== null
+        && trainingSessionStatus !== null
+        && trainingSessionStatus.completedEpochs >= trainingSessionStatus.targetEpochs;
+    const continueTrainingDisabledReason = canContinueTraining
+        ? null
+        : trainedModelContextSource === 'imported'
+            ? 'Imported models do not include the optimizer and training rows needed to continue.'
+            : !isModelTrained
+                ? 'Complete a local training target before adding epochs.'
+                : 'The local training session is no longer available.';
 
     const trainedModelExportDisabledReason = useMemo(() => {
         if (!mlpWorkerReady) return 'MLP worker is not ready.';
@@ -3252,12 +3444,9 @@ export default function ANNPage() {
             </div>
             )}
 
-            {/* NEW: Added wrapping div with height constraint */}
-            <div className='h-[85vh]'>
-                 {/* MODIFIED: Applied grid styles from page.tsx */}
-                 <div className="px-2 py-2 grid grid-cols-[3fr_1fr] grid-rows-[3fr_1fr] min-h-full max-h-full gap-2 flex-grow">
-                     {/* Left Column (Scrollable) - MODIFIED col-span */}
-                     <div className="col-span-1 md:col-span-1 flex flex-col gap-4 overflow-y-auto h-[85vh] pr-2 hide-scrollbar">
+            <div className='h-auto md:h-[85vh]'>
+                 <div className="px-2 py-2 grid grid-cols-1 md:grid-cols-[3fr_1fr] grid-rows-none md:grid-rows-[3fr_1fr] min-h-full md:max-h-full gap-2 flex-grow">
+                     <div className="col-span-1 flex flex-col gap-4 overflow-visible h-auto pr-0 md:overflow-y-auto md:h-[85vh] md:pr-2 hide-scrollbar">
                          <DndContext onDragEnd={handleDragEnd}>
                              <LabelingPanel
                                  songs={songs}
@@ -3301,13 +3490,15 @@ export default function ANNPage() {
                              outputDimension={outputDimension}
                              labelNames={Array.from(labelMap.keys())}
                              activationSnapshot={activationSnapshot}
-                             isTraining={isTraining}
+                             modelStateSnapshot={modelStateSnapshot}
+                             trainingPhaseSnapshot={trainingPhaseSnapshot}
+                             isTraining={isTraining || isTrainingSessionActive}
                              isModelTrained={isModelTrained}
                          />
-                         <ANNTrainingPerformancePanel
-                             history={trainingHistory}
-                             isTraining={isTraining}
-                             currentEpoch={currentEpoch}
+                          <ANNTrainingPerformancePanel
+                              history={trainingHistory}
+                              isTraining={isTraining}
+                              currentEpoch={currentEpoch}
                          />
                          <LogPanel 
                             className="col-span-1 row-span-1 h-[30vh]" // Updated spans
@@ -3323,9 +3514,10 @@ export default function ANNPage() {
                              mlpWorkerReady={mlpWorkerReady}
                              isExtracting={isExtracting}
                              isProcessingData={isProcessingData}
-                             isReducing={isReducing}
-                             isTraining={isTraining}
-                             isInferring={isInferring}
+                              isReducing={isReducing}
+                              isTraining={isTraining}
+                              isTrainingSessionActive={isTrainingSessionActive}
+                              isInferring={isInferring}
                              canProcess={processedData === null && hasCurrentFeatureRows}
                              canReduce={processedData !== null}
                              canTrain={canTrain}
@@ -3334,6 +3526,11 @@ export default function ANNPage() {
                              canInfer={canInfer}
                              inferDisabledReason={inferDisabledReason}
                              trainingSummary={trainingSummary}
+                             trainingExecutionMode={trainingExecutionMode}
+                             trainingSessionStatus={trainingSessionStatus}
+                             trainingPhaseSnapshot={trainingPhaseSnapshot}
+                             canContinueTraining={canContinueTraining}
+                             continueTrainingDisabledReason={continueTrainingDisabledReason}
                              featureSignalSummary={featureSignalSummary}
                              evaluationSummary={evaluationSummary}
                              permutationImportanceSummary={permutationImportanceSummary}
@@ -3383,6 +3580,9 @@ export default function ANNPage() {
                              targetDimensions={targetDimensions}
                              onTargetDimensionsChange={handleTargetDimensionsChange}
                              onTrain={handleTrain}
+                             onTrainingExecutionModeChange={setTrainingExecutionMode}
+                             onAdvanceTraining={handleAdvanceTraining}
+                             onContinueTraining={handleContinueTraining}
                              onInfer={handleInfer}
                              onRunPermutationImportance={handleRunPermutationImportance}
                              onCancelPermutationImportance={handleCancelPermutationImportance}

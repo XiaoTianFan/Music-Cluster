@@ -495,6 +495,8 @@ test('ANNControlsPanel renders training summary after a model is trained', () =>
 
   const html = renderPanel({
     trainingSummary,
+    trainingExecutionMode: 'epoch',
+    canContinueTraining: true,
   });
 
   assert.match(html, /Training summary/);
@@ -512,6 +514,49 @@ test('ANNControlsPanel renders training summary after a model is trained', () =>
   assert.match(html, /Some labels have fewer than 5 songs: Rock \(3\), Jazz \(2\)/);
   assert.match(html, /Rock/);
   assert.match(html, /Jazz/);
+  assert.match(html, /Further training/);
+  assert.match(html, /Current total: 40 epochs/);
+  assert.match(html, /Additional epochs/);
+  assert.match(html, />Continue</);
+});
+
+test('ANNControlsPanel renders internal training phases and an explicit advance action', () => {
+  const html = renderPanel({
+    isTrainingSessionActive: true,
+    trainingExecutionMode: 'step',
+    trainingSessionStatus: {
+      mode: 'step',
+      completedEpochs: 1,
+      targetEpochs: 4,
+      batchIndex: 1,
+      batchCount: 3,
+      nextAction: 'Advance the next internal training phase.',
+    },
+    trainingPhaseSnapshot: {
+      phase: 'backward',
+      label: 'Backpropagate through hidden_1',
+      description: 'The loss signal travels backward through hidden_1.',
+      epoch: 2,
+      targetEpochs: 4,
+      batchIndex: 2,
+      batchCount: 3,
+      activeLayerName: 'hidden_1',
+      direction: 'backward',
+      sampleLabel: 'Rock',
+      predictedLabel: 'Jazz',
+      predictionConfidence: 0.72,
+      loss: 0.41,
+    },
+  });
+
+  assert.match(html, /data-ann-training-session="active"/);
+  assert.match(html, /Backpropagate through hidden_1/);
+  assert.match(html, /The loss signal travels backward through hidden_1[.]/);
+  assert.match(html, /1 [/] 4 epochs/);
+  assert.match(html, /Jazz [(]72[.]0%[)]/);
+  assert.match(html, /0.4100/);
+  assert.match(html, /Next Training Phase/);
+  assert.doesNotMatch(html, /data-ann-start-training="step"/);
 });
 
 test('ANNControlsPanel renders feature signal analysis for trained inputs', () => {

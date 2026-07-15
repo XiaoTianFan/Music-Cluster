@@ -238,7 +238,8 @@ test('MlpWorkerController echoes requestId across the inference lifecycle', asyn
     },
   } as any, inferSink.postMessage);
 
-  assert.equal(inferSink.messages.length, 2);
+  assert.equal(inferSink.messages.length, 3);
+  assert.ok(inferSink.messages.some(message => message.type === 'modelStateSnapshot'));
   assert.ok(inferSink.messages.every(message => (message as any).requestId === 'infer-123'));
 
   controller.dispose();
@@ -322,6 +323,99 @@ test('MlpWorkerController emits mlpError for invalid training rows', async () =>
   assert.equal(sink.messages.length, 1);
   assert.equal(sink.messages[0].type, 'mlpError');
   assert.match(sink.messages[0].payload.error, /Unknown label/);
+
+  controller.dispose();
+});
+
+test('MlpWorkerController advances exactly one epoch and can continue beyond the original target', async () => {
+  const controller = new MlpWorkerController();
+  const startSink = collectMessages();
+  const firstEpochSink = collectMessages();
+  const secondEpochSink = collectMessages();
+  const continueSink = collectMessages();
+  const thirdEpochSink = collectMessages();
+
+  await controller.handleMessage({
+    type: 'train',
+    payload: { ...trainingPayload, trainIterations: 2, executionMode: 'epoch' },
+  }, startSink.postMessage);
+  const ready = startSink.messages.find(message => message.type === 'trainingSessionReady');
+  assert.ok(ready);
+  assert.equal(ready.payload.status.completedEpochs, 0);
+  assert.equal(ready.payload.status.targetEpochs, 2);
+
+  await controller.handleMessage({ type: 'advanceTraining' }, firstEpochSink.postMessage);
+  const firstPause = firstEpochSink.messages.find(message => message.type === 'trainingPaused');
+  assert.ok(firstPause);
+  assert.equal(firstPause.payload.status.completedEpochs, 1);
+  assert.deepEqual(
+    firstEpochSink.messages.filter(message => message.type === 'epochMetrics').map(message => message.payload.epoch),
+    [1]
+  );
+
+  await controller.handleMessage({ type: 'advanceTraining' }, secondEpochSink.postMessage);
+  const secondComplete = secondEpochSink.messages.find(message => message.type === 'trainingComplete');
+  assert.ok(secondComplete);
+  assert.equal(secondComplete.payload.status.completedEpochs, 2);
+
+  await controller.handleMessage({
+    type: 'continueTraining',
+    payload: { additionalEpochs: 1, executionMode: 'epoch' },
+  }, continueSink.postMessage);
+  const continued = continueSink.messages.find(message => message.type === 'trainingSessionReady');
+  assert.ok(continued);
+  assert.equal(continued.payload.status.completedEpochs, 2);
+  assert.equal(continued.payload.status.targetEpochs, 3);
+
+  await controller.handleMessage({ type: 'advanceTraining' }, thirdEpochSink.postMessage);
+  const thirdComplete = thirdEpochSink.messages.find(message => message.type === 'trainingComplete');
+  assert.ok(thirdComplete);
+  assert.equal(thirdComplete.payload.status.completedEpochs, 3);
+
+  controller.dispose();
+});
+
+test('MlpWorkerController exposes every internal phase, full activations, and updated weights', async () => {
+  const controller = new MlpWorkerController();
+  const startSink = collectMessages();
+  const phaseMessages: MlpWorkerSendMessage[] = [];
+  const stepPayload: TrainPayload = {
+    ...trainingPayload,
+    config: {
+      ...trainingPayload.config,
+      layers: 1,
+      nodes: [70],
+    },
+    executionMode: 'step',
+  };
+
+  await controller.handleMessage({ type: 'train', payload: stepPayload }, startSink.postMessage);
+  const ready = startSink.messages.find(message => message.type === 'trainingSessionReady');
+  assert.ok(ready);
+  const hiddenActivation = ready.payload.activationSnapshot.layers.find(layer => layer.name === 'hidden_1');
+  assert.equal(hiddenActivation?.values?.length, 70);
+  assert.equal(ready.payload.modelStateSnapshot.layers[0].weights.length, 2);
+  assert.equal(ready.payload.modelStateSnapshot.layers[0].weights[0].length, 70);
+
+  for (let step = 0; step < 7; step++) {
+    const sink = collectMessages();
+    await controller.handleMessage({ type: 'advanceTraining' }, sink.postMessage);
+    phaseMessages.push(...sink.messages);
+  }
+
+  const phases = phaseMessages
+    .filter(message => message.type === 'trainingPhase')
+    .map(message => message.payload.phase);
+  assert.deepEqual(phases, ['input', 'forward', 'forward', 'loss', 'backward', 'backward', 'update']);
+  const update = phaseMessages.find(message => message.type === 'trainingPhase' && message.payload.phase === 'update') as
+    | Extract<MlpWorkerSendMessage, { type: 'trainingPhase' }>
+    | undefined;
+  assert.ok(update);
+  assert.equal(Number.isFinite(update.payload.meanAbsoluteWeightDelta), true);
+  assert.ok((update.payload.meanAbsoluteWeightDelta ?? 0) > 0);
+  const complete = phaseMessages.find(message => message.type === 'trainingComplete');
+  assert.ok(complete);
+  assert.equal(complete.payload.status.completedEpochs, 1);
 
   controller.dispose();
 });

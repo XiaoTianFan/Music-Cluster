@@ -4,6 +4,7 @@ export interface AnnProcessStatusInput {
   isProcessingData: boolean;
   isReducing: boolean;
   isTraining: boolean;
+  isTrainingSessionActive?: boolean;
   isInferring: boolean;
   isValidating?: boolean;
   isAnalyzingPermutationImportance?: boolean;
@@ -22,6 +23,7 @@ export function getAnnProcessStatus(input: AnnProcessStatusInput): AnnProcessSta
   if (input.isProcessingData) return { text: 'Processing Data...', tone: 'active' };
   if (input.isReducing) return { text: 'Reducing Dimensions...', tone: 'active' };
   if (input.isTraining) return { text: 'Training Network...', tone: 'active' };
+  if (input.isTrainingSessionActive) return { text: 'Training Paused - Ready to Advance', tone: 'active' };
   if (input.isInferring) return { text: 'Inferring Labels...', tone: 'active' };
   if (input.isValidating) return { text: 'Running Validation...', tone: 'active' };
   if (input.isAnalyzingPermutationImportance) return { text: 'Analyzing Feature Impact...', tone: 'active' };

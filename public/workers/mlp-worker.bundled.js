@@ -134420,7 +134420,6 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _mlpTraining__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./mlpTraining */ "./src/lib/mlpTraining.ts");
 
 
-const activationValueLimit = 64;
 function getErrorMessage(error) {
     return error instanceof Error ? error.message : String(error);
 }
@@ -134451,9 +134450,8 @@ function normalizeWeightData(weightData) {
     throw new Error('Trained model artifacts are missing weight data.');
 }
 function validateModelArtifactsPayload(payload) {
-    if (!payload || !payload.modelArtifacts) {
+    if (!payload || !payload.modelArtifacts)
         throw new Error('Imported model artifacts are missing.');
-    }
     const { modelArtifacts, outputLabels } = payload;
     if (!modelArtifacts.modelTopology || modelArtifacts.modelTopology instanceof ArrayBuffer) {
         throw new Error('Imported model artifacts are missing model topology.');
@@ -134473,12 +134471,7 @@ function createModel(inputDimension, outputDimension, config) {
     const model = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.sequential();
     const hiddenLayerCount = Math.max(0, config.layers);
     if (hiddenLayerCount === 0) {
-        model.add(_tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.layers.dense({
-            inputShape: [inputDimension],
-            units: outputDimension,
-            activation: 'softmax',
-            name: 'output',
-        }));
+        model.add(_tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.layers.dense({ inputShape: [inputDimension], units: outputDimension, activation: 'softmax', name: 'output' }));
     }
     else {
         for (let layerIndex = 0; layerIndex < hiddenLayerCount; layerIndex++) {
@@ -134490,17 +134483,9 @@ function createModel(inputDimension, outputDimension, config) {
                 name: `hidden_${layerIndex + 1}`,
             }));
         }
-        model.add(_tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.layers.dense({
-            units: outputDimension,
-            activation: 'softmax',
-            name: 'output',
-        }));
+        model.add(_tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.layers.dense({ units: outputDimension, activation: 'softmax', name: 'output' }));
     }
-    model.compile({
-        optimizer: createOptimizer(config),
-        loss: 'categoricalCrossentropy',
-        metrics: ['accuracy'],
-    });
+    model.compile({ optimizer: createOptimizer(config), loss: 'categoricalCrossentropy', metrics: ['accuracy'] });
     return model;
 }
 function validateExplicitValidationRows({ vectors, labels, labelMap, inputDimension, }) {
@@ -134513,9 +134498,8 @@ function validateExplicitValidationRows({ vectors, labels, labelMap, inputDimens
         if (!Array.isArray(vector) || vector.length !== inputDimension || !vector.every(Number.isFinite)) {
             throw new Error('Explicit validation vectors must match the training input dimension.');
         }
-        if (labelMap[label] === undefined) {
+        if (labelMap[label] === undefined)
             throw new Error(`Unknown validation label "${label}" is missing from labelMap.`);
-        }
     }
     return vectors.map((vector, index) => ({ vector, label: labels[index] }));
 }
@@ -134523,17 +134507,8 @@ function summarizeValues(name, values) {
     const finiteValues = values.filter(Number.isFinite);
     const min = finiteValues.length > 0 ? Math.min(...finiteValues) : 0;
     const max = finiteValues.length > 0 ? Math.max(...finiteValues) : 0;
-    const mean = finiteValues.length > 0
-        ? finiteValues.reduce((sum, value) => sum + value, 0) / finiteValues.length
-        : 0;
-    return {
-        name,
-        units: values.length,
-        values: values.slice(0, activationValueLimit),
-        min,
-        max,
-        mean,
-    };
+    const mean = finiteValues.length > 0 ? finiteValues.reduce((sum, value) => sum + value, 0) / finiteValues.length : 0;
+    return { name, units: values.length, values: [...values], min, max, mean };
 }
 async function getActivationSnapshot(model, probeVector, epoch, songId) {
     const layers = [summarizeValues('Input', probeVector)];
@@ -134541,13 +134516,11 @@ async function getActivationSnapshot(model, probeVector, epoch, songId) {
     try {
         for (const layer of model.layers) {
             const outputTensor = layer.apply(currentTensor);
-            if (Array.isArray(outputTensor)) {
+            if (Array.isArray(outputTensor))
                 throw new Error('Unexpected multi-output layer in MLP activation snapshot.');
-            }
             currentTensor.dispose();
             currentTensor = outputTensor;
-            const values = Array.from(await currentTensor.data());
-            layers.push(summarizeValues(layer.name, values));
+            layers.push(summarizeValues(layer.name, Array.from(await currentTensor.data())));
         }
     }
     finally {
@@ -134555,23 +134528,121 @@ async function getActivationSnapshot(model, probeVector, epoch, songId) {
     }
     return { epoch, songId, layers };
 }
+async function getModelStateSnapshot(model, epoch, phase) {
+    var _a, _b;
+    const layers = [];
+    for (let layerIndex = 0; layerIndex < model.layers.length; layerIndex++) {
+        const layer = model.layers[layerIndex];
+        const tensors = layer.getWeights();
+        if (tensors.length === 0)
+            continue;
+        const kernel = tensors[0];
+        const bias = tensors[1];
+        const inputUnits = (_a = kernel.shape[0]) !== null && _a !== void 0 ? _a : 0;
+        const outputUnits = (_b = kernel.shape[1]) !== null && _b !== void 0 ? _b : 0;
+        const flatWeights = Array.from(await kernel.data());
+        const weights = Array.from({ length: inputUnits }, (_, sourceIndex) => (flatWeights.slice(sourceIndex * outputUnits, (sourceIndex + 1) * outputUnits)));
+        const biases = bias ? Array.from(await bias.data()) : Array(outputUnits).fill(0);
+        let min = 0;
+        let max = 0;
+        let absoluteTotal = 0;
+        if (flatWeights.length > 0) {
+            min = flatWeights[0];
+            max = flatWeights[0];
+            for (const weight of flatWeights) {
+                min = Math.min(min, weight);
+                max = Math.max(max, weight);
+                absoluteTotal += Math.abs(weight);
+            }
+        }
+        layers.push({
+            layerName: layer.name,
+            sourceLayerName: layerIndex === 0 ? 'Input' : model.layers[layerIndex - 1].name,
+            inputUnits,
+            outputUnits,
+            weights,
+            biases,
+            min,
+            max,
+            meanAbsolute: flatWeights.length > 0 ? absoluteTotal / flatWeights.length : 0,
+        });
+    }
+    return { epoch, phase, layers };
+}
+function getSessionStatus(session, nextAction) {
+    return {
+        mode: session.mode,
+        completedEpochs: session.completedEpochs,
+        targetEpochs: session.targetEpochs,
+        batchIndex: session.stepBatchIndex,
+        batchCount: session.batchCount,
+        nextAction,
+    };
+}
+function getBatch(session) {
+    const start = session.stepBatchIndex * session.batchSize;
+    const end = Math.min(session.trainVectors.length, start + session.batchSize);
+    return {
+        vectors: session.trainVectors.slice(start, end),
+        labelIndices: session.trainLabelIndices.slice(start, end),
+    };
+}
+async function getPredictionSummary(model, vector, targetIndex, outputLabels) {
+    var _a, _b, _c;
+    const input = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.tensor2d([vector]);
+    let prediction = null;
+    try {
+        prediction = model.predict(input);
+        const probabilities = Array.from(await prediction.data());
+        let bestIndex = 0;
+        probabilities.forEach((value, index) => {
+            var _a;
+            if (value > ((_a = probabilities[bestIndex]) !== null && _a !== void 0 ? _a : Number.NEGATIVE_INFINITY))
+                bestIndex = index;
+        });
+        const targetProbability = Math.max((_a = probabilities[targetIndex]) !== null && _a !== void 0 ? _a : Number.EPSILON, Number.EPSILON);
+        return {
+            predictedLabel: (_b = outputLabels[bestIndex]) !== null && _b !== void 0 ? _b : 'Unknown',
+            confidence: (_c = probabilities[bestIndex]) !== null && _c !== void 0 ? _c : 0,
+            loss: -Math.log(targetProbability),
+        };
+    }
+    finally {
+        prediction === null || prediction === void 0 ? void 0 : prediction.dispose();
+        input.dispose();
+    }
+}
+function getMeanAbsoluteWeightDelta(before, after) {
+    let total = 0;
+    let count = 0;
+    after.layers.forEach((layer, layerIndex) => {
+        const previousLayer = before.layers[layerIndex];
+        layer.weights.forEach((row, sourceIndex) => {
+            row.forEach((weight, targetIndex) => {
+                var _a, _b;
+                total += Math.abs(weight - ((_b = (_a = previousLayer === null || previousLayer === void 0 ? void 0 : previousLayer.weights[sourceIndex]) === null || _a === void 0 ? void 0 : _a[targetIndex]) !== null && _b !== void 0 ? _b : weight));
+                count++;
+            });
+        });
+    });
+    return count > 0 ? total / count : 0;
+}
 class MlpWorkerController {
     constructor() {
         this.trainedModel = null;
         this.outputLabels = [];
+        this.trainingSession = null;
     }
     dispose() {
-        if (this.trainedModel) {
-            this.trainedModel.dispose();
-            this.trainedModel = null;
-        }
+        var _a;
+        (_a = this.trainedModel) === null || _a === void 0 ? void 0 : _a.dispose();
+        this.trainedModel = null;
         this.outputLabels = [];
+        this.trainingSession = null;
     }
     async handleMessage(message, postMessage) {
         const requestId = message.requestId;
-        const reply = (replyMessage) => {
-            postMessage(withRequestId(replyMessage, requestId));
-        };
+        const reply = (replyMessage) => postMessage(withRequestId(replyMessage, requestId));
         try {
             switch (message.type) {
                 case 'reset':
@@ -134579,7 +134650,13 @@ class MlpWorkerController {
                     reply({ type: 'mlpResetComplete' });
                     break;
                 case 'train':
-                    await this.train(message.payload, reply);
+                    await this.startTraining(message.payload, reply);
+                    break;
+                case 'advanceTraining':
+                    await this.advanceTraining(reply);
+                    break;
+                case 'continueTraining':
+                    await this.continueTraining(message.payload, reply);
                     break;
                 case 'infer':
                     await this.infer(message.payload, reply);
@@ -134590,8 +134667,7 @@ class MlpWorkerController {
                 case 'importModel':
                     await this.importModel(message.payload, reply);
                     break;
-                default:
-                    throw new Error(`Unknown message type: ${message.type}`);
+                default: throw new Error(`Unknown message type: ${message.type}`);
             }
         }
         catch (error) {
@@ -134600,16 +134676,15 @@ class MlpWorkerController {
             reply({ type: 'mlpError', payload: { error: getErrorMessage(error) } });
         }
     }
-    async train(payload, postMessage) {
-        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m;
+    async startTraining(payload, postMessage) {
+        var _a;
         this.dispose();
         const { vectors, labels, config, labelMap, trainIterations, batchSize, splitRatio, seed, activationSampleSongId, validationVectors, validationLabels, } = payload;
-        if (!config || !labelMap || !trainIterations || !batchSize || !splitRatio) {
+        if (!config || !labelMap || !trainIterations || !batchSize || !splitRatio)
             throw new Error('Invalid training parameters.');
-        }
         const validation = (0,_mlpTraining__WEBPACK_IMPORTED_MODULE_1__.validateTrainingRows)(vectors, labels, labelMap);
         const hasExplicitValidationRows = validationVectors !== undefined || validationLabels !== undefined;
-        const { trainPairs, validationPairs: testPairs } = hasExplicitValidationRows
+        const { trainPairs, validationPairs } = hasExplicitValidationRows
             ? {
                 trainPairs: vectors.map((vector, index) => ({ vector, label: labels[index] })),
                 validationPairs: validateExplicitValidationRows({
@@ -134620,128 +134695,351 @@ class MlpWorkerController {
                 }),
             }
             : (0,_mlpTraining__WEBPACK_IMPORTED_MODULE_1__.createStratifiedTrainValidationSplit)(vectors, labels, labelMap, splitRatio, seed);
-        const { inputDimension, numClasses } = validation;
+        if (trainPairs.length === 0 || validationPairs.length === 0) {
+            throw new Error(`Training split produced ${trainPairs.length} train rows and ${validationPairs.length} validation rows.`);
+        }
         this.outputLabels = validation.outputLabels;
-        if (trainPairs.length === 0 || testPairs.length === 0) {
-            throw new Error(`Training split produced ${trainPairs.length} train rows and ${testPairs.length} validation rows.`);
+        this.trainedModel = createModel(validation.inputDimension, validation.numClasses, config);
+        this.trainingSession = {
+            trainVectors: trainPairs.map(pair => [...pair.vector]),
+            trainLabelIndices: trainPairs.map(pair => labelMap[pair.label]),
+            validationVectors: validationPairs.map(pair => [...pair.vector]),
+            validationLabelIndices: validationPairs.map(pair => labelMap[pair.label]),
+            outputLabels: [...validation.outputLabels],
+            batchSize,
+            batchCount: Math.ceil(trainPairs.length / batchSize),
+            completedEpochs: 0,
+            targetEpochs: trainIterations,
+            mode: (_a = payload.executionMode) !== null && _a !== void 0 ? _a : 'automatic',
+            activationSampleSongId,
+            stepBatchIndex: 0,
+            stepPhaseIndex: 0,
+            stepActivationSnapshot: null,
+        };
+        if (this.trainingSession.mode === 'automatic') {
+            await this.runAutomatic(postMessage);
+            return;
         }
-        const trainTensors = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.tensor2d(trainPairs.map(pair => pair.vector));
-        const testTensors = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.tensor2d(testPairs.map(pair => pair.vector));
-        const trainLabels = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.oneHot(trainPairs.map(pair => labelMap[pair.label]), numClasses);
-        const testLabels = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.oneHot(testPairs.map(pair => labelMap[pair.label]), numClasses);
-        const model = createModel(inputDimension, numClasses, config);
-        const probeVector = trainPairs[0].vector;
-        try {
-            for (let epoch = 0; epoch < trainIterations; epoch++) {
-                const history = await model.fit(trainTensors, trainLabels, {
-                    epochs: 1,
-                    batchSize,
-                    shuffle: true,
-                    validationData: [testTensors, testLabels],
-                    verbose: 0,
-                });
-                const loss = Number((_b = (_a = history.history.loss) === null || _a === void 0 ? void 0 : _a[0]) !== null && _b !== void 0 ? _b : 0);
-                const acc = Number((_e = (_d = ((_c = history.history.acc) !== null && _c !== void 0 ? _c : history.history.accuracy)) === null || _d === void 0 ? void 0 : _d[0]) !== null && _e !== void 0 ? _e : 0);
-                const valLoss = Number((_g = (_f = history.history.val_loss) === null || _f === void 0 ? void 0 : _f[0]) !== null && _g !== void 0 ? _g : 0);
-                const valAcc = Number((_k = (_j = ((_h = history.history.val_acc) !== null && _h !== void 0 ? _h : history.history.val_accuracy)) === null || _j === void 0 ? void 0 : _j[0]) !== null && _k !== void 0 ? _k : 0);
-                postMessage({
-                    type: 'epochMetrics',
-                    payload: {
-                        epoch: epoch + 1,
-                        metrics: { loss, acc, valLoss, valAcc },
-                    },
-                });
-                postMessage({
-                    type: 'activationSnapshot',
-                    payload: await getActivationSnapshot(model, probeVector, epoch + 1, activationSampleSongId),
-                });
-            }
-            const evalResult = model.evaluate(testTensors, testLabels);
-            const evalTensors = Array.isArray(evalResult) ? evalResult : [evalResult];
-            const testLoss = (_l = (await evalTensors[0].data())[0]) !== null && _l !== void 0 ? _l : 0;
-            const testAcc = evalTensors[1] ? (_m = (await evalTensors[1].data())[0]) !== null && _m !== void 0 ? _m : 0 : 0;
-            evalTensors.forEach(tensor => tensor.dispose());
-            this.trainedModel = model;
-            postMessage({
-                type: 'trainingComplete',
-                payload: {
-                    finalMetrics: { loss: testLoss, accuracy: testAcc },
-                    activationSnapshot: await getActivationSnapshot(model, probeVector, trainIterations, activationSampleSongId),
-                },
-            });
+        const activationSnapshot = await getActivationSnapshot(this.trainedModel, this.trainingSession.trainVectors[0], 0, activationSampleSongId);
+        const modelStateSnapshot = await getModelStateSnapshot(this.trainedModel, 0);
+        postMessage({ type: 'activationSnapshot', payload: activationSnapshot });
+        postMessage({ type: 'modelStateSnapshot', payload: modelStateSnapshot });
+        postMessage({
+            type: 'trainingSessionReady',
+            payload: {
+                status: getSessionStatus(this.trainingSession, this.trainingSession.mode === 'step' ? 'Advance the input propagation step.' : 'Train the next epoch.'),
+                activationSnapshot,
+                modelStateSnapshot,
+            },
+        });
+    }
+    async continueTraining(payload, postMessage) {
+        if (!this.trainedModel || !this.trainingSession)
+            throw new Error('No completed local training session is available to continue.');
+        if (this.trainingSession.completedEpochs < this.trainingSession.targetEpochs) {
+            throw new Error('Finish the active training target before adding more epochs.');
         }
-        catch (error) {
-            model.dispose();
-            throw error;
+        if (!Number.isInteger(payload.additionalEpochs) || payload.additionalEpochs <= 0)
+            throw new Error('Additional epochs must be a positive integer.');
+        this.trainingSession.targetEpochs = this.trainingSession.completedEpochs + payload.additionalEpochs;
+        this.trainingSession.mode = payload.executionMode;
+        this.trainingSession.stepBatchIndex = 0;
+        this.trainingSession.stepPhaseIndex = 0;
+        this.trainingSession.stepActivationSnapshot = null;
+        if (payload.executionMode === 'automatic') {
+            await this.runAutomatic(postMessage);
+            return;
         }
-        finally {
-            trainTensors.dispose();
-            testTensors.dispose();
-            trainLabels.dispose();
-            testLabels.dispose();
+        const activationSnapshot = await getActivationSnapshot(this.trainedModel, this.trainingSession.trainVectors[0], this.trainingSession.completedEpochs, this.trainingSession.activationSampleSongId);
+        const modelStateSnapshot = await getModelStateSnapshot(this.trainedModel, this.trainingSession.completedEpochs);
+        postMessage({
+            type: 'trainingSessionReady',
+            payload: {
+                status: getSessionStatus(this.trainingSession, payload.executionMode === 'step' ? 'Advance the next internal training phase.' : 'Train the next epoch.'),
+                activationSnapshot,
+                modelStateSnapshot,
+            },
+        });
+    }
+    async advanceTraining(postMessage) {
+        if (!this.trainedModel || !this.trainingSession)
+            throw new Error('Start an interactive training session before advancing it.');
+        if (this.trainingSession.mode === 'automatic')
+            throw new Error('Automatic training cannot be advanced manually.');
+        if (this.trainingSession.mode === 'epoch') {
+            await this.runEpoch(postMessage);
+            return;
+        }
+        await this.runStep(postMessage);
+    }
+    async runAutomatic(postMessage) {
+        if (!this.trainingSession)
+            throw new Error('Training session is missing.');
+        while (this.trainingSession.completedEpochs < this.trainingSession.targetEpochs) {
+            const completed = await this.runEpoch(postMessage, false);
+            if (completed)
+                return;
         }
     }
-    async infer(payload, postMessage) {
-        var _a, _b;
-        if (!this.trainedModel) {
-            throw new Error('Model not trained yet. Train the model before running inference.');
+    async runEpoch(postMessage, pauseWhenIncomplete = true) {
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
+        const model = this.trainedModel;
+        const session = this.trainingSession;
+        if (!model || !session)
+            throw new Error('Training session is missing.');
+        const trainXs = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.tensor2d(session.trainVectors);
+        const trainYs = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.oneHot(session.trainLabelIndices, session.outputLabels.length);
+        const validationXs = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.tensor2d(session.validationVectors);
+        const validationYs = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.oneHot(session.validationLabelIndices, session.outputLabels.length);
+        try {
+            const history = await model.fit(trainXs, trainYs, {
+                epochs: 1,
+                batchSize: session.batchSize,
+                shuffle: true,
+                validationData: [validationXs, validationYs],
+                verbose: 0,
+            });
+            session.completedEpochs++;
+            const metrics = {
+                loss: Number((_b = (_a = history.history.loss) === null || _a === void 0 ? void 0 : _a[0]) !== null && _b !== void 0 ? _b : 0),
+                acc: Number((_e = (_d = ((_c = history.history.acc) !== null && _c !== void 0 ? _c : history.history.accuracy)) === null || _d === void 0 ? void 0 : _d[0]) !== null && _e !== void 0 ? _e : 0),
+                valLoss: Number((_g = (_f = history.history.val_loss) === null || _f === void 0 ? void 0 : _f[0]) !== null && _g !== void 0 ? _g : 0),
+                valAcc: Number((_k = (_j = ((_h = history.history.val_acc) !== null && _h !== void 0 ? _h : history.history.val_accuracy)) === null || _j === void 0 ? void 0 : _j[0]) !== null && _k !== void 0 ? _k : 0),
+            };
+            postMessage({ type: 'epochMetrics', payload: { epoch: session.completedEpochs, metrics } });
+            const activationSnapshot = await getActivationSnapshot(model, session.trainVectors[0], session.completedEpochs, session.activationSampleSongId);
+            const modelStateSnapshot = await getModelStateSnapshot(model, session.completedEpochs, 'epoch-complete');
+            postMessage({ type: 'activationSnapshot', payload: activationSnapshot });
+            postMessage({ type: 'modelStateSnapshot', payload: modelStateSnapshot });
+            postMessage({
+                type: 'trainingPhase',
+                payload: {
+                    phase: 'epoch-complete',
+                    label: `Epoch ${session.completedEpochs} complete`,
+                    description: 'Training and validation metrics are updated with the latest model weights.',
+                    epoch: session.completedEpochs,
+                    targetEpochs: session.targetEpochs,
+                    batchIndex: session.batchCount,
+                    batchCount: session.batchCount,
+                    direction: 'none',
+                },
+            });
+            if (session.completedEpochs >= session.targetEpochs) {
+                await this.completeTraining(postMessage);
+                return true;
+            }
+            if (pauseWhenIncomplete) {
+                postMessage({ type: 'trainingPaused', payload: { status: getSessionStatus(session, 'Train the next epoch.') } });
+            }
+            return false;
         }
+        finally {
+            trainXs.dispose();
+            trainYs.dispose();
+            validationXs.dispose();
+            validationYs.dispose();
+        }
+    }
+    async runStep(postMessage) {
+        var _a;
+        const model = this.trainedModel;
+        const session = this.trainingSession;
+        if (!model || !session)
+            throw new Error('Training session is missing.');
+        const layerCount = model.layers.length;
+        const inputPhaseIndex = 0;
+        const firstForwardIndex = 1;
+        const lossPhaseIndex = firstForwardIndex + layerCount;
+        const firstBackwardIndex = lossPhaseIndex + 1;
+        const updatePhaseIndex = firstBackwardIndex + layerCount;
+        const batch = getBatch(session);
+        const sampleVector = batch.vectors[0];
+        const sampleTargetIndex = batch.labelIndices[0];
+        const epoch = session.completedEpochs + 1;
+        let phaseSnapshot;
+        if (session.stepPhaseIndex === inputPhaseIndex) {
+            session.stepActivationSnapshot = await getActivationSnapshot(model, sampleVector, epoch, session.activationSampleSongId);
+            postMessage({ type: 'activationSnapshot', payload: session.stepActivationSnapshot });
+            postMessage({ type: 'modelStateSnapshot', payload: await getModelStateSnapshot(model, session.completedEpochs, 'input') });
+            phaseSnapshot = {
+                phase: 'input', label: 'Load training batch',
+                description: 'The selected batch enters the input layer before forward propagation.',
+                epoch, targetEpochs: session.targetEpochs, batchIndex: session.stepBatchIndex + 1, batchCount: session.batchCount,
+                activeLayerName: 'Input', direction: 'forward', sampleLabel: session.outputLabels[sampleTargetIndex],
+            };
+        }
+        else if (session.stepPhaseIndex < lossPhaseIndex) {
+            const layer = model.layers[session.stepPhaseIndex - firstForwardIndex];
+            phaseSnapshot = {
+                phase: 'forward', label: `Activate ${layer.name}`,
+                description: `Weighted inputs and bias flow forward through ${layer.name}.`,
+                epoch, targetEpochs: session.targetEpochs, batchIndex: session.stepBatchIndex + 1, batchCount: session.batchCount,
+                activeLayerName: layer.name, direction: 'forward', sampleLabel: session.outputLabels[sampleTargetIndex],
+            };
+        }
+        else if (session.stepPhaseIndex === lossPhaseIndex) {
+            const prediction = await getPredictionSummary(model, sampleVector, sampleTargetIndex, session.outputLabels);
+            phaseSnapshot = {
+                phase: 'loss', label: 'Measure prediction loss',
+                description: 'The output probabilities are compared with the target label before backpropagation.',
+                epoch, targetEpochs: session.targetEpochs, batchIndex: session.stepBatchIndex + 1, batchCount: session.batchCount,
+                activeLayerName: (_a = model.layers[model.layers.length - 1]) === null || _a === void 0 ? void 0 : _a.name,
+                direction: 'none', sampleLabel: session.outputLabels[sampleTargetIndex],
+                predictedLabel: prediction.predictedLabel, predictionConfidence: prediction.confidence, loss: prediction.loss,
+            };
+        }
+        else if (session.stepPhaseIndex < updatePhaseIndex) {
+            const backwardOffset = session.stepPhaseIndex - firstBackwardIndex;
+            const layer = model.layers[layerCount - 1 - backwardOffset];
+            phaseSnapshot = {
+                phase: 'backward', label: `Backpropagate through ${layer.name}`,
+                description: `The loss signal travels backward through ${layer.name}; the optimizer update follows after every layer is visited.`,
+                epoch, targetEpochs: session.targetEpochs, batchIndex: session.stepBatchIndex + 1, batchCount: session.batchCount,
+                activeLayerName: layer.name, direction: 'backward', sampleLabel: session.outputLabels[sampleTargetIndex],
+            };
+        }
+        else {
+            const before = await getModelStateSnapshot(model, session.completedEpochs, 'update');
+            const batchXs = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.tensor2d(batch.vectors);
+            const batchYs = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.oneHot(batch.labelIndices, session.outputLabels.length);
+            try {
+                await model.trainOnBatch(batchXs, batchYs);
+            }
+            finally {
+                batchXs.dispose();
+                batchYs.dispose();
+            }
+            const after = await getModelStateSnapshot(model, session.completedEpochs, 'update');
+            const meanAbsoluteWeightDelta = getMeanAbsoluteWeightDelta(before, after);
+            const activationSnapshot = await getActivationSnapshot(model, sampleVector, epoch, session.activationSampleSongId);
+            postMessage({ type: 'activationSnapshot', payload: activationSnapshot });
+            postMessage({ type: 'modelStateSnapshot', payload: after });
+            phaseSnapshot = {
+                phase: 'update', label: 'Apply optimizer update',
+                description: 'The optimizer applies the computed gradients to every connected weight and bias in this batch.',
+                epoch, targetEpochs: session.targetEpochs, batchIndex: session.stepBatchIndex + 1, batchCount: session.batchCount,
+                direction: 'none', sampleLabel: session.outputLabels[sampleTargetIndex], meanAbsoluteWeightDelta,
+            };
+            session.stepBatchIndex++;
+            session.stepPhaseIndex = 0;
+            session.stepActivationSnapshot = null;
+            postMessage({ type: 'trainingPhase', payload: phaseSnapshot });
+            if (session.stepBatchIndex >= session.batchCount) {
+                session.stepBatchIndex = 0;
+                session.completedEpochs++;
+                const metrics = await this.evaluateMetrics();
+                postMessage({ type: 'epochMetrics', payload: { epoch: session.completedEpochs, metrics } });
+                if (session.completedEpochs >= session.targetEpochs) {
+                    await this.completeTraining(postMessage);
+                    return;
+                }
+            }
+            postMessage({ type: 'trainingPaused', payload: { status: getSessionStatus(session, 'Advance the next internal training phase.'), phaseSnapshot } });
+            return;
+        }
+        session.stepPhaseIndex++;
+        postMessage({ type: 'trainingPhase', payload: phaseSnapshot });
+        postMessage({ type: 'trainingPaused', payload: { status: getSessionStatus(session, 'Advance the next internal training phase.'), phaseSnapshot } });
+    }
+    async evaluateMetrics() {
+        const model = this.trainedModel;
+        const session = this.trainingSession;
+        if (!model || !session)
+            throw new Error('Training session is missing.');
+        const evaluateRows = async (vectors, labels) => {
+            var _a, _b;
+            const xs = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.tensor2d(vectors);
+            const ys = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.oneHot(labels, session.outputLabels.length);
+            try {
+                const result = model.evaluate(xs, ys);
+                const tensors = Array.isArray(result) ? result : [result];
+                try {
+                    return {
+                        loss: (_a = (await tensors[0].data())[0]) !== null && _a !== void 0 ? _a : 0,
+                        accuracy: tensors[1] ? (_b = (await tensors[1].data())[0]) !== null && _b !== void 0 ? _b : 0 : 0,
+                    };
+                }
+                finally {
+                    tensors.forEach(tensor => tensor.dispose());
+                }
+            }
+            finally {
+                xs.dispose();
+                ys.dispose();
+            }
+        };
+        const train = await evaluateRows(session.trainVectors, session.trainLabelIndices);
+        const validation = await evaluateRows(session.validationVectors, session.validationLabelIndices);
+        return { loss: train.loss, acc: train.accuracy, valLoss: validation.loss, valAcc: validation.accuracy };
+    }
+    async completeTraining(postMessage) {
+        const model = this.trainedModel;
+        const session = this.trainingSession;
+        if (!model || !session)
+            throw new Error('Training session is missing.');
+        const metrics = await this.evaluateMetrics();
+        const activationSnapshot = await getActivationSnapshot(model, session.trainVectors[0], session.completedEpochs, session.activationSampleSongId);
+        const modelStateSnapshot = await getModelStateSnapshot(model, session.completedEpochs, 'epoch-complete');
+        postMessage({
+            type: 'trainingComplete',
+            payload: {
+                finalMetrics: { loss: metrics.valLoss, accuracy: metrics.valAcc },
+                activationSnapshot,
+                modelStateSnapshot,
+                status: getSessionStatus(session, 'Training target reached. Continue with more epochs or run inference.'),
+            },
+        });
+    }
+    async infer(payload, postMessage) {
+        var _a, _b, _c, _d;
+        if (!this.trainedModel)
+            throw new Error('Model not trained yet. Train the model before running inference.');
         const { vectors, songIds } = payload;
         if (!vectors || vectors.length === 0 || !songIds || songIds.length !== vectors.length) {
             throw new Error('Invalid inference data: vectors or songIds are missing or mismatched.');
         }
-        if (!this.outputLabels.length) {
+        if (!this.outputLabels.length)
             throw new Error('Output label mapping is missing from the trained model context.');
-        }
         const inputDimension = (_b = (_a = vectors[0]) === null || _a === void 0 ? void 0 : _a.length) !== null && _b !== void 0 ? _b : 0;
         if (inputDimension <= 0 || !vectors.every(vector => vector.length === inputDimension && vector.every(Number.isFinite))) {
             throw new Error('Inference vectors must be finite and share one non-empty dimension.');
         }
         const inferTensor = _tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.tensor2d(vectors);
+        let predictions = null;
         try {
-            const predictions = this.trainedModel.predict(inferTensor);
+            predictions = this.trainedModel.predict(inferTensor);
             const probabilities = await predictions.array();
             const results = {};
             probabilities.forEach((row, index) => {
                 var _a, _b;
                 let bestIndex = 0;
-                let bestConfidence = (_a = row[0]) !== null && _a !== void 0 ? _a : 0;
                 row.forEach((confidence, candidateIndex) => {
-                    if (confidence > bestConfidence) {
-                        bestConfidence = confidence;
+                    var _a;
+                    if (confidence > ((_a = row[bestIndex]) !== null && _a !== void 0 ? _a : Number.NEGATIVE_INFINITY))
                         bestIndex = candidateIndex;
-                    }
                 });
-                results[songIds[index]] = {
-                    predictedLabel: (_b = this.outputLabels[bestIndex]) !== null && _b !== void 0 ? _b : 'Unknown',
-                    confidence: bestConfidence,
-                };
+                results[songIds[index]] = { predictedLabel: (_a = this.outputLabels[bestIndex]) !== null && _a !== void 0 ? _a : 'Unknown', confidence: (_b = row[bestIndex]) !== null && _b !== void 0 ? _b : 0 };
             });
-            postMessage({
-                type: 'activationSnapshot',
-                payload: await getActivationSnapshot(this.trainedModel, vectors[0], undefined, songIds[0]),
-            });
+            postMessage({ type: 'activationSnapshot', payload: await getActivationSnapshot(this.trainedModel, vectors[0], undefined, songIds[0]) });
+            postMessage({ type: 'modelStateSnapshot', payload: await getModelStateSnapshot(this.trainedModel, (_d = (_c = this.trainingSession) === null || _c === void 0 ? void 0 : _c.completedEpochs) !== null && _d !== void 0 ? _d : 0) });
             postMessage({ type: 'inferenceComplete', payload: { results } });
-            predictions.dispose();
         }
         finally {
+            predictions === null || predictions === void 0 ? void 0 : predictions.dispose();
             inferTensor.dispose();
         }
     }
     async exportModel(postMessage) {
-        if (!this.trainedModel) {
+        if (!this.trainedModel)
             throw new Error('Model not trained yet. Train the model before exporting it.');
-        }
-        if (!this.outputLabels.length) {
+        if (!this.outputLabels.length)
             throw new Error('Output label mapping is missing from the trained model context.');
-        }
         let savedArtifacts = null;
         await this.trainedModel.save(_tensorflow_tfjs__WEBPACK_IMPORTED_MODULE_0__.io.withSaveHandler(async (artifacts) => {
             savedArtifacts = artifacts;
             return {
                 modelArtifactsInfo: {
-                    dateSaved: new Date(),
-                    modelTopologyType: 'JSON',
+                    dateSaved: new Date(), modelTopologyType: 'JSON',
                     modelTopologyBytes: artifacts.modelTopology ? JSON.stringify(artifacts.modelTopology).length : 0,
                     weightSpecsBytes: artifacts.weightSpecs ? JSON.stringify(artifacts.weightSpecs).length : 0,
                     weightDataBytes: normalizeWeightData(artifacts.weightData).byteLength,
@@ -134749,12 +135047,10 @@ class MlpWorkerController {
             };
         }));
         const artifacts = savedArtifacts;
-        if (!artifacts || !artifacts.modelTopology || artifacts.modelTopology instanceof ArrayBuffer) {
+        if (!artifacts || !artifacts.modelTopology || artifacts.modelTopology instanceof ArrayBuffer)
             throw new Error('Trained model artifacts are missing model topology.');
-        }
-        if (!Array.isArray(artifacts.weightSpecs) || artifacts.weightSpecs.length === 0) {
+        if (!Array.isArray(artifacts.weightSpecs) || artifacts.weightSpecs.length === 0)
             throw new Error('Trained model artifacts are missing weight specs.');
-        }
         postMessage({
             type: 'modelExportComplete',
             payload: {
@@ -134785,7 +135081,10 @@ class MlpWorkerController {
         this.outputLabels = [...payload.outputLabels];
         postMessage({
             type: 'modelImportComplete',
-            payload: { outputLabels: [...this.outputLabels] },
+            payload: {
+                outputLabels: [...this.outputLabels],
+                modelStateSnapshot: await getModelStateSnapshot(nextModel, 0),
+            },
         });
     }
 }

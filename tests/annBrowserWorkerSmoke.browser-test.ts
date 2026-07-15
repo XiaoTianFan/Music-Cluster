@@ -555,7 +555,7 @@ async function stopChrome(child: ChildProcessWithoutNullStreams, profileDir: str
       await once(child, 'exit');
     }
   }
-  rmSync(profileDir, { recursive: true, force: true });
+  rmSync(profileDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 }
 
 async function waitForChromeVersion(
@@ -727,7 +727,10 @@ async function runBrowserWorkerSmoke(chromePath: string, url: string): Promise<B
   } catch (error) {
     throw new Error(`${error instanceof Error ? error.message : String(error)}\n${getOutput()}`);
   } finally {
-    client?.close();
+    if (client) {
+      await client.send('Browser.close', {}, 5000).catch(() => undefined);
+      client.close();
+    }
     await stopChrome(child, profileDir);
   }
 }

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown'; // << Import react-markdown
+import { usePathname } from 'next/navigation';
 import 'github-markdown-css/github-markdown-dark.css'; // << Add this import
 
 // Define the mobile breakpoint
@@ -12,6 +13,8 @@ interface MobileLayoutWrapperProps {
 }
 
 const MobileLayoutWrapper: React.FC<MobileLayoutWrapperProps> = ({ children }) => {
+  const pathname = usePathname();
+  const supportsMobileLayout = pathname === '/ann' || pathname.startsWith('/ann/');
   // State to track viewport status: loading, mobile, or desktop
   const [viewportStatus, setViewportStatus] = useState<'loading' | 'mobile' | 'desktop'>('loading');
   const [aboutContent, setAboutContent] = useState<string>(''); // << State for markdown content
@@ -66,6 +69,10 @@ const MobileLayoutWrapper: React.FC<MobileLayoutWrapperProps> = ({ children }) =
   if (viewportStatus === 'loading') {
     // Render minimal loading state or null during initial client check
     return <div className="flex items-center justify-center min-h-screen text-gray-500">Loading...</div>;
+  }
+
+  if (supportsMobileLayout) {
+    return <div className="h-full overflow-y-auto hide-scrollbar">{children}</div>;
   }
 
   if (viewportStatus === 'mobile') {
@@ -127,4 +134,4 @@ const MobileLayoutWrapper: React.FC<MobileLayoutWrapperProps> = ({ children }) =
   return <>{children}</>; 
 };
 
-export default MobileLayoutWrapper; 
+export default MobileLayoutWrapper;

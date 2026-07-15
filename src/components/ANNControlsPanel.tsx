@@ -3,7 +3,15 @@ import React, { useMemo, useState } from 'react';
 import { TrashIcon } from '@heroicons/react/24/solid';
 import BasePanel from './ui/BasePanel';
 import Button from './ui/Button';
-import { availableMirFeatures, type FeatureId, type ProcessingMethod, type ReductionMethod } from '../lib/annPipeline';
+import {
+    availableMirFeatures,
+    type AnnTrainingExecutionMode,
+    type AnnTrainingPhaseSnapshot,
+    type AnnTrainingSessionStatus,
+    type FeatureId,
+    type ProcessingMethod,
+    type ReductionMethod,
+} from '../lib/annPipeline';
 import type { AnnEvaluationSummary } from '../lib/annEvaluation';
 import type { AnnFeatureSignalSummary } from '../lib/annFeatureSignal';
 import type { AnnLabelDistributionSummary, AnnLabelDistributionStatus } from '../lib/annLabelDistribution';
@@ -107,6 +115,7 @@ interface ANNControlsPanelProps {
     isProcessingData: boolean;
     isReducing: boolean;
     isTraining: boolean;
+    isTrainingSessionActive?: boolean;
     isInferring: boolean;
     // Data Availability Flags
     canProcess: boolean;
@@ -117,6 +126,11 @@ interface ANNControlsPanelProps {
     canInfer: boolean;
     inferDisabledReason?: string | null;
     trainingSummary?: AnnTrainingSummary | null;
+    trainingExecutionMode?: AnnTrainingExecutionMode;
+    trainingSessionStatus?: AnnTrainingSessionStatus | null;
+    trainingPhaseSnapshot?: AnnTrainingPhaseSnapshot | null;
+    canContinueTraining?: boolean;
+    continueTrainingDisabledReason?: string | null;
     featureSignalSummary?: AnnFeatureSignalSummary | null;
     evaluationSummary?: AnnEvaluationSummary | null;
     permutationImportanceSummary?: AnnPermutationImportanceSummary | null;
@@ -163,7 +177,10 @@ interface ANNControlsPanelProps {
     onExtractFeatures: (selectedFeatures: Set<string>) => void;
     onProcessData: (method: ProcessingMethod, range?: [number, number]) => void;
     onReduceDimensions: (method: ReductionMethod, dimensions: number) => void;
-    onTrain: () => void;
+    onTrainingExecutionModeChange?: (mode: AnnTrainingExecutionMode) => void;
+    onTrain: (mode?: AnnTrainingExecutionMode) => void;
+    onAdvanceTraining?: () => void;
+    onContinueTraining?: (additionalEpochs: number, mode: AnnTrainingExecutionMode) => void;
     onInfer: () => void;
     onRunPermutationImportance: () => void;
     onCancelPermutationImportance: () => void;
@@ -247,6 +264,7 @@ const ANNControlsPanel: React.FC<ANNControlsPanelProps> = ({
     isProcessingData,
     isReducing,
     isTraining,
+    isTrainingSessionActive = false,
     isInferring,
     canProcess,
     canReduce,
@@ -256,6 +274,11 @@ const ANNControlsPanel: React.FC<ANNControlsPanelProps> = ({
     canInfer,
     inferDisabledReason,
     trainingSummary,
+    trainingExecutionMode = 'automatic',
+    trainingSessionStatus = null,
+    trainingPhaseSnapshot = null,
+    canContinueTraining = false,
+    continueTrainingDisabledReason = null,
     featureSignalSummary,
     evaluationSummary,
     permutationImportanceSummary,
@@ -301,6 +324,9 @@ const ANNControlsPanel: React.FC<ANNControlsPanelProps> = ({
     onProcessData,
     onReduceDimensions,
     onTrain,
+    onTrainingExecutionModeChange = () => {},
+    onAdvanceTraining = () => {},
+    onContinueTraining = () => {},
     onInfer,
     onRunPermutationImportance,
     onCancelPermutationImportance,
@@ -338,6 +364,7 @@ const ANNControlsPanel: React.FC<ANNControlsPanelProps> = ({
     const [modelComparisonSortMode, setModelComparisonSortMode] = useState<AnnModelComparisonSortMode>('best-quality');
     const [pendingModelComparisonDeleteId, setPendingModelComparisonDeleteId] = useState<string | null>(null);
     const [uploadedDatasetReattachmentReviewFilter, setUploadedDatasetReattachmentReviewFilter] = useState<AnnUploadedDatasetReattachmentReviewFilter>('all');
+    const [additionalTrainingEpochs, setAdditionalTrainingEpochs] = useState(10);
     const [uploadedDatasetReattachmentSearchQuery, setUploadedDatasetReattachmentSearchQuery] = useState('');
     const [expandedUploadedDatasetReattachmentSections, setExpandedUploadedDatasetReattachmentSections] = useState<Set<AnnUploadedDatasetReattachmentReviewSectionKey>>(() => new Set());
     const [isPermutationImportanceExpanded, setIsPermutationImportanceExpanded] = useState(false);
@@ -412,7 +439,7 @@ const ANNControlsPanel: React.FC<ANNControlsPanelProps> = ({
         onSelectedFeaturesChange(newSet);
     };
 
-    const isAnyProcessRunning = isExtracting || isProcessingData || isReducing || isTraining || isInferring || isValidating || isAnalyzingPermutationImportance;
+    const isAnyProcessRunning = isExtracting || isProcessingData || isReducing || isTraining || isTrainingSessionActive || isInferring || isValidating || isAnalyzingPermutationImportance;
     const areBaseWorkersReady = essentiaWorkerReady && dataProcessingWorkerReady && druidWorkerReady;
     const formatPercent = (value: number | null) => (
         value === null ? 'n/a' : `${(value * 100).toFixed(1)}%`
@@ -803,6 +830,35 @@ const ANNControlsPanel: React.FC<ANNControlsPanelProps> = ({
                 >
                     <h3 className="text-md font-semibold ml-2 mb-2 text-[var(--accent-primary)]">5. Training</h3>
                     <div className="space-y-2">
+                        <div className="space-y-1.5" data-ann-training-mode-controls="true">
+                            <span className="text-xs font-semibold text-[var(--text-primary)]">Execution mode</span>
+                            <div className="grid grid-cols-3 border border-[var(--foreground)]/25 p-0.5">
+                                {([
+                                    ['automatic', 'Automatic'],
+                                    ['step', 'Internal Steps'],
+                                    ['epoch', 'By Epoch'],
+                                ] as const).map(([mode, label]) => (
+                                    <button
+                                        key={mode}
+                                        type="button"
+                                        className={`min-h-8 px-1 text-[10px] transition-colors ${trainingExecutionMode === mode ? 'bg-cyan-400/15 text-cyan-200' : 'text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)]'}`}
+                                        aria-pressed={trainingExecutionMode === mode}
+                                        disabled={isAnyProcessRunning}
+                                        onClick={() => onTrainingExecutionModeChange(mode)}
+                                        data-ann-training-mode={mode}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
+                            <p className="text-[10px] leading-snug text-[var(--text-secondary)]">
+                                {trainingExecutionMode === 'step'
+                                    ? 'Pause at input, forward activation, loss, backpropagation, and optimizer update phases.'
+                                    : trainingExecutionMode === 'epoch'
+                                        ? 'Train one complete epoch per action and inspect metrics between epochs.'
+                                        : 'Run every configured epoch without pausing.'}
+                            </p>
+                        </div>
                         <div className="space-y-1 text-xs">
                             <div className="flex items-center justify-between gap-2 text-[var(--text-secondary)]">
                                 <span>Label samples</span>
@@ -822,16 +878,57 @@ const ANNControlsPanel: React.FC<ANNControlsPanelProps> = ({
                                 </div>
                             )}
                         </div>
-                         <Button
-                            onClick={onTrain}
-                            disabled={isAnyProcessRunning || !mlpWorkerReady || !canTrain}
-                            title={trainDisabledReason ?? undefined}
-                            className="w-full py-1.5 text-sm font-semibold"
-                            variant="primary"
-                             enableTilt={true}
-                        >
-                            {isTraining ? 'Training...' : 'Train Network'}
-                        </Button>
+                        {!isTrainingSessionActive ? (
+                            <Button
+                                onClick={() => onTrain(trainingExecutionMode)}
+                                disabled={isAnyProcessRunning || !mlpWorkerReady || !canTrain}
+                                title={trainDisabledReason ?? undefined}
+                                className="w-full py-1.5 text-sm font-semibold"
+                                variant="primary"
+                                enableTilt={true}
+                                data-ann-start-training={trainingExecutionMode}
+                            >
+                                {isTraining ? 'Training...' : trainingExecutionMode === 'automatic' ? 'Train Network' : 'Start Training Session'}
+                            </Button>
+                        ) : (
+                            <div className="space-y-2 border-t border-[var(--foreground)]/20 pt-2" data-ann-training-session="active">
+                                <div className="flex items-center justify-between gap-2 text-xs">
+                                    <span className="font-semibold text-cyan-200">
+                                        {trainingPhaseSnapshot?.label ?? (trainingExecutionMode === 'step' ? 'Internal training ready' : 'Epoch training ready')}
+                                    </span>
+                                    <span className="tabular-nums text-[var(--text-secondary)]">
+                                        {trainingSessionStatus?.completedEpochs ?? 0} / {trainingSessionStatus?.targetEpochs ?? localConfig.epochs} epochs
+                                    </span>
+                                </div>
+                                {trainingPhaseSnapshot && (
+                                    <div className="space-y-1 bg-black/20 px-2 py-1.5 text-[10px] text-[var(--text-secondary)]" data-ann-training-phase={trainingPhaseSnapshot.phase}>
+                                        <p className="leading-snug text-[var(--text-primary)]">{trainingPhaseSnapshot.description}</p>
+                                        <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+                                            <span>Epoch</span>
+                                            <span className="text-right">{trainingPhaseSnapshot.epoch} / {trainingPhaseSnapshot.targetEpochs}</span>
+                                            <span>Batch</span>
+                                            <span className="text-right">{trainingPhaseSnapshot.batchIndex} / {trainingPhaseSnapshot.batchCount}</span>
+                                            {trainingPhaseSnapshot.activeLayerName && <><span>Active layer</span><span className="truncate text-right">{trainingPhaseSnapshot.activeLayerName}</span></>}
+                                            {trainingPhaseSnapshot.predictedLabel && <><span>Prediction</span><span className="truncate text-right">{trainingPhaseSnapshot.predictedLabel} ({((trainingPhaseSnapshot.predictionConfidence ?? 0) * 100).toFixed(1)}%)</span></>}
+                                            {trainingPhaseSnapshot.loss !== undefined && <><span>Sample loss</span><span className="text-right">{trainingPhaseSnapshot.loss.toFixed(4)}</span></>}
+                                            {trainingPhaseSnapshot.meanAbsoluteWeightDelta !== undefined && <><span>Mean |weight delta|</span><span className="text-right">{trainingPhaseSnapshot.meanAbsoluteWeightDelta.toExponential(2)}</span></>}
+                                        </div>
+                                    </div>
+                                )}
+                                <Button
+                                    onClick={onAdvanceTraining}
+                                    disabled={isTraining}
+                                    className="w-full py-1.5 text-sm font-semibold"
+                                    variant="primary"
+                                    data-ann-advance-training={trainingExecutionMode}
+                                >
+                                    {isTraining ? 'Advancing...' : trainingExecutionMode === 'step' ? 'Next Training Phase' : 'Train Next Epoch'}
+                                </Button>
+                                <p className="text-[10px] leading-snug text-[var(--text-secondary)]">
+                                    {trainingSessionStatus?.nextAction ?? 'Advance the paused training session.'}
+                                </p>
+                            </div>
+                        )}
                         {trainDisabledReason && (
                             <p className="text-xs leading-snug text-yellow-300/90">
                                 {trainDisabledReason}
@@ -897,6 +994,42 @@ const ANNControlsPanel: React.FC<ANNControlsPanelProps> = ({
                                             </p>
                                         ))}
                                     </div>
+                                )}
+                            </div>
+                        )}
+                        {trainingSummary && !isTrainingSessionActive && (
+                            <div className="space-y-2 border-t border-[var(--foreground)]/25 pt-3 text-xs" data-ann-continue-training="true">
+                                <div className="flex items-center justify-between gap-2">
+                                    <span className="font-semibold text-[var(--text-primary)]">Further training</span>
+                                    <span className="text-[10px] text-[var(--text-secondary)]">Current total: {trainingSummary.epochs} epochs</span>
+                                </div>
+                                <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+                                    <label className="min-w-0">
+                                        <span className="mb-0.5 block text-[10px] text-[var(--text-secondary)]">Additional epochs</span>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max="10000"
+                                            step="1"
+                                            value={additionalTrainingEpochs}
+                                            onChange={event => setAdditionalTrainingEpochs(Math.max(1, Math.floor(Number(event.target.value) || 1)))}
+                                            className="h-8 w-full border border-[var(--foreground)]/40 bg-transparent px-2 text-xs focus:border-[var(--accent-primary)] focus:outline-none"
+                                            disabled={isAnyProcessRunning}
+                                            data-ann-additional-epochs="true"
+                                        />
+                                    </label>
+                                    <Button
+                                        onClick={() => onContinueTraining(additionalTrainingEpochs, trainingExecutionMode)}
+                                        disabled={isAnyProcessRunning || !canContinueTraining}
+                                        title={continueTrainingDisabledReason ?? undefined}
+                                        className="self-end px-3 py-1.5 text-xs font-semibold"
+                                        variant="secondary"
+                                    >
+                                        Continue
+                                    </Button>
+                                </div>
+                                {continueTrainingDisabledReason && (
+                                    <p className="text-[10px] leading-snug text-yellow-300/90">{continueTrainingDisabledReason}</p>
                                 )}
                             </div>
                         )}
