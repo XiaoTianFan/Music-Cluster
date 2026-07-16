@@ -201,7 +201,7 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
 
   // Prepare props for BasePanel
   const panelClassName = `
-    flex flex-col h-[85vh] 
+    flex h-[85vh] flex-col md:h-full md:min-h-0
     transition-colors duration-200 
     ${isDraggingOver ? 'bg-blue-900/30 border-blue-300' : ''} 
     ${className || ''}
@@ -234,9 +234,8 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
         </div>
       )}
 
-      {/* Song List Area - Removed flex-grow */}
-      <div className="h-[70vh] min-h-0 overflow-y-scroll mb-2 hide-scrollbar relative z-0"> {/* Ensure list is below hint */}
-         <ul className="h-[70vh] list-none p-0 min-h-0">
+      <div className="relative z-0 mb-2 min-h-0 flex-1 overflow-y-scroll hide-scrollbar">
+         <ul className="min-h-full list-none p-0">
             {/* Map over the SORTED 'songs' array */}
             {sortedSongs.map((song) => { 
                 // --- ADDED: Background color logic ---
@@ -388,4 +387,4 @@ const SongListPanel: React.FC<SongListPanelProps> = ({
   );
 };
 
-export default SongListPanel; 
+export default SongListPanel;

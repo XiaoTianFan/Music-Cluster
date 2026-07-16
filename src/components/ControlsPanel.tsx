@@ -182,7 +182,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
 
   return (
     <BasePanel
-      className={`flex overflow-y-scroll hide-scrollbar flex-col h-[85vh] ${className || ''}`}
+      className={`flex h-[85vh] flex-col overflow-y-scroll hide-scrollbar md:h-full md:min-h-0 ${className || ''}`}
       data-augmented-ui="tl-clip tr-2-clip-x br-clip-x bl-clip border inlay"
       style={{ '--aug-border-x': '1px' } as React.CSSProperties}
     >
@@ -618,4 +618,4 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
   );
 };
 
-export default ControlsPanel; 
+export default ControlsPanel;

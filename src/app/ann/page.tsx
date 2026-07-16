@@ -25,6 +25,7 @@ import ANNTrainingPerformancePanel, { type ANNTrainingHistory } from '@/componen
 import ANNDataVisualizationPanel from '@/components/ANNDataVisualizationPanel';
 import AudioPlayer from '@/components/AudioPlayer'; // <-- NEW: Import AudioPlayer
 import ModeSwitchLink from '@/components/ModeSwitchLink';
+import AppFooter from '@/components/AppFooter';
 import SongDetailsDialog from '@/components/SongDetailsDialog';
 import { downloadRawFeatureMatrixExport, type ExportFormat } from '@/lib/exportRawFeatureMatrix';
 import {
@@ -3578,7 +3579,7 @@ export default function ANNPage() {
     // --- Render ---
     return (
         <main
-            className="flex min-h-screen flex-col p-4 bg-gray-950/30 bg-blur-md text-gray-100 font-[family-name:var(--font-geist-mono)] hide-scrollbar md:h-full md:min-h-0 md:overflow-hidden"
+            className="flex min-h-screen flex-col p-4 bg-gray-950/30 bg-blur-md text-gray-100 font-[family-name:var(--font-geist-mono)] hide-scrollbar md:h-full md:min-h-0 md:overflow-hidden md:pb-0"
             data-ann-shell
         >
             {/* Header - Replaced with styled div from page.tsx */}
@@ -3692,7 +3693,7 @@ export default function ANNPage() {
             )}
 
             <div className="h-auto md:min-h-0 md:flex-1 md:overflow-hidden" data-ann-content>
-                 <div className="grid min-h-full grid-cols-1 gap-2 px-2 py-2 md:h-full md:min-h-0 md:grid-cols-[3fr_1fr]">
+                 <div className="grid min-h-full grid-cols-1 gap-2 px-2 pt-2 md:h-full md:min-h-0 md:grid-cols-[3fr_1fr]">
                      <div className="flex h-[980px] min-w-0 flex-col pr-0 md:h-full md:min-h-0 md:pr-2" data-ann-workspace>
                          <div className="relative min-h-0 flex-1 overflow-hidden" data-ann-workspace-pages>
                              <section
@@ -3952,37 +3953,7 @@ export default function ANNPage() {
                  </div>
             </div>
 
-            {/* ADDED Footer from page.tsx */}
-            <footer
-                className="mt-4 flex h-10 w-full flex-shrink-0 items-center justify-center gap-4 border-t border-gray-700 p-2 text-center text-xs text-gray-500"
-                 data-augmented-ui="tl-clip tr-clip border"
-                 style={{ '--aug-border-color': '#444', '--aug-border-bg': 'transparent' } as React.CSSProperties}
-              >
-                <span>Copyright (c) 2025 Xiaotian Fan, As33</span>
-                <span>|</span>
-                <a 
-                  href="https://github.com/XiaoTianFan/Music-Cluster" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="hover:text-gray-400 transition-colors"
-                >
-                  GitHub Repository
-                </a>
-                <span>|</span>
-                <span
-                  onClick={handleToggleAboutDialog}
-                  className="hover:text-gray-400 transition-colors cursor-pointer"
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      handleToggleAboutDialog();
-                    }
-                  }}
-                >
-                  About
-                </span>
-            </footer>
+            <AppFooter onAbout={handleToggleAboutDialog} />
 
             <ExportRawFeaturesDialog
                 isOpen={isExportRawModalOpen}

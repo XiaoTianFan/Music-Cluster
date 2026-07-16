@@ -14,6 +14,7 @@ import ExplanationDialog from '../components/ExplanationDialog'; // <-- Import t
 import ExportRawFeaturesDialog from '../components/ExportRawFeaturesDialog';
 import AudioPlayer from '../components/AudioPlayer'; // <-- NEW: Import AudioPlayer
 import ModeSwitchLink from '../components/ModeSwitchLink';
+import AppFooter from '../components/AppFooter';
 import { downloadRawFeatureMatrixExport, type ExportFormat } from '@/lib/exportRawFeatureMatrix';
 // Remove the static import of VisualizationPanel
 // import VisualizationPanel from '../components/VisualizationPanel';
@@ -2724,7 +2725,10 @@ export default function DashboardPage() {
   }, [isProcessing, processingSongIds, featureStatus]); // Dependencies
 
   return (
-    <main className="flex flex-col min-h-screen p-4 bg-gray-950/30 bg-blur-md text-gray-100 font-[family-name:var(--font-geist-mono)] hide-scrollbar">
+    <main
+      className="flex min-h-screen flex-col p-4 bg-gray-950/30 bg-blur-md text-gray-100 font-[family-name:var(--font-geist-mono)] hide-scrollbar md:h-full md:min-h-0 md:overflow-hidden md:pb-0"
+      data-cluster-shell
+    >
        {/* Hidden File Input */}
        <input
           ref={fileInputRef}
@@ -2738,7 +2742,7 @@ export default function DashboardPage() {
 
       {/* Header/Top Controls Placeholder */}
       <div
-        className="w-full h-16 mb-4 p-2 flex justify-between items-center"
+        className="mb-4 flex h-16 w-full flex-shrink-0 items-center justify-between p-2"
         data-augmented-ui="bl-clip-y tr-clip-y border inlay"
         style={{'--aug-border-bg': 'var(--foreground)',
           '--aug-border-opacity': '0.8',
@@ -2818,11 +2822,11 @@ export default function DashboardPage() {
       </div>
 
       {/* New Grid Layout - Based on Wireframe */}
-      <div className='h-[85vh]'>
-        <div className="flex-grow px-2 py-2 grid grid-cols-[auto_1fr_auto] grid-rows-[3fr_1fr] min-h-full max-h-full gap-2"> {/* Use auto columns for sides, fr for middle */} 
+      <div className="min-h-0 flex-1 overflow-hidden" data-cluster-content>
+        <div className="grid h-full min-h-0 grid-cols-[auto_1fr_auto] grid-rows-[3fr_1fr] gap-2 px-2 pt-2"> {/* Use auto columns for sides, fr for middle */}
           {/* Song List Panel (Left Column, Full Height, Max Width) */}
           <SongListPanel
-            className="col-span-1 row-span-2 max-w-xs max-h-full" // Added max-width
+            className="col-span-1 row-span-2 max-h-full min-h-0 max-w-xs" // Added max-width
             songs={songs}
             featureStatus={featureStatus}
             activeSongIds={activeSongIds}
@@ -2868,7 +2872,7 @@ export default function DashboardPage() {
 
           {/* Controls Panel (Right Column, Full Height, Max Width)*/}
           <ControlsPanel
-            className="col-span-1 row-span-2 max-w-sm"
+            className="col-span-1 row-span-2 min-h-0 max-w-sm"
             isProcessing={isProcessing}
             isReducing={isReducing}
             isClustering={isClustering}
@@ -2902,52 +2906,13 @@ export default function DashboardPage() {
 
           {/* Log Panel (Middle Column, Bottom Row) */}
           <LogPanel
-            className="col-span-1 row-span-1 h-[20vh] ml-4 mr-4" // Updated spans
+            className="col-span-1 row-span-1 ml-4 mr-4 h-full min-h-0" // Updated spans
             logs={filteredLogMessages}
           />
         </div>
       </div>
 
-      {/* Footer */}
-      <footer
-        className="w-full h-10 mt-4 p-2 text-center text-xs text-gray-500 border-t border-gray-700 flex items-center justify-center gap-4"
-         data-augmented-ui="tl-clip tr-clip border"
-         style={{ '--aug-border-color': '#444', '--aug-border-bg': 'transparent' } as React.CSSProperties}
-      >
-        <span>
-          <a href="https://xiaotianfanx.com" 
-          target="_blank" 
-          rel="noopener noreferrer" 
-          className="hover:text-gray-400 transition-colors">
-            Copyright (c) 2025 Xiaotian Fan, As33
-            </a>
-          </span>
-        <span>|</span>
-        <a 
-          href="https://github.com/XiaoTianFan/Music-Cluster" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="hover:text-gray-400 transition-colors"
-        >
-          GitHub Repository
-        </a>
-        {/* --- NEW: About Link in Footer --- */}
-        <span>|</span>
-        <span
-          onClick={handleToggleAboutDialog}
-          className="hover:text-gray-400 transition-colors cursor-pointer"
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              handleToggleAboutDialog();
-            }
-          }}
-        >
-          About
-        </span>
-        {/* --------------------------------- */}
-      </footer>
+      <AppFooter onAbout={handleToggleAboutDialog} />
 
       {/* Song Details Dialog (Conditionally Rendered) */}
       {isDetailsDialogOpen && detailsSong && (

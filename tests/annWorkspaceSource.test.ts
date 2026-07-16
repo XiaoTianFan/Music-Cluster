@@ -7,6 +7,8 @@ const pageSource = readFileSync(resolve(process.cwd(), 'src/app/ann/page.tsx'), 
 const clusterPageSource = readFileSync(resolve(process.cwd(), 'src/app/page.tsx'), 'utf8');
 const logPanelSource = readFileSync(resolve(process.cwd(), 'src/components/LogPanel.tsx'), 'utf8');
 const mobileLayoutSource = readFileSync(resolve(process.cwd(), 'src/components/MobileLayoutWrapper.tsx'), 'utf8');
+const appFooterSource = readFileSync(resolve(process.cwd(), 'src/components/AppFooter.tsx'), 'utf8');
+const annControlsSource = readFileSync(resolve(process.cwd(), 'src/components/ANNControlsPanel.tsx'), 'utf8');
 
 test('ANN workspace provides five fixed-height tab pages in the requested order', () => {
   assert.match(pageSource, /\{ id: 'data', label: 'Data Labeling'/);
@@ -40,6 +42,17 @@ test('ANN desktop shell is fixed to the viewport with contained overflow', () =>
   assert.match(mobileLayoutSource, /data-ann-layout-wrapper/);
   assert.match(mobileLayoutSource, /md:overflow-hidden/);
   assert.doesNotMatch(pageSource, /md:h-\[85vh\]/);
+});
+
+test('Cluster and ANN share a fixed footer and give desktop panel height to their workspaces', () => {
+  assert.match(clusterPageSource, /<AppFooter onAbout=\{handleToggleAboutDialog\} \/>/);
+  assert.match(pageSource, /<AppFooter onAbout=\{handleToggleAboutDialog\} \/>/);
+  assert.match(appFooterSource, /h-10 min-h-10 max-h-10/);
+  assert.match(clusterPageSource, /data-cluster-shell/);
+  assert.match(clusterPageSource, /data-cluster-content/);
+  assert.match(clusterPageSource, /md:pb-0/);
+  assert.match(pageSource, /md:pb-0/);
+  assert.match(annControlsSource, /md:h-full md:min-h-0/);
 });
 
 test('switching an active session to Automatic waits for explicit authorization', () => {
