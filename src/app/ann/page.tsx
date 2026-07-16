@@ -3577,10 +3577,13 @@ export default function ANNPage() {
 
     // --- Render ---
     return (
-        <main className="flex flex-col min-h-screen p-4 bg-gray-950/30 bg-blur-md text-gray-100 font-[family-name:var(--font-geist-mono)] hide-scrollbar">
+        <main
+            className="flex min-h-screen flex-col p-4 bg-gray-950/30 bg-blur-md text-gray-100 font-[family-name:var(--font-geist-mono)] hide-scrollbar md:h-full md:min-h-0 md:overflow-hidden"
+            data-ann-shell
+        >
             {/* Header - Replaced with styled div from page.tsx */}
             <div
-                className="w-full h-16 mb-4 p-2 flex justify-between items-center"
+                className="mb-4 flex h-16 w-full flex-shrink-0 items-center justify-between p-2"
                 data-augmented-ui="bl-clip-y tr-clip-y border inlay"
                 style={{'--aug-border-bg': 'var(--foreground)',
                 '--aug-border-opacity': '0.8',
@@ -3688,9 +3691,9 @@ export default function ANNPage() {
             </div>
             )}
 
-            <div className="h-auto md:h-[85vh]">
-                 <div className="grid min-h-full grid-cols-1 gap-2 px-2 py-2 md:h-full md:grid-cols-[3fr_1fr]">
-                     <div className="flex h-[980px] min-w-0 flex-col pr-0 md:h-full md:pr-2" data-ann-workspace>
+            <div className="h-auto md:min-h-0 md:flex-1 md:overflow-hidden" data-ann-content>
+                 <div className="grid min-h-full grid-cols-1 gap-2 px-2 py-2 md:h-full md:min-h-0 md:grid-cols-[3fr_1fr]">
+                     <div className="flex h-[980px] min-w-0 flex-col pr-0 md:h-full md:min-h-0 md:pr-2" data-ann-workspace>
                          <div className="relative min-h-0 flex-1 overflow-hidden" data-ann-workspace-pages>
                              <section
                                  id="ann-workspace-page-data"
@@ -3835,7 +3838,7 @@ export default function ANNPage() {
                          </div>
                      </div>
 
-                     <div className="col-span-1 md:col-span-1 flex flex-col">
+                     <div className="col-span-1 flex min-h-0 flex-col overflow-hidden md:col-span-1">
                          <ANNControlsPanel
                              essentiaWorkerReady={essentiaWorkerReady}
                              dataProcessingWorkerReady={dataProcessingWorkerReady}
@@ -3951,7 +3954,7 @@ export default function ANNPage() {
 
             {/* ADDED Footer from page.tsx */}
             <footer
-                className="w-full h-10 mt-4 p-2 text-center text-xs text-gray-500 border-t border-gray-700 flex items-center justify-center gap-4"
+                className="mt-4 flex h-10 w-full flex-shrink-0 items-center justify-center gap-4 border-t border-gray-700 p-2 text-center text-xs text-gray-500"
                  data-augmented-ui="tl-clip tr-clip border"
                  style={{ '--aug-border-color': '#444', '--aug-border-bg': 'transparent' } as React.CSSProperties}
               >

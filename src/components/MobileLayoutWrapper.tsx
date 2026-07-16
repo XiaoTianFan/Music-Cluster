@@ -72,7 +72,11 @@ const MobileLayoutWrapper: React.FC<MobileLayoutWrapperProps> = ({ children }) =
   }
 
   if (supportsMobileLayout) {
-    return <div className="h-full overflow-y-auto hide-scrollbar">{children}</div>;
+    return (
+      <div className="h-full overflow-y-auto hide-scrollbar md:overflow-hidden" data-ann-layout-wrapper>
+        {children}
+      </div>
+    );
   }
 
   if (viewportStatus === 'mobile') {
