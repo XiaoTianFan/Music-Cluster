@@ -4,17 +4,29 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const pageSource = readFileSync(resolve(process.cwd(), 'src/app/ann/page.tsx'), 'utf8');
+const clusterPageSource = readFileSync(resolve(process.cwd(), 'src/app/page.tsx'), 'utf8');
+const logPanelSource = readFileSync(resolve(process.cwd(), 'src/components/LogPanel.tsx'), 'utf8');
 
-test('ANN workspace provides four fixed-height tab pages in the requested order', () => {
-  assert.match(pageSource, /\{ id: 'data', label: 'Data & Labels'/);
+test('ANN workspace provides five fixed-height tab pages in the requested order', () => {
+  assert.match(pageSource, /\{ id: 'data', label: 'Data Labeling'/);
   assert.match(pageSource, /\{ id: 'model', label: 'Model Inspection'/);
   assert.match(pageSource, /\{ id: 'performance', label: 'Performance'/);
+  assert.match(pageSource, /\{ id: 'visualization', label: 'Data Visualization'/);
   assert.match(pageSource, /\{ id: 'logs', label: 'Program Logs'/);
   assert.match(pageSource, /data-ann-workspace-pages/);
-  assert.match(pageSource, /grid-rows-\[24rem_minmax\(0,1fr\)\]/);
+  assert.match(pageSource, /data-ann-workspace-page="visualization"/);
+  assert.match(pageSource, /grid-cols-5/);
   assert.match(pageSource, /role="tablist"/);
   assert.match(pageSource, /role="tabpanel"/);
   assert.match(pageSource, /isVisible=\{workspacePage === 'model'\}/);
+});
+
+test('Cluster and ANN logs append chronologically and follow the latest row', () => {
+  assert.match(clusterPageSource, /setLogMessages\(prevLogs => \[\.\.\.prevLogs, logEntry\]\)/);
+  assert.match(pageSource, /setLogMessages\(prevLogs => \[\.\.\.prevLogs\.slice\(-199\), logEntry\]\)/);
+  assert.match(logPanelSource, /scrollContainer\.scrollTop = scrollContainer\.scrollHeight/);
+  assert.match(logPanelSource, /role="log"/);
+  assert.doesNotMatch(logPanelSource, /scrollTop = 0/);
 });
 
 test('switching an active session to Automatic waits for explicit authorization', () => {

@@ -83,7 +83,7 @@ const LabelingPanel: React.FC<LabelingPanelProps> = ({
     };
 
     return (
-        <BasePanel className={`${className} flex h-96 min-h-96 flex-col`} title="Data Labeling">
+        <BasePanel className={`${className || 'h-96 min-h-96'} flex flex-col`} title="Data Labeling">
             <h2 className="ml-2 mb-2 flex-shrink-0 text-lg font-semibold text-[var(--accent-secondary)]">
                 Data Labeling
             </h2>

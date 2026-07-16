@@ -6,6 +6,7 @@ import {
     ChartBarIcon,
     CommandLineIcon,
     CpuChipIcon,
+    PresentationChartLineIcon,
     TagIcon,
 } from '@heroicons/react/24/outline';
 
@@ -279,7 +280,7 @@ type ProcessingMethod = 'none' | 'standardize' | 'normalize';
 type ReductionMethod = 'pca' | 'tsne' | 'umap';
 // Define possible stages for visualization control
 type ProcessingStage = 'features' | 'processed' | 'reduced' | 'kmeans' | null;
-type AnnWorkspacePage = 'data' | 'model' | 'performance' | 'logs';
+type AnnWorkspacePage = 'data' | 'model' | 'performance' | 'visualization' | 'logs';
 
 // Data structure types
 type UnprocessedDataType = { vectors: number[][], songIds: string[], isOHEColumn: boolean[], columnLabels: string[] };
@@ -287,9 +288,10 @@ type ProcessedDataType = { vectors: number[][], songIds: string[] };
 // Placeholder for K-Means assignments (not used in ANN page)
 const placeholderKmeansAssignments: Record<string, number> = {};
 const ANN_WORKSPACE_TABS = [
-    { id: 'data', label: 'Data & Labels', icon: TagIcon },
+    { id: 'data', label: 'Data Labeling', icon: TagIcon },
     { id: 'model', label: 'Model Inspection', icon: CpuChipIcon },
     { id: 'performance', label: 'Performance', icon: ChartBarIcon },
+    { id: 'visualization', label: 'Data Visualization', icon: PresentationChartLineIcon },
     { id: 'logs', label: 'Program Logs', icon: CommandLineIcon },
 ] as const;
 
@@ -498,7 +500,7 @@ export default function ANNPage() {
         const timestamp = new Date().toLocaleTimeString();
         const logEntry: LogMessage = { text: message, level, timestamp };
         console.log(`[${level.toUpperCase()}] ${message}`);
-        setLogMessages(prevLogs => [logEntry, ...prevLogs.slice(0, 199)]);
+        setLogMessages(prevLogs => [...prevLogs.slice(-199), logEntry]);
     }, []);
 
     useEffect(() => {
@@ -3695,11 +3697,12 @@ export default function ANNPage() {
                                  role="tabpanel"
                                  aria-labelledby="ann-workspace-tab-data"
                                  aria-hidden={workspacePage !== 'data'}
-                                 className={`absolute inset-0 grid min-h-0 grid-rows-[24rem_minmax(0,1fr)] gap-4 ${workspacePage === 'data' ? 'visible' : 'invisible pointer-events-none'}`}
+                                 className={`absolute inset-0 min-h-0 ${workspacePage === 'data' ? 'visible' : 'invisible pointer-events-none'}`}
                                  data-ann-workspace-page="data"
                              >
                                  <DndContext onDragEnd={handleDragEnd}>
                                      <LabelingPanel
+                                         className="h-full min-h-0"
                                          songs={songs}
                                          namedLists={namedLists}
                                          onCreateList={handleCreateList}
@@ -3715,26 +3718,6 @@ export default function ANNPage() {
                                          interactionDisabled={isAnyProcessRunning}
                                      />
                                  </DndContext>
-                                 <ANNDataVisualizationPanel
-                                     className="h-full min-h-0"
-                                     activeSongIds={new Set(songs.map(s => s.id))}
-                                     songs={songs}
-                                     songFeatures={songFeatures}
-                                     unprocessedData={unprocessedData}
-                                     processedData={processedData}
-                                     reducedDataPoints={reducedDataPoints}
-                                     reductionDimensions={reductionDimensions}
-                                     trueLabels={annRouteLabelState.trueLabels}
-                                     predictedLabels={inferenceResults}
-                                     showPredictions={Object.keys(inferenceResults).length > 0}
-                                     availableFeatureKeys={availableFeatureKeys}
-                                     visualizationDisplayStage={visualizationTargetStage}
-                                     onStageSelect={setVisualizationTargetStage}
-                                     latestSuccessfulStage={latestCompletedStage}
-                                     kmeansAssignments={placeholderKmeansAssignments}
-                                     kmeansCentroids={[]}
-                                     kmeansIteration={0}
-                                 />
                              </section>
                              <section
                                  id="ann-workspace-page-model"
@@ -3774,6 +3757,35 @@ export default function ANNPage() {
                                  />
                              </section>
                              <section
+                                 id="ann-workspace-page-visualization"
+                                 role="tabpanel"
+                                 aria-labelledby="ann-workspace-tab-visualization"
+                                 aria-hidden={workspacePage !== 'visualization'}
+                                 className={`absolute inset-0 min-h-0 ${workspacePage === 'visualization' ? 'visible' : 'invisible pointer-events-none'}`}
+                                 data-ann-workspace-page="visualization"
+                             >
+                                 <ANNDataVisualizationPanel
+                                     className="h-full min-h-0"
+                                     activeSongIds={new Set(songs.map(s => s.id))}
+                                     songs={songs}
+                                     songFeatures={songFeatures}
+                                     unprocessedData={unprocessedData}
+                                     processedData={processedData}
+                                     reducedDataPoints={reducedDataPoints}
+                                     reductionDimensions={reductionDimensions}
+                                     trueLabels={annRouteLabelState.trueLabels}
+                                     predictedLabels={inferenceResults}
+                                     showPredictions={Object.keys(inferenceResults).length > 0}
+                                     availableFeatureKeys={availableFeatureKeys}
+                                     visualizationDisplayStage={visualizationTargetStage}
+                                     onStageSelect={setVisualizationTargetStage}
+                                     latestSuccessfulStage={latestCompletedStage}
+                                     kmeansAssignments={placeholderKmeansAssignments}
+                                     kmeansCentroids={[]}
+                                     kmeansIteration={0}
+                                 />
+                             </section>
+                             <section
                                  id="ann-workspace-page-logs"
                                  role="tabpanel"
                                  aria-labelledby="ann-workspace-tab-logs"
@@ -3785,7 +3797,7 @@ export default function ANNPage() {
                              </section>
                          </div>
                          <div className="flex flex-shrink-0 justify-center pt-2" role="tablist" aria-label="ANN workspace pages" data-ann-workspace-tabs>
-                             <div className="inline-grid max-w-full grid-cols-4 border border-[var(--foreground)]/25 bg-black/30 p-0.5">
+                             <div className="inline-grid max-w-full grid-cols-5 border border-[var(--foreground)]/25 bg-black/30 p-0.5">
                                  {ANN_WORKSPACE_TABS.map((tab, tabIndex) => {
                                      const Icon = tab.icon;
                                      return (

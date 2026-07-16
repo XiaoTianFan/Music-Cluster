@@ -1,5 +1,5 @@
 // songcluster/src/components/LogPanel.tsx
-import React, { useRef, useEffect } from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import BasePanel from './ui/BasePanel';
 
 // Re-import LogLevel and LogMessage if they are defined elsewhere and exported,
@@ -28,10 +28,10 @@ const levelColors: Record<LogLevel, string> = {
 const LogPanel: React.FC<LogPanelProps> = ({ logs, className }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // Logs are stored newest-first, so keep the latest operation in view.
-  useEffect(() => {
-    if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTop = 0;
+  useLayoutEffect(() => {
+    const scrollContainer = scrollContainerRef.current;
+    if (scrollContainer) {
+      scrollContainer.scrollTop = scrollContainer.scrollHeight;
     }
   }, [logs]);
 
@@ -49,13 +49,21 @@ const LogPanel: React.FC<LogPanelProps> = ({ logs, className }) => {
       <h2 className="ml-2 text-lg font-semibold mb-2 text-[var(--accent-secondary)]">Program Logs</h2>
       <div
         ref={scrollContainerRef}
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions"
+        data-program-logs-scroll
         className="min-h-0 flex-grow overflow-y-auto bg-grey/90 p-2 text-xs font-mono hide-scrollbar"
       >
         {logs.length === 0 ? (
           <p className="text-gray-500 italic">No logs yet...</p>
         ) : (
           logs.map((log, index) => (
-            <div key={index} className={`whitespace-pre-wrap break-words ${levelColors[log.level]}`}>
+            <div
+              key={`${log.timestamp}-${index}-${log.text}`}
+              className={`whitespace-pre-wrap break-words ${levelColors[log.level]}`}
+              data-program-log-entry
+            >
               {`[${log.timestamp}] ${log.text}`}
             </div>
           ))
